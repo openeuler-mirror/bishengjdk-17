@@ -248,6 +248,8 @@ inline oop PSPromotionManager::copy_unmarked_to_survivor_space(oop o,
 
   assert(new_obj != NULL, "allocation should have succeeded");
 
+  Prefetch::write(new_obj, PrefetchCopyIntervalInBytes);
+
   // Copy obj
   Copy::aligned_disjoint_words(cast_from_oop<HeapWord*>(o), cast_from_oop<HeapWord*>(new_obj), new_obj_size);
 
