@@ -418,6 +418,7 @@ class os: AllStatic {
   static bool   numa_topology_changed();
   static int    numa_get_group_id();
   static int    numa_get_group_id_for_address(const void* address);
+  static uint   numa_distance(uint node_index, uint node_index_other);
 
   // Page manipulation
   struct page_info {

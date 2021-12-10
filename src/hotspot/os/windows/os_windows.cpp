@@ -278,6 +278,10 @@ void os::run_periodic_checks() {
   return;
 }
 
+uint os::numa_distance(uint node_index, uint node_index_other) {
+  return 0;
+}
+
 // previous UnhandledExceptionFilter, if there is one
 static LPTOP_LEVEL_EXCEPTION_FILTER prev_uef_handler = NULL;
 
