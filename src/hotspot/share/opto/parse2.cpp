@@ -45,6 +45,14 @@
 #include "runtime/deoptimization.hpp"
 #include "runtime/sharedRuntime.hpp"
 
+#ifdef AARCH64
+  __asm__(".symver log2f,log2f@GLIBC_2.17");
+#endif
+
+#ifdef AMD64
+  __asm__(".symver log2f,log2f@GLIBC_2.2.5");
+#endif
+
 #ifndef PRODUCT
 extern int explicit_null_checks_inserted,
            explicit_null_checks_elided;

@@ -48,6 +48,10 @@
 
 #include "childproc.h"
 
+#if defined(amd64)
+  __asm__(".symver posix_spawn,posix_spawn@GLIBC_2.2.5");
+#endif
+
 /*
  *
  * When starting a child on Unix, we need to do three things:
