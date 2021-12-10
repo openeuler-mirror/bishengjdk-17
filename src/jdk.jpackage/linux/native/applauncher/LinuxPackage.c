@@ -33,6 +33,9 @@
 #include "JvmLauncher.h"
 #include "LinuxPackage.h"
 
+#if (defined AMD64) || (defined amd64)
+__asm__(".symver memcpy, memcpy@GLIBC_2.2.5");
+#endif
 
 static char* getModulePath(void) {
     char modulePath[PATH_MAX] = { 0 };

@@ -167,6 +167,14 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBJVM, \
     PRECOMPILED_HEADER_EXCLUDE := $(JVM_PRECOMPILED_HEADER_EXCLUDE), \
 ))
 
+MEMCPY_OBJECT_FILE := $(JVM_OUTPUTDIR)/objs/memcpy$(OBJ_SUFFIX)
+
+$(eval $(call SetupCopyFiles, COPY_MEMCPY_OBJECT_FILE, \
+          DEST := $(SUPPORT_OUTPUTDIR), \
+          FILES :=$(MEMCPY_OBJECT_FILE), \
+))
+TARGETS += $(COPY_MEMCPY_OBJECT_FILE)
+
 # Always recompile abstract_vm_version.cpp if libjvm needs to be relinked. This ensures
 # that the internal vm version is updated as it relies on __DATE__ and __TIME__
 # macros.
