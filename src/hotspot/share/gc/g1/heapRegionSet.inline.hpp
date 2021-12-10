@@ -183,12 +183,24 @@ inline HeapRegion* FreeRegionList::remove_region_with_node_index(bool from_head,
 
   // Find the region to use, searching from _head or _tail as requested.
   size_t cur_depth = 0;
+  bool exist_region = false;
+  uint numa_distance_min = UINT_MAX;
+  HeapRegion* remote_node_region = NULL;
+
   if (from_head) {
     for (cur = _head;
          cur != NULL && cur_depth < max_search_depth;
          cur = cur->next(), ++cur_depth) {
       if (requested_node_index == cur->node_index()) {
+        exist_region = true;
         break;
+      }
+      if (G1NUMA::numa()->use_nearest_node()) {
+          uint distance = G1NUMA::numa()->calc_numa_node_distance(requested_node_index, cur->node_index());
+          if (distance < numa_distance_min) {
+            remote_node_region = cur;
+            numa_distance_min = distance;
+          }
       }
     }
   } else {
@@ -196,13 +208,23 @@ inline HeapRegion* FreeRegionList::remove_region_with_node_index(bool from_head,
          cur != NULL && cur_depth < max_search_depth;
          cur = cur->prev(), ++cur_depth) {
       if (requested_node_index == cur->node_index()) {
+        exist_region = true;
         break;
+      }
+      if (G1NUMA::numa()->use_nearest_node()) {
+          uint distance = G1NUMA::numa()->calc_numa_node_distance(requested_node_index, cur->node_index());
+          if (distance < numa_distance_min) {
+            remote_node_region = cur;
+            numa_distance_min = distance;
+          }
       }
     }
   }
 
   // Didn't find a region to use.
-  if (cur == NULL || cur_depth >= max_search_depth) {
+  if (G1NUMA::numa()->use_nearest_node() && !exist_region && remote_node_region != NULL) {
+    cur = remote_node_region;
+  } else if (cur == NULL || cur_depth >= max_search_depth) {
     return NULL;
   }
 

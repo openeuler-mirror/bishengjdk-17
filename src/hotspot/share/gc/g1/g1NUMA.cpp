@@ -70,9 +70,20 @@ uint G1NUMA::index_of_node_id(int node_id) const {
   return node_index;
 }
 
+// Returns numa distance
+const uint G1NUMA::calc_numa_node_distance(uint node_index, uint other_node_index) const {
+  if (node_index >= _num_active_node_ids || other_node_index >= _num_active_node_ids) {
+    return UINT_MAX;
+  }
+  return _numa_node_distance[node_index][other_node_index];
+}
+bool G1NUMA::use_nearest_node() const {
+   return _use_nearest;
+}
+
 G1NUMA::G1NUMA() :
   _node_id_to_index_map(NULL), _len_node_id_to_index_map(0),
-  _node_ids(NULL), _num_active_node_ids(0),
+  _node_ids(NULL), _num_active_node_ids(0), _use_nearest(false),
   _region_size(0), _page_size(0), _stats(NULL) {
 }
 
@@ -104,10 +115,24 @@ void G1NUMA::initialize(bool use_numa) {
   for (uint i = 0; i < _num_active_node_ids; i++) {
     max_node_id = MAX2(max_node_id, _node_ids[i]);
   }
+  if (_num_active_node_ids > 2) {
+    _use_nearest = true;
+  }
 
   // Create a mapping between node_id and index.
   _len_node_id_to_index_map = max_node_id + 1;
   _node_id_to_index_map = NEW_C_HEAP_ARRAY(uint, _len_node_id_to_index_map, mtGC);
+  _numa_node_distance =  NEW_C_HEAP_ARRAY(uint*, _num_active_node_ids * _num_active_node_ids, mtGC);
+   // Set node disctance
+  for (uint node_i = 0; node_i < _num_active_node_ids; node_i++) {
+      _numa_node_distance[node_i] = NEW_C_HEAP_ARRAY(uint, _num_active_node_ids*_num_active_node_ids, mtGC);
+  }
+  for (uint node_i = 0; node_i < _num_active_node_ids; node_i++) {
+    for (uint node_j = 0; node_j < _num_active_node_ids; node_j++) {
+      uint distance = os::numa_distance(node_i, node_j);
+      _numa_node_distance[node_i][node_j] = distance;
+    }
+  }
 
   // Set all indices with unknown node id.
   for (int i = 0; i < _len_node_id_to_index_map; i++) {
@@ -126,6 +151,10 @@ G1NUMA::~G1NUMA() {
   delete _stats;
   FREE_C_HEAP_ARRAY(int, _node_id_to_index_map);
   FREE_C_HEAP_ARRAY(int, _node_ids);
+  for (uint node_i = 0; node_i < _num_active_node_ids; node_i++) {
+    FREE_C_HEAP_ARRAY(uint, _numa_node_distance[node_i]);
+  }
+  FREE_C_HEAP_ARRAY(uint*, _numa_node_distance);
 }
 
 void G1NUMA::set_region_info(size_t region_size, size_t page_size) {

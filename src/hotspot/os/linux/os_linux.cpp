@@ -2862,6 +2862,10 @@ int os::numa_get_group_id_for_address(const void* address) {
   return id;
 }
 
+uint os::numa_distance(uint node_index, uint node_index_other) {
+  return Linux::numa_distance(node_index, node_index_other);
+}
+
 int os::Linux::get_existing_num_nodes() {
   int node;
   int highest_node_number = Linux::numa_max_node();

@@ -279,6 +279,10 @@ bool os::have_special_privileges() {
   return privileges;
 }
 
+uint os::numa_distance(uint node_index, uint node_index_other) {
+  return 0;
+}
+
 // Helper function, emulates disclaim64 using multiple 32bit disclaims
 // because we cannot use disclaim64() on AS/400 and old AIX releases.
 static bool my_disclaim64(char* addr, size_t size) {

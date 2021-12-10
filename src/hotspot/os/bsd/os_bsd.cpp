@@ -191,7 +191,9 @@ bool os::have_special_privileges() {
   return privileges;
 }
 
-
+uint os::numa_distance(uint node_index, uint node_index_other) {
+  return 0;
+}
 
 // Cpu architecture string
 #if   defined(ZERO)
