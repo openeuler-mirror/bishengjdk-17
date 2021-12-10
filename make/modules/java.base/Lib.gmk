@@ -41,6 +41,7 @@ include lib/CoreLibraries.gmk
 
 $(eval $(call SetupJdkLibrary, BUILD_LIBNET, \
     NAME := net, \
+    EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
     OPTIMIZATION := LOW, \
     CFLAGS := $(CFLAGS_JDKLIB), \
     DISABLED_WARNINGS_gcc := format-nonliteral unused-function, \
@@ -72,6 +73,7 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBNIO, \
     CFLAGS := $(CFLAGS_JDKLIB), \
     DISABLED_WARNINGS_gcc := undef, \
     DISABLED_WARNINGS_clang := undef, \
+    EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
     EXTRA_HEADER_DIRS := \
         libnio/ch \
         libnio/fs \

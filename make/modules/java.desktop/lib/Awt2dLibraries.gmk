@@ -44,6 +44,7 @@ endif
 $(eval $(call SetupJdkLibrary, BUILD_LIBMLIB_IMAGE, \
     NAME := mlib_image, \
     EXTRA_SRC := common/awt/medialib, \
+    EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
     EXCLUDE_FILES := mlib_c_ImageBlendTable.c, \
     EXCLUDE_SRC_PATTERNS := $(BUILD_LIBMLIB_EXCLUDE_SRC_PATTERNS), \
     OPTIMIZATION := HIGHEST, \
@@ -142,6 +143,7 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBAWT, \
     OPTIMIZATION := HIGHEST, \
     CFLAGS := $(CFLAGS_JDKLIB) $(LIBAWT_CFLAGS), \
     EXTRA_HEADER_DIRS := $(LIBAWT_EXTRA_HEADER_DIRS), \
+    EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
     DISABLED_WARNINGS_gcc := sign-compare unused-result maybe-uninitialized \
         format-nonliteral parentheses unused-value unused-function, \
     DISABLED_WARNINGS_clang := logical-op-parentheses extern-initializer \
@@ -236,6 +238,7 @@ ifeq ($(call isTargetOs, windows macosx), false)
         EXTRA_SRC := $(LIBAWT_XAWT_EXTRA_SRC), \
         EXTRA_HEADER_DIRS := $(LIBAWT_XAWT_EXTRA_HEADER_DIRS), \
         EXCLUDES := $(LIBAWT_XAWT_EXCLUDES), \
+        EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
         OPTIMIZATION := LOW, \
         CFLAGS := $(CFLAGS_JDKLIB) $(LIBAWT_XAWT_CFLAGS) \
             $(X_CFLAGS), \
@@ -295,6 +298,7 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBLCMS, \
         common/awt/debug \
         libawt/java2d, \
     HEADERS_FROM_SRC := $(LIBLCMS_HEADERS_FROM_SRC), \
+    EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
     DISABLED_WARNINGS_gcc := format-nonliteral type-limits \
         misleading-indentation undef unused-function stringop-truncation, \
     DISABLED_WARNINGS_clang := tautological-compare format-nonliteral undef, \
@@ -337,6 +341,7 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBJAVAJPEG, \
     NAME := javajpeg, \
     INCLUDE_FILES := $(BUILD_LIBJAVAJPEG_INCLUDE_FILES), \
     OPTIMIZATION := HIGHEST, \
+    EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
     CFLAGS := $(CFLAGS_JDKLIB), \
     HEADERS_FROM_SRC := $(LIBJPEG_HEADERS_FROM_SRC), \
     DISABLED_WARNINGS_gcc := clobbered implicit-fallthrough shift-negative-value array-bounds, \
@@ -420,6 +425,7 @@ else
       OPTIMIZATION := HIGHEST, \
       CFLAGS := $(CFLAGS_JDKLIB) \
           $(BUILD_LIBFREETYPE_CFLAGS), \
+      EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
       EXTRA_HEADER_DIRS := $(BUILD_LIBFREETYPE_HEADER_DIRS), \
       DISABLED_WARNINGS_microsoft := 4018 4267 4244 4312 4819, \
       DISABLED_WARNINGS_gcc := implicit-fallthrough cast-function-type bad-function-cast, \
@@ -515,6 +521,7 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBFONTMANAGER, \
     OPTIMIZATION := $(LIBFONTMANAGER_OPTIMIZATION), \
     CFLAGS_windows = -DCC_NOEX, \
     EXTRA_HEADER_DIRS := $(LIBFONTMANAGER_EXTRA_HEADER_DIRS), \
+    EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
     EXTRA_SRC := $(LIBFONTMANAGER_EXTRA_SRC), \
     WARNINGS_AS_ERRORS_xlc := false, \
     DISABLED_WARNINGS_gcc := $(HARFBUZZ_DISABLED_WARNINGS_gcc), \
@@ -735,6 +742,7 @@ ifeq ($(ENABLE_HEADLESS_ONLY), false)
       EXCLUDE_FILES := imageioJPEG.c jpegdecoder.c pngtest.c, \
       EXCLUDES := $(LIBSPLASHSCREEN_EXCLUDES), \
       OPTIMIZATION := LOW, \
+      EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
       CFLAGS := $(CFLAGS_JDKLIB) $(LIBSPLASHSCREEN_CFLAGS) \
           $(GIFLIB_CFLAGS) $(LIBJPEG_CFLAGS) $(PNG_CFLAGS) $(LIBZ_CFLAGS), \
       EXTRA_HEADER_DIRS := $(LIBSPLASHSCREEN_HEADER_DIRS), \
