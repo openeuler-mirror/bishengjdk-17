@@ -196,11 +196,11 @@ inline HeapRegion* FreeRegionList::remove_region_with_node_index(bool from_head,
         break;
       }
       if (G1NUMA::numa()->use_nearest_node()) {
-          uint distance = G1NUMA::numa()->calc_numa_node_distance(requested_node_index, cur->node_index());
-          if (distance < numa_distance_min) {
-            remote_node_region = cur;
-            numa_distance_min = distance;
-          }
+         uint distance = G1NUMA::numa()->calc_numa_node_distance(requested_node_index, cur->node_index());
+         if (distance < numa_distance_min) {
+           remote_node_region = cur;
+           numa_distance_min = distance;
+         }
       }
     }
   } else {
