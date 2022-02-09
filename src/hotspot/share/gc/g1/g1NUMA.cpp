@@ -83,7 +83,7 @@ bool G1NUMA::use_nearest_node() const {
 
 G1NUMA::G1NUMA() :
   _node_id_to_index_map(NULL), _len_node_id_to_index_map(0),
-  _node_ids(NULL), _num_active_node_ids(0), _use_nearest(false),
+  _node_ids(NULL), _num_active_node_ids(0), _numa_node_distance(NULL), _use_nearest(false),
   _region_size(0), _page_size(0), _stats(NULL) {
 }
 
@@ -125,7 +125,7 @@ void G1NUMA::initialize(bool use_numa) {
   _numa_node_distance =  NEW_C_HEAP_ARRAY(uint*, _num_active_node_ids * _num_active_node_ids, mtGC);
    // Set node disctance
   for (uint node_i = 0; node_i < _num_active_node_ids; node_i++) {
-      _numa_node_distance[node_i] = NEW_C_HEAP_ARRAY(uint, _num_active_node_ids*_num_active_node_ids, mtGC);
+    _numa_node_distance[node_i] = NEW_C_HEAP_ARRAY(uint, _num_active_node_ids*_num_active_node_ids, mtGC);
   }
   for (uint node_i = 0; node_i < _num_active_node_ids; node_i++) {
     for (uint node_j = 0; node_j < _num_active_node_ids; node_j++) {
