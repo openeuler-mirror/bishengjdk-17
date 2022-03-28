@@ -97,7 +97,6 @@ ifeq ($(call isTargetOs, linux), true)
       SYMBOLS_DIR := $(SUPPORT_OUTPUTDIR)/native/$(MODULE)/libjpackageapplauncher, \
       SRC := $(JPACKAGE_LIBAPPLAUNCHER_SRC), \
       EXCLUDE_FILES := LinuxLauncher.c LinuxPackage.c, \
-      EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
       TOOLCHAIN := TOOLCHAIN_LINK_CXX, \
       OPTIMIZATION := LOW, \
       CXXFLAGS := $(CXXFLAGS_JDKLIB) $(JPACKAGE_LIBAPPLAUNCHER_INCLUDES), \

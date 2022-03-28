@@ -1102,6 +1102,15 @@ define SetupNativeCompilationBody
       endif
     endif
 
+    # if ldflags contain --wrap=memcpy, add memcpy.o to OBJS
+    ifneq ($$(findstring wrap=memcpy, $$($1_LDFLAGS)$$($1_EXTRA_LDFLAGS)),)
+      ifeq ($$(findstring memcpy$(OBJ_SUFFIX), $$($1_ALL_OBJS)),)
+        $$($1_BUILD_INFO):
+	    $(ECHO) 'Adding $(SUPPORT_OUTPUTDIR)/memcpy/memcpy$(OBJ_SUFFIX) to $1_ALL_OBJS'
+        $1_ALL_OBJS += $(SUPPORT_OUTPUTDIR)/memcpy/memcpy$(OBJ_SUFFIX)
+      endif
+    endif
+
     $1_VARDEPS := $$($1_LD) $$($1_SYSROOT_LDFLAGS) $$($1_LDFLAGS) $$($1_EXTRA_LDFLAGS) \
         $$($1_LIBS) $$($1_EXTRA_LIBS) $$($1_MT) \
         $$($1_CREATE_DEBUGINFO_CMDS) $$($1_MANIFEST_VERSION) \
