@@ -59,7 +59,6 @@ ifeq ($(call isTargetOs, aix), false)
       NAME := jsound, \
       TOOLCHAIN := $(LIBJSOUND_TOOLCHAIN), \
       OPTIMIZATION := LOW, \
-      EXTRA_OBJECT_FILES := $(SUPPORT_OUTPUTDIR)/memcpy$(OBJ_SUFFIX), \
       CFLAGS := $(CFLAGS_JDKLIB) \
           $(LIBJSOUND_CFLAGS), \
       CXXFLAGS := $(CXXFLAGS_JDKLIB) $(LIBJSOUND_CFLAGS), \

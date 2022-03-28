@@ -170,7 +170,7 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBJVM, \
 MEMCPY_OBJECT_FILE := $(JVM_OUTPUTDIR)/objs/memcpy$(OBJ_SUFFIX)
 
 $(eval $(call SetupCopyFiles, COPY_MEMCPY_OBJECT_FILE, \
-          DEST := $(SUPPORT_OUTPUTDIR), \
+          DEST := $(SUPPORT_OUTPUTDIR)/memcpy, \
           FILES :=$(MEMCPY_OBJECT_FILE), \
 ))
 TARGETS += $(COPY_MEMCPY_OBJECT_FILE)
