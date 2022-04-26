@@ -1406,7 +1406,7 @@ read_icc_profile (JNIEnv *env, j_decompress_ptr cinfo)
     /* and fill it in */
     dst_ptr = icc_data;
     for (seq_no = first; seq_no < last; seq_no++) {
-        JOCTET FAR *src_ptr = icc_markers[seq_no]->data + ICC_OVERHEAD_LEN;
+        JOCTET *src_ptr = icc_markers[seq_no]->data + ICC_OVERHEAD_LEN;
         unsigned int length =
             icc_markers[seq_no]->data_length - ICC_OVERHEAD_LEN;
 
