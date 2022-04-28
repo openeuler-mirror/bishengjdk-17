@@ -54,12 +54,12 @@ public class VerifyCACerts {
             + File.separator + "security" + File.separator + "cacerts";
 
     // The numbers of certs now.
-    private static final int COUNT = 89;
+    private static final int COUNT = 87;
 
     // SHA-256 of cacerts, can be generated with
     // shasum -a 256 cacerts | sed -e 's/../&:/g' | tr '[:lower:]' '[:upper:]' | cut -c1-95
     private static final String CHECKSUM
-            = "CC:AD:BB:49:70:97:3F:42:AD:73:91:A0:A2:C4:B8:AA:D1:95:59:F3:B3:22:09:2A:1F:2C:AB:04:47:08:EF:AA";
+            = "63:C4:11:7D:BF:C5:05:2B:BF:C2:B4:5A:2C:B6:26:C4:57:76:FB:D4:48:3B:E7:4C:62:B0:A1:7B:4F:07:B1:0C";
 
     // Hex formatter to upper case with ":" delimiter
     private static final HexFormat HEX = HexFormat.ofDelimiter(":").withUpperCase();
@@ -120,6 +120,8 @@ public class VerifyCACerts {
                     "7E:37:CB:8B:4C:47:09:0C:AB:36:55:1B:A6:F4:5D:B8:40:68:0F:BA:16:6A:95:2D:B1:00:71:7F:43:05:3F:C2");
             put("digicerthighassuranceevrootca [jdk]",
                     "74:31:E5:F4:C3:C1:CE:46:90:77:4F:0B:61:E0:54:40:88:3B:A9:A0:1E:D0:0B:A6:AB:D7:80:6E:D3:B1:18:CF");
+            put("geotrustglobalca [jdk]",
+                    "FF:85:6A:2D:25:1D:CD:88:D3:66:56:F4:50:12:67:98:CF:AB:AA:DE:40:79:9C:72:2D:E4:D2:B5:DB:36:A7:3A");
             put("geotrustprimaryca [jdk]",
                     "37:D5:10:06:C5:12:EA:AB:62:64:21:F1:EC:8C:92:01:3F:C5:F8:2A:E9:8E:E5:33:EB:46:19:B8:DE:B4:D0:6C");
             put("geotrustprimarycag2 [jdk]",
@@ -254,6 +256,8 @@ public class VerifyCACerts {
             add("addtrustexternalca [jdk]");
             // Valid until: Sat May 30 10:44:50 GMT 2020
             add("addtrustqualifiedca [jdk]");
+	    // Valid until: Sat May 21 04:00:00 GMT 2022
+            add("geotrustglobalca [jdk]");
         }
     };
 
