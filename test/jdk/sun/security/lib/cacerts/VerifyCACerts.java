@@ -254,7 +254,6 @@ public class VerifyCACerts {
             add("addtrustexternalca [jdk]");
             // Valid until: Sat May 30 10:44:50 GMT 2020
             add("addtrustqualifiedca [jdk]");
-	    // Valid until: Sat May 21 04:00:00 GMT 2022
         }
     };
 
