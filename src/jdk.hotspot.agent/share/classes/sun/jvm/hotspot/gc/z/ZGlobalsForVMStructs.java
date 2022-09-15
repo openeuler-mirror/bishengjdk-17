@@ -34,6 +34,7 @@ import sun.jvm.hotspot.types.TypeDataBase;
 class ZGlobalsForVMStructs extends VMObject {
     private static AddressField ZGlobalPhaseField;
     private static AddressField ZGlobalSeqNumField;
+    private static AddressField ZAddressBaseField;
     private static AddressField ZAddressOffsetMaskField;
     private static AddressField ZAddressMetadataMaskField;
     private static AddressField ZAddressMetadataFinalizableField;
@@ -52,6 +53,7 @@ class ZGlobalsForVMStructs extends VMObject {
 
         ZGlobalPhaseField = type.getAddressField("_ZGlobalPhase");
         ZGlobalSeqNumField = type.getAddressField("_ZGlobalSeqNum");
+        ZAddressBaseField = type.getAddressField("_ZAddressBase");
         ZAddressOffsetMaskField = type.getAddressField("_ZAddressOffsetMask");
         ZAddressMetadataMaskField = type.getAddressField("_ZAddressMetadataMask");
         ZAddressMetadataFinalizableField = type.getAddressField("_ZAddressMetadataFinalizable");
@@ -72,6 +74,10 @@ class ZGlobalsForVMStructs extends VMObject {
 
     int ZGlobalSeqNum() {
         return ZGlobalSeqNumField.getValue(addr).getJIntAt(0);
+    }
+
+    long ZAddressBase() {
+        return ZAddressBaseField.getValue(addr).getJLongAt(0);
     }
 
     long ZAddressOffsetMask() {

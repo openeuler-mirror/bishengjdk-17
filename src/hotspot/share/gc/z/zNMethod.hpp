@@ -48,6 +48,10 @@ public:
   static bool is_armed(nmethod* nm);
   static void disarm(nmethod* nm);
 
+#ifdef AARCH64
+  static void nmethod_patch_barriers(nmethod* nm);
+#endif
+
   static void nmethod_oops_do(nmethod* nm, OopClosure* cl);
   static void nmethod_oops_do_inner(nmethod* nm, OopClosure* cl);
 
@@ -57,7 +61,7 @@ public:
   static void nmethods_do_end();
   static void nmethods_do(NMethodClosure* cl);
 
-  static ZReentrantLock* lock_for_nmethod(nmethod* nm);
+  static ZReentrantLock* lock_for_nmethod(const nmethod* nm);
 
   static void unlink(ZWorkers* workers, bool unloading_occurred);
   static void purge(ZWorkers* workers);

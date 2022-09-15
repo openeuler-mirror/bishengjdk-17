@@ -78,7 +78,8 @@ private:
   typedef ZBitField<uint64_t, bool,      2,  1>  field_follow;
   typedef ZBitField<uint64_t, bool,      3,  1>  field_inc_live;
   typedef ZBitField<uint64_t, bool,      4,  1>  field_mark;
-  typedef ZBitField<uint64_t, uintptr_t, 5,  59> field_object_address;
+  // Set ValueShift to 2 to avoid the top bits being cleared.
+  typedef ZBitField<uint64_t, uintptr_t, 5,  59, 2> field_object_address;
   typedef ZBitField<uint64_t, size_t,    2,  30> field_partial_array_length;
   typedef ZBitField<uint64_t, size_t,    32, 32> field_partial_array_offset;
 

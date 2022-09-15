@@ -104,6 +104,21 @@ size_t ZVirtualMemoryManager::reserve_discontiguous(size_t size) {
 bool ZVirtualMemoryManager::reserve_contiguous(uintptr_t start, size_t size) {
   assert(is_aligned(size, ZGranuleSize), "Must be granule aligned");
 
+#ifdef AARCH64
+  if (UseTBI) {
+    const uintptr_t addr = ZAddress::base(start);
+    if (!pd_reserve(addr, size)) {
+      return false;
+    }
+    nmt_reserve(addr, size);
+
+    // Make the address range free
+    _manager.free(start, size);
+
+    return true;
+  }
+#endif // AARCH64
+
   // Reserve address views
   const uintptr_t marked0 = ZAddress::marked0(start);
   const uintptr_t marked1 = ZAddress::marked1(start);

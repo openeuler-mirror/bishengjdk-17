@@ -28,6 +28,7 @@
 #include "jfr/jni/jfrJavaSupport.hpp"
 #include "jfr/writers/jfrStreamWriterHost.hpp"
 #include "runtime/os.hpp"
+#include "runtime/globals.hpp"
 
 template <typename Adapter, typename AP>
 StreamWriterHost<Adapter, AP>::StreamWriterHost(typename Adapter::StorageType* storage, Thread* thread) :
@@ -74,6 +75,9 @@ inline void StreamWriterHost<Adapter, AP>::write_bytes(void* dest, const void* b
 template <typename Adapter, typename AP>
 inline void StreamWriterHost<Adapter, AP>::write_bytes(const u1* buf, intptr_t len) {
   assert(len >= 0, "invariant");
+#ifdef AARCH64
+  buf = (const u1*) CLEAR_COLOR_BITS((uintptr_t) buf);
+#endif
   while (len > 0) {
     const unsigned int nBytes = len > INT_MAX ? INT_MAX : (unsigned int)len;
     const ssize_t num_written = (ssize_t)os::write(_fd, buf, nBytes);

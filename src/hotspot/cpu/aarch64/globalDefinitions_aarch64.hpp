@@ -67,4 +67,7 @@ const bool CCallingConventionRequiresIntsAsLongs = false;
 #define NOT_R18_RESERVED(code) code
 #endif
 
+#define CLEAR_TOP_BYTE(addr) ((addr) & ((1UL << 56) - 1))
+#define CLEAR_COLOR_BITS(addr) (UseTBI ? CLEAR_TOP_BYTE(addr) : (addr))
+
 #endif // CPU_AARCH64_GLOBALDEFINITIONS_AARCH64_HPP

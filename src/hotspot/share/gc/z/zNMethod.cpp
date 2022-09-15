@@ -28,7 +28,10 @@
 #include "gc/shared/barrierSet.hpp"
 #include "gc/shared/barrierSetNMethod.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
+#include "gc/z/zArray.inline.hpp"
 #include "gc/z/zBarrier.inline.hpp"
+#include "gc/z/zBarrierSet.hpp"
+#include "gc/z/zBarrierSetAssembler.hpp"
 #include "gc/z/zGlobals.hpp"
 #include "gc/z/zLock.inline.hpp"
 #include "gc/z/zNMethod.hpp"
@@ -54,12 +57,23 @@ static void set_gc_data(nmethod* nm, ZNMethodData* data) {
 }
 
 void ZNMethod::attach_gc_data(nmethod* nm) {
+#ifdef AARCH64
+  ZArray<address> barriers;
+#endif
   GrowableArray<oop*> immediate_oops;
   bool non_immediate_oops = false;
 
-  // Find all oop relocations
+  // Find all barrier and oop relocations
   RelocIterator iter(nm);
   while (iter.next()) {
+#ifdef AARCH64
+    if (UseTBI && iter.type() == relocInfo::barrier_type) {
+      // Barrier relocation
+      barrier_Relocation* const reloc = iter.barrier_reloc();
+      barriers.push(reloc->addr());
+      continue;
+    }
+#endif
     if (iter.type() != relocInfo::oop_type) {
       // Not an oop
       continue;
@@ -92,9 +106,16 @@ void ZNMethod::attach_gc_data(nmethod* nm) {
   ZNMethodDataOops* const new_oops = ZNMethodDataOops::create(immediate_oops, non_immediate_oops);
   ZNMethodDataOops* const old_oops = data->swap_oops(new_oops);
   ZNMethodDataOops::destroy(old_oops);
+
+#ifdef AARCH64
+  if (UseTBI) {
+    // Attach barriers in GC data
+    data->swap_barriers(&barriers);
+  }
+#endif
 }
 
-ZReentrantLock* ZNMethod::lock_for_nmethod(nmethod* nm) {
+ZReentrantLock* ZNMethod::lock_for_nmethod(const nmethod* nm) {
   return gc_data(nm)->lock();
 }
 
@@ -115,6 +136,20 @@ void ZNMethod::log_register(const nmethod* nm) {
             nm->oops_count() - 1,
             oops->immediates_count(),
             oops->has_non_immediates() ? "Yes" : "No");
+
+#ifdef AARCH64
+  if (UseTBI) {
+    LogTarget(Trace, gc, nmethod, barrier) log_barriers;
+    if (log_barriers.is_enabled()) {
+      // Print nmethod barriers
+      ZLocker<ZReentrantLock> locker(lock_for_nmethod(nm));
+      ZArrayIterator<address> iter(gc_data(nm)->barriers());
+      for (address b; iter.next(&b);) {
+        log_barriers.print("       Barrier: " PTR_FORMAT, p2i(b));
+      }
+    }
+  }
+#endif
 
   LogTarget(Trace, gc, nmethod, oops) log_oops;
   if (!log_oops.is_enabled()) {
@@ -164,6 +199,15 @@ void ZNMethod::register_nmethod(nmethod* nm) {
 
   log_register(nm);
 
+#ifdef AARCH64
+  if (UseTBI) {
+    ZLocker<ZReentrantLock> locker(lock_for_nmethod(nm));
+    // Patch nmathod barriers
+    nmethod_patch_barriers(nm);
+  }
+#endif
+
+  // Register nmethod
   ZNMethodTable::register_nmethod(nm);
 
   // Disarm nmethod entry barrier
@@ -205,6 +249,16 @@ void ZNMethod::disarm(nmethod* nm) {
   BarrierSetNMethod* const bs = BarrierSet::barrier_set()->barrier_set_nmethod();
   bs->disarm(nm);
 }
+
+#ifdef AARCH64
+void ZNMethod::nmethod_patch_barriers(nmethod* nm) {
+  ZBarrierSetAssembler* const bs_asm = ZBarrierSet::assembler();
+  ZArrayIterator<address> iter(gc_data(nm)->barriers());
+  for (address barrier; iter.next(&barrier);) {
+    bs_asm->patch_barrier_relocation(barrier);
+  }
+}
+#endif
 
 void ZNMethod::nmethod_oops_do(nmethod* nm, OopClosure* cl) {
   ZLocker<ZReentrantLock> locker(ZNMethod::lock_for_nmethod(nm));
@@ -329,6 +383,13 @@ public:
     ZLocker<ZReentrantLock> locker(ZNMethod::lock_for_nmethod(nm));
 
     if (ZNMethod::is_armed(nm)) {
+#ifdef AARCH64
+      if (UseTBI) {
+        // Heal barriers
+        ZNMethod::nmethod_patch_barriers(nm);
+      }
+#endif
+
       // Heal oops and disarm
       ZNMethod::nmethod_oops_barrier(nm);
       ZNMethod::disarm(nm);

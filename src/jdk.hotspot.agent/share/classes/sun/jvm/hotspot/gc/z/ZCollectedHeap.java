@@ -92,6 +92,9 @@ public class ZCollectedHeap extends CollectedHeap {
         if (oopAddress == null) {
             return null;
         }
+        if (ZUtils.getUseTBI()) {
+            oopAddress = ZAddress.clearTopByte(oopAddress);
+        }
 
         return oopAddress.addOffsetToAsOopHandle(0);
     }

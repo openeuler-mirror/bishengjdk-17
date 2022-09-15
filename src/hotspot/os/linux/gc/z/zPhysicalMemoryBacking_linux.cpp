@@ -120,6 +120,14 @@ ZPhysicalMemoryBacking::ZPhysicalMemoryBacking(size_t max_capacity) :
     _available(0),
     _initialized(false) {
 
+#ifdef AARCH64
+  if (UseTBI) {
+    // Successfully initialized
+    _initialized = true;
+    return;
+  }
+#endif // AARCH64
+
   // Create backing file
   _fd = create_fd(ZFILENAME_HEAP);
   if (_fd == -1) {
@@ -350,7 +358,12 @@ void ZPhysicalMemoryBacking::warn_max_map_count(size_t max_capacity) const {
   // However, ZGC tends to create the most mappings and dominate the total count.
   // In the worst cases, ZGC will map each granule three times, i.e. once per heap view.
   // We speculate that we need another 20% to allow for non-ZGC subsystems to map memory.
-  const size_t required_max_map_count = (max_capacity / ZGranuleSize) * 3 * 1.2;
+#ifdef AARCH64
+  const size_t required_max_map_multiple = UseTBI ? 1 : 3;
+#else
+  const size_t required_max_map_multiple = 3;
+#endif // AARCH64
+  const size_t required_max_map_count = (max_capacity / ZGranuleSize) * required_max_map_multiple * 1.2;
   if (actual_max_map_count < required_max_map_count) {
     log_warning_p(gc)("***** WARNING! INCORRECT SYSTEM CONFIGURATION DETECTED! *****");
     log_warning_p(gc)("The system limit on number of memory mappings per process might be too low for the given");
@@ -363,6 +376,13 @@ void ZPhysicalMemoryBacking::warn_max_map_count(size_t max_capacity) const {
 }
 
 void ZPhysicalMemoryBacking::warn_commit_limits(size_t max_capacity) const {
+#ifdef AARCH64
+  if (UseTBI) {
+    // Warn if max map count is too low
+    warn_max_map_count(max_capacity);
+    return;
+  }
+#endif // AARCH64
   // Warn if available space is too low
   warn_available_space(max_capacity);
 
@@ -681,6 +701,13 @@ size_t ZPhysicalMemoryBacking::commit_default(size_t offset, size_t length) cons
 }
 
 size_t ZPhysicalMemoryBacking::commit(size_t offset, size_t length) const {
+#ifdef AARCH64
+  if (UseTBI) {
+    // do nothing
+    return length;
+  }
+#endif // AARCH64
+
   if (ZNUMA::is_enabled() && !ZLargePages::is_explicit()) {
     // To get granule-level NUMA interleaving when using non-large pages,
     // we must explicitly interleave the memory at commit/fallocate time.
@@ -693,6 +720,12 @@ size_t ZPhysicalMemoryBacking::commit(size_t offset, size_t length) const {
 size_t ZPhysicalMemoryBacking::uncommit(size_t offset, size_t length) const {
   log_trace(gc, heap)("Uncommitting memory: " SIZE_FORMAT "M-" SIZE_FORMAT "M (" SIZE_FORMAT "M)",
                       offset / M, (offset + length) / M, length / M);
+#ifdef AARCH64
+  if (UseTBI) {
+    // Not yet supported.
+    return length;
+  }
+#endif // AARCH64
 
   const ZErrno err = fallocate(true /* punch_hole */, offset, length);
   if (err) {
@@ -704,6 +737,29 @@ size_t ZPhysicalMemoryBacking::uncommit(size_t offset, size_t length) const {
 }
 
 void ZPhysicalMemoryBacking::map(uintptr_t addr, size_t size, uintptr_t offset) const {
+#ifdef AARCH64
+  if (UseTBI) {
+    int flags = MAP_FIXED | MAP_ANONYMOUS | MAP_PRIVATE;
+    if (ZLargePages::is_explicit()) {
+      flags |= MAP_HUGETLB;
+    }
+    const void* const res = mmap((void*) CLEAR_TOP_BYTE(addr), size, PROT_READ | PROT_WRITE, flags, 0, 0);
+    if (res == MAP_FAILED) {
+      ZErrno err;
+      fatal("Failed to map memory (%s)", err.to_string());
+    }
+
+    // Advise on use of transparent huge pages before touching it
+    if (ZLargePages::is_transparent()) {
+      if (madvise((void*) CLEAR_TOP_BYTE(addr), size, MADV_HUGEPAGE) == -1) {
+        ZErrno err;
+        log_error(gc)("Failed to advise use of transparent huge pages (%s)", err.to_string());
+      }
+    }
+    return;
+  }
+#endif // AARCH64
+
   const void* const res = mmap((void*)addr, size, PROT_READ|PROT_WRITE, MAP_FIXED|MAP_SHARED, _fd, offset);
   if (res == MAP_FAILED) {
     ZErrno err;
@@ -712,6 +768,9 @@ void ZPhysicalMemoryBacking::map(uintptr_t addr, size_t size, uintptr_t offset) 
 }
 
 void ZPhysicalMemoryBacking::unmap(uintptr_t addr, size_t size) const {
+#ifdef AARCH64
+  addr = CLEAR_COLOR_BITS(addr);
+#endif // AARCH64
   // Note that we must keep the address space reservation intact and just detach
   // the backing memory. For this reason we map a new anonymous, non-accessible
   // and non-reserved page over the mapping instead of actually unmapping.

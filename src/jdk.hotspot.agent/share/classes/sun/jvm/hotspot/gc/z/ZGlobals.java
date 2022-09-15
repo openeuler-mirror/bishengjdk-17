@@ -98,6 +98,10 @@ public class ZGlobals {
         return instance().ZGlobalSeqNum();
     }
 
+    public static long ZAddressBase() {
+        return instance().ZAddressBase();
+    }
+
     public static long ZAddressOffsetMask() {
         return instance().ZAddressOffsetMask();
     }

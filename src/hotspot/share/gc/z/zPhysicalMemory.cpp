@@ -277,13 +277,21 @@ void ZPhysicalMemoryManager::try_enable_uncommit(size_t min_capacity, size_t max
 
 void ZPhysicalMemoryManager::nmt_commit(uintptr_t offset, size_t size) const {
   // From an NMT point of view we treat the first heap view (marked0) as committed
+#ifdef AARCH64
+  const uintptr_t addr = UseTBI ? ZAddress::base(offset) : ZAddress::marked0(offset);
+#else // AARCH64
   const uintptr_t addr = ZAddress::marked0(offset);
+#endif // AARCH64
   MemTracker::record_virtual_memory_commit((void*)addr, size, CALLER_PC);
 }
 
 void ZPhysicalMemoryManager::nmt_uncommit(uintptr_t offset, size_t size) const {
   if (MemTracker::tracking_level() > NMT_minimal) {
+#ifdef AARCH64
+    const uintptr_t addr = UseTBI ? ZAddress::base(offset) : ZAddress::marked0(offset);
+#else // AARCH64
     const uintptr_t addr = ZAddress::marked0(offset);
+#endif // AARCH64
     Tracker tracker(Tracker::uncommit);
     tracker.record((address)addr, size);
   }
@@ -291,6 +299,13 @@ void ZPhysicalMemoryManager::nmt_uncommit(uintptr_t offset, size_t size) const {
 
 void ZPhysicalMemoryManager::alloc(ZPhysicalMemory& pmem, size_t size) {
   assert(is_aligned(size, ZGranuleSize), "Invalid size");
+#ifdef AARCH64
+  if (UseTBI) {
+    // We don't use _manager to alloc addresses.
+    pmem.add_segment(ZPhysicalMemorySegment(0, size, false /* committed */));
+    return;
+  }
+#endif // AARCH64
 
   // Allocate segments
   while (size > 0) {
@@ -303,6 +318,13 @@ void ZPhysicalMemoryManager::alloc(ZPhysicalMemory& pmem, size_t size) {
 }
 
 void ZPhysicalMemoryManager::free(const ZPhysicalMemory& pmem) {
+#ifdef AARCH64
+  if (UseTBI) {
+    // We don't use _manager to alloc addresses.
+    return;
+  }
+#endif // AARCH64
+
   // Free segments
   for (int i = 0; i < pmem.nsegments(); i++) {
     const ZPhysicalMemorySegment& segment = pmem.segment(i);
@@ -381,6 +403,13 @@ void ZPhysicalMemoryManager::unmap_view(uintptr_t addr, size_t size) const {
 }
 
 void ZPhysicalMemoryManager::pretouch(uintptr_t offset, size_t size) const {
+#ifdef AARCH64
+  if (UseTBI) {
+    pretouch_view(ZAddress::base(offset), size);
+    return;
+  }
+#endif // AARCH64
+
   if (ZVerifyViews) {
     // Pre-touch good view
     pretouch_view(ZAddress::good(offset), size);
@@ -394,6 +423,13 @@ void ZPhysicalMemoryManager::pretouch(uintptr_t offset, size_t size) const {
 
 void ZPhysicalMemoryManager::map(uintptr_t offset, const ZPhysicalMemory& pmem) const {
   const size_t size = pmem.size();
+#ifdef AARCH64
+  if (UseTBI) {
+    map_view(ZAddress::base(offset), pmem);
+    nmt_commit(offset, size);
+    return;
+  }
+#endif // AARCH64
 
   if (ZVerifyViews) {
     // Map good view
@@ -410,6 +446,12 @@ void ZPhysicalMemoryManager::map(uintptr_t offset, const ZPhysicalMemory& pmem) 
 
 void ZPhysicalMemoryManager::unmap(uintptr_t offset, size_t size) const {
   nmt_uncommit(offset, size);
+#ifdef AARCH64
+  if (UseTBI) {
+    unmap_view(ZAddress::base(offset), size);
+    return;
+  }
+#endif // AARCH64
 
   if (ZVerifyViews) {
     // Unmap good view
@@ -423,12 +465,24 @@ void ZPhysicalMemoryManager::unmap(uintptr_t offset, size_t size) const {
 }
 
 void ZPhysicalMemoryManager::debug_map(uintptr_t offset, const ZPhysicalMemory& pmem) const {
+#ifdef AARCH64
+  if (UseTBI) {
+    // Does nothing when using VA-masking
+    return;
+  }
+#endif // AARCH64
   // Map good view
   assert(ZVerifyViews, "Should be enabled");
   map_view(ZAddress::good(offset), pmem);
 }
 
 void ZPhysicalMemoryManager::debug_unmap(uintptr_t offset, size_t size) const {
+#ifdef AARCH64
+  if (UseTBI) {
+    // Does nothing when using VA-masking
+    return;
+  }
+#endif // AARCH64
   // Unmap good view
   assert(ZVerifyViews, "Should be enabled");
   unmap_view(ZAddress::good(offset), size);

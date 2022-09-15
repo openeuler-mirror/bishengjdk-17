@@ -34,6 +34,7 @@
 #include <sys/mman.h>
 #endif // LINUX
 
+// Address layout when using multi-mapping
 //
 // The heap can have three different layouts, depending on the max heap size.
 //
@@ -142,6 +143,97 @@
 //  * 63-48 Fixed (16-bits, always zero)
 //
 
+// Address layout when using TBI (Top Byte Ignore)
+//
+// The heap can have three different layouts, depending on the max heap size.
+//
+// Address Space & Pointer Layout 1
+// --------------------------------
+//
+//  +--------------------------------+ 0x00007FFFFFFFFFFF (127TB)
+//  .                                .
+//  .                                .
+//  .                                .
+//  +--------------------------------+ 0x0000080000000000 (8TB)
+//  |            Heap                |
+//  +--------------------------------+ 0x0000040000000000 (4TB)
+//  .                                .
+//  +--------------------------------+ 0x0000000000000000
+//
+//    6  5 5                 4 4
+//    2  9 8                 2 1                                             0
+//  ++----+-------------------+-----------------------------------------------+
+//  0|1111|000 00000000 000000|11 11111111 11111111 11111111 11111111 11111111|
+//  ++----+-------------------+-----------------------------------------------+
+//   |    |                   |
+//   |    |                   * 41-0 Object Offset (42-bits, 4TB address space)
+//   |    |
+//   |    * 58-42 Fixed (18-bits, always zero)
+//   |
+//   * 62-59 Metadata Bits (4-bits)  0001 = Marked0
+//                                   0010 = Marked1
+//                                   0100 = Remapped
+//                                   1000 = Finalizable
+//
+//
+// Address Space & Pointer Layout 2
+// --------------------------------
+//
+//  +--------------------------------+ 0x00007FFFFFFFFFFF (127TB)
+//  .                                .
+//  .                                .
+//  .                                .
+//  +--------------------------------+ 0x0000100000000000 (16TB)
+//  |            Heap                |
+//  +--------------------------------+ 0x0000080000000000 (8TB)
+//  .                                .
+//  +--------------------------------+ 0x0000000000000000
+//
+//    6  5 5                4 4
+//    2  9 8                3 2                                             0
+//  ++----+------------------+------------------------------------------------+
+//  0|1111|000 00000000 00000|111 11111111 11111111 11111111 11111111 11111111|
+//  ++----+------------------+------------------------------------------------+
+//   |    |                  |
+//   |    |                  * 42-0 Object Offset (43-bits, 8TB address space)
+//   |    |
+//   |    * 58-43 Fixed (17-bits, always zero)
+//   |
+//   * 62-59 Metadata Bits (4-bits)  0001 = Marked0
+//                                   0010 = Marked1
+//                                   0100 = Remapped
+//                                   1000 = Finalizable
+//
+//
+// Address Space & Pointer Layout 3
+// --------------------------------
+//
+//  +--------------------------------+ 0x00007FFFFFFFFFFF (127TB)
+//  .                                .
+//  .                                .
+//  .                                .
+//  +--------------------------------+ 0x0000200000000000 (32TB)
+//  |            Heap                |
+//  +--------------------------------+ 0x0000100000000000 (16TB)
+//  .                                .
+//  +--------------------------------+ 0x0000000000000000
+//
+//    6  5 5               4 4
+//    2  9 8               4 3                                              0
+//  ++----+-----------------+-------------------------------------------------+
+//  0|1111|000 00000000 0000|1111 11111111 11111111 11111111 11111111 11111111|
+//  ++----+-----------------+-------------------------------------------------+
+//   |    |                 |
+//   |    |                 * 43-0 Object Offset (44-bits, 16TB address space)
+//   |    |
+//   |    * 58-44 Fixed (17-bits, always zero)
+//   |
+//   * 62-59 Metadata Bits (4-bits)  0001 = Marked0
+//                                   0010 = Marked1
+//                                   0100 = Remapped
+//                                   1000 = Finalizable
+//
+
 // Default value if probing is not implemented for a certain platform: 128TB
 static const size_t DEFAULT_MAX_ADDRESS_BIT = 47;
 // Minimum value returned, if probing fails: 64GB
@@ -196,6 +288,13 @@ static size_t probe_valid_max_address_bit() {
 #endif // LINUX
 }
 
+uintptr_t ZPlatformAddressBase() {
+  if (UseTBI) {
+    return (uintptr_t)1 << ZPlatformAddressOffsetBits();
+  }
+  return 0;
+}
+
 size_t ZPlatformAddressOffsetBits() {
   const static size_t valid_max_address_offset_bits = probe_valid_max_address_bit() + 1;
   const size_t max_address_offset_bits = valid_max_address_offset_bits - 3;
@@ -206,5 +305,8 @@ size_t ZPlatformAddressOffsetBits() {
 }
 
 size_t ZPlatformAddressMetadataShift() {
+  if (UseTBI) {
+    return ZPlatformAddressMetadataShiftForTbi;
+  }
   return ZPlatformAddressOffsetBits();
 }

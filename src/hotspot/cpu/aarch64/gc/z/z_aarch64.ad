@@ -26,6 +26,7 @@ source_hpp %{
 #include "gc/shared/gc_globals.hpp"
 #include "gc/z/c2/zBarrierSetC2.hpp"
 #include "gc/z/zThreadLocalData.hpp"
+#include "gc/z/zBarrierSetAssembler.hpp"
 
 %}
 
@@ -36,7 +37,12 @@ static void z_load_barrier(MacroAssembler& _masm, const MachNode* node, Address 
     return;
   }
   ZLoadBarrierStubC2* const stub = ZLoadBarrierStubC2::create(node, ref_addr, ref, tmp, barrier_data);
-  __ ldr(tmp, Address(rthread, ZThreadLocalData::address_bad_mask_offset()));
+  if (UseTBI) {
+    __ relocate(barrier_Relocation::spec());
+    __ movz(tmp, barrier_Relocation::unpatched, 48);
+  } else {
+    __ ldr(tmp, Address(rthread, ZThreadLocalData::address_bad_mask_offset()));
+  }
   __ andr(tmp, tmp, ref);
   __ cbnz(tmp, *stub->entry());
   __ bind(*stub->continuation());

@@ -1750,7 +1750,11 @@ int MachCallStaticJavaNode::ret_addr_offset()
 
 int MachCallDynamicJavaNode::ret_addr_offset()
 {
-  return 16; // movz, movk, movk, bl
+  if (!UseTBI) {
+    return 16; // movz, movk, movk, bl
+  } else {
+    return 20; // movz, movk, movk, movk, bl
+  }
 }
 
 int MachCallRuntimeNode::ret_addr_offset() {
@@ -1768,7 +1772,12 @@ int MachCallRuntimeNode::ret_addr_offset() {
   if (cb) {
     return 1 * NativeInstruction::instruction_size;
   } else {
-    return 6 * NativeInstruction::instruction_size;
+    // lea will emit 3 or an extra movk to make 4 instructions.
+    if (!UseTBI) {
+      return 6 * NativeInstruction::instruction_size;
+    } else {
+      return 7 * NativeInstruction::instruction_size;
+    }
   }
 }
 

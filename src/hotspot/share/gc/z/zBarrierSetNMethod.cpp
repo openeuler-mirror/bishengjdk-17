@@ -55,6 +55,13 @@ bool ZBarrierSetNMethod::nmethod_entry_barrier(nmethod* nm) {
     return false;
   }
 
+#ifdef AARCH64
+  if (UseTBI) {
+    // Heal barriers
+    ZNMethod::nmethod_patch_barriers(nm);
+  }
+#endif
+
   // Heal oops
   ZNMethod::nmethod_oops_barrier(nm);
 

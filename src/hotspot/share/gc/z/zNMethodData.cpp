@@ -86,3 +86,15 @@ ZNMethodDataOops* ZNMethodData::swap_oops(ZNMethodDataOops* new_oops) {
   _oops = new_oops;
   return old_oops;
 }
+
+#ifdef AARCH64
+const ZArray<address>* ZNMethodData::barriers() const {
+  assert(_lock.is_owned(), "Should be owned");
+  return &_barriers;
+}
+
+void ZNMethodData::swap_barriers(ZArray<address>* new_barriers) {
+  ZLocker<ZReentrantLock> locker(&_lock);
+  _barriers.swap(new_barriers);
+}
+#endif

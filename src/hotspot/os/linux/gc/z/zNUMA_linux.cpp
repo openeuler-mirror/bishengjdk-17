@@ -59,6 +59,10 @@ uint32_t ZNUMA::memory_id(uintptr_t addr) {
 
   uint32_t id = (uint32_t)-1;
 
+#ifdef AARCH64
+  addr = CLEAR_COLOR_BITS(addr);
+#endif
+
   if (ZSyscall::get_mempolicy((int*)&id, NULL, 0, (void*)addr, MPOL_F_NODE | MPOL_F_ADDR) == -1) {
     ZErrno err;
     fatal("Failed to get NUMA id for memory at " PTR_FORMAT " (%s)", addr, err.to_string());
