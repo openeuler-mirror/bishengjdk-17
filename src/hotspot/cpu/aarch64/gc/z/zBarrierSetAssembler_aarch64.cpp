@@ -203,6 +203,26 @@ void ZBarrierSetAssembler::try_resolve_jobject_in_native(MacroAssembler* masm,
   BLOCK_COMMENT("} ZBarrierSetAssembler::try_resolve_jobject_in_native");
 }
 
+static void change_immediate(uint32_t& instr, uint32_t imm, uint32_t start, uint32_t end) {
+  uint32_t imm_mask = ((1u << start) - 1u) ^ ((1u << (end + 1)) - 1u);
+  instr &= ~imm_mask;
+  instr |= imm << start;
+}
+
+void ZBarrierSetAssembler::patch_barrier_relocation(address addr) {
+  uint32_t* const patch_addr = (uint32_t*)addr;
+
+  // The next 3 insns should be movz, andr, cbnz.
+  assert(nativeInstruction_at(addr)->is_movz() &&
+    Instruction_aarch64::extract(*(patch_addr + 1), 30, 24) == 0b0001010 &&
+    Instruction_aarch64::extract(*(patch_addr + 2), 31, 24) == 0b10110101,
+    "wrong insns in barrier patch");
+
+  change_immediate(*patch_addr, (uint16_t) (ZAddressBadMask >> 48), 5, 20);
+  OrderAccess::fence();
+  ICache::invalidate_word((address)patch_addr);
+}
+
 #ifdef COMPILER1
 
 #undef __

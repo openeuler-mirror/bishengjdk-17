@@ -45,6 +45,7 @@ public:
 
   uint32_t* _ZGlobalSeqNum;
 
+  uintptr_t* _ZAddressBase;
   uintptr_t* _ZAddressOffsetMask;
   uintptr_t* _ZAddressMetadataMask;
   uintptr_t* _ZAddressMetadataFinalizable;
@@ -64,6 +65,7 @@ typedef ZAttachedArray<ZForwarding, ZForwardingEntry> ZAttachedArrayForForwardin
   static_field(ZGlobalsForVMStructs,            _instance_p,          ZGlobalsForVMStructs*)         \
   nonstatic_field(ZGlobalsForVMStructs,         _ZGlobalPhase,        uint32_t*)                     \
   nonstatic_field(ZGlobalsForVMStructs,         _ZGlobalSeqNum,       uint32_t*)                     \
+  nonstatic_field(ZGlobalsForVMStructs,         _ZAddressBase,        uintptr_t*)                    \
   nonstatic_field(ZGlobalsForVMStructs,         _ZAddressOffsetMask,  uintptr_t*)                    \
   nonstatic_field(ZGlobalsForVMStructs,         _ZAddressMetadataMask, uintptr_t*)                   \
   nonstatic_field(ZGlobalsForVMStructs,         _ZAddressMetadataFinalizable, uintptr_t*)            \
@@ -120,6 +122,7 @@ typedef ZAttachedArray<ZForwarding, ZForwardingEntry> ZAttachedArrayForForwardin
   declare_constant(ZPageSizeMediumShift)                                                             \
   declare_constant(ZAddressOffsetShift)                                                              \
   declare_constant(ZAddressOffsetBits)                                                               \
+  declare_constant(ZAddressBase)                                                                     \
   declare_constant(ZAddressOffsetMask)                                                               \
   declare_constant(ZAddressOffsetMax)
 

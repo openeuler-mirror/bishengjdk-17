@@ -234,6 +234,14 @@ void NativeCall::insert(address code_pos, address entry) { Unimplemented(); }
 
 //-------------------------------------------------------------------
 
+// movz, movk, movk.
+int NativeMovConstReg::instruction_size = 3 * NativeInstruction::instruction_size;
+
+void NativeMovConstReg::init_for_tbi() {
+  // movz, movk, movk, movk.
+  instruction_size = 4 * NativeInstruction::instruction_size;
+}
+
 void NativeMovConstReg::verify() {
   if (! (nativeInstruction_at(instruction_address())->is_movz() ||
         is_adrp_at(instruction_address()) ||
@@ -439,8 +447,17 @@ bool NativeInstruction::is_general_jump() {
       NativeInstruction* inst2 = nativeInstruction_at(addr_at(instruction_size * 2));
       if (inst2->is_movk()) {
         NativeInstruction* inst3 = nativeInstruction_at(addr_at(instruction_size * 3));
-        if (inst3->is_blr()) {
-          return true;
+        if (!UseTBI) {
+          if (inst3->is_blr()) {
+            return true;
+          }
+        } else {
+          if(inst3->is_movk()) {
+            NativeInstruction* inst4 = nativeInstruction_at(addr_at(instruction_size * 4));
+            if (inst4->is_blr()) {
+              return true;
+            }
+          }
         }
       }
     }
@@ -494,6 +511,16 @@ void NativeJump::patch_verified_entry(address entry, address verified_entry, add
   }
 
   ICache::invalidate_range(verified_entry, instruction_size);
+}
+
+// movz, movk, movk, br.
+int NativeGeneralJump::instruction_size = 4 * NativeInstruction::instruction_size;
+int NativeGeneralJump::next_instruction_offset = 4 * NativeInstruction::instruction_size;
+
+void NativeGeneralJump::init_for_tbi() {
+  // movz, movk, movk, movk, br.
+  instruction_size = 5 * NativeInstruction::instruction_size;
+  next_instruction_offset = 5 * NativeInstruction::instruction_size;
 }
 
 void NativeGeneralJump::verify() {  }

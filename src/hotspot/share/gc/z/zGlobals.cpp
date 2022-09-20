@@ -49,6 +49,7 @@ static uint32_t* ZAddressCalculateBadMaskHighOrderBitsAddr() {
 
 uint32_t*  ZAddressBadMaskHighOrderBitsAddr = ZAddressCalculateBadMaskHighOrderBitsAddr();
 
+uintptr_t  ZAddressBase;
 size_t     ZAddressOffsetBits;
 uintptr_t  ZAddressOffsetMask;
 size_t     ZAddressOffsetMax;

@@ -174,9 +174,10 @@ int MacroAssembler::patch_oop(address insn_addr, address o) {
   unsigned insn = *(unsigned*)insn_addr;
   assert(nativeInstruction_at(insn_addr+4)->is_movk(), "wrong insns in patch");
 
-  // OOPs are either narrow (32 bits) or wide (48 bits).  We encode
+  // OOPs are either narrow (32 bits) or wide (48 or 64 bits).  We encode
   // narrow OOPs by setting the upper 16 bits in the first
   // instruction.
+  // 64 bit addresses are only enabled with UseTBI set.
   if (Instruction_aarch64::extract(insn, 31, 21) == 0b11010010101) {
     // Move narrow OOP
     uint32_t n = CompressedOops::narrow_oop_value(cast_to_oop(o));
@@ -191,6 +192,12 @@ int MacroAssembler::patch_oop(address insn_addr, address o) {
     Instruction_aarch64::patch(insn_addr+4, 20, 5, (dest >>= 16) & 0xffff);
     Instruction_aarch64::patch(insn_addr+8, 20, 5, (dest >>= 16) & 0xffff);
     instructions = 3;
+
+    if (UseTBI) {
+      assert(nativeInstruction_at(insn_addr+12)->is_movk(), "wrong insns in patch");
+      Instruction_aarch64::patch(insn_addr+12, 20, 5, (dest >>= 16) & 0xffff);
+      instructions = 4;
+    }
   }
   return instructions * NativeInstruction::instruction_size;
 }
@@ -277,12 +284,18 @@ address MacroAssembler::target_addr_for_insn(address insn_addr, unsigned insn) {
     }
   } else if (Instruction_aarch64::extract(insn, 31, 23) == 0b110100101) {
     uint32_t *insns = (uint32_t *)insn_addr;
-    // Move wide constant: movz, movk, movk.  See movptr().
-    assert(nativeInstruction_at(insns+1)->is_movk(), "wrong insns in patch");
-    assert(nativeInstruction_at(insns+2)->is_movk(), "wrong insns in patch");
-    return address(uint64_t(Instruction_aarch64::extract(insns[0], 20, 5))
+    // Move wide constant: movz, movk, movk [, movk].  See movptr().
+    assert(nativeInstruction_at(insns+1)->is_movk(), "wrong insns in patch - 2nd movk missing");
+    assert(nativeInstruction_at(insns+2)->is_movk(), "wrong insns in patch - 3rd movk missing");
+    uint64_t addr = uint64_t(Instruction_aarch64::extract(insns[0], 20, 5))
                    + (uint64_t(Instruction_aarch64::extract(insns[1], 20, 5)) << 16)
-                   + (uint64_t(Instruction_aarch64::extract(insns[2], 20, 5)) << 32));
+                   + (uint64_t(Instruction_aarch64::extract(insns[2], 20, 5)) << 32);
+    // Allow for getting the target address of a possible adddress.
+    if (UseTBI) {
+      assert(nativeInstruction_at(insns+3)->is_movk(), "wrong insns in patch - 4th movk missing.");
+      addr += uint64_t(Instruction_aarch64::extract(insns[3], 20, 5)) << 48;
+    }
+    return address(addr);
   } else if (Instruction_aarch64::extract(insn, 31, 22) == 0b1011100101 &&
              Instruction_aarch64::extract(insn, 4, 0) == 0b11111) {
     return 0;
@@ -1473,10 +1486,9 @@ void MacroAssembler::mov(Register r, Address dest) {
   movptr(r, imm64);
 }
 
-// Move a constant pointer into r.  In AArch64 mode the virtual
-// address space is 48 bits in size, so we only need three
-// instructions to create a patchable instruction sequence that can
-// reach anywhere.
+// Move a constant pointer into r.  In AArch64 mode the virtual address space
+// is 48 bits in size or 52 bits. We need three or four instructions to create
+// a patchable instruction sequence that can reach anywhere.
 void MacroAssembler::movptr(Register r, uintptr_t imm64) {
 #ifndef PRODUCT
   {
@@ -1485,12 +1497,18 @@ void MacroAssembler::movptr(Register r, uintptr_t imm64) {
     block_comment(buffer);
   }
 #endif
-  assert(imm64 < (1ull << 48), "48-bit overflow in address constant");
+  if (!UseTBI) {
+    assert(imm64 < (1ull << 48), "48-bit overflow in address constant");
+  }
   movz(r, imm64 & 0xffff);
   imm64 >>= 16;
   movk(r, imm64 & 0xffff, 16);
   imm64 >>= 16;
   movk(r, imm64 & 0xffff, 32);
+  if (UseTBI) {
+    imm64 >>= 16;
+    movk(r, imm64 & 0xffff, 48);
+  }
 }
 
 // Macro to mov replicated immediate to vector register.

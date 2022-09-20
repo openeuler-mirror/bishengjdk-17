@@ -52,6 +52,9 @@ public:
   static bool is_remapped(uintptr_t value);
   static bool is_in(uintptr_t value);
 
+#ifdef AARCH64
+  static uintptr_t base(uintptr_t value);
+#endif
   static uintptr_t offset(uintptr_t value);
   static uintptr_t good(uintptr_t value);
   static uintptr_t good_or_null(uintptr_t value);

@@ -643,6 +643,13 @@ public:
     }
 
     if (ZNMethod::is_armed(nm)) {
+#ifdef AARCH64
+      if (UseTBI) {
+        // Heal barriers
+        ZNMethod::nmethod_patch_barriers(nm);
+      }
+#endif
+
       ZNMethod::nmethod_oops_do_inner(nm, _cl);
       ZNMethod::disarm(nm);
     }

@@ -31,6 +31,12 @@
 #include "utilities/macros.hpp"
 #include "utilities/powerOfTwo.hpp"
 
+#ifdef AARCH64
+#define AARCH64_BASE(x) base(x)
+#else
+#define AARCH64_BASE(x) (x)
+#endif
+
 inline bool ZAddress::is_null(uintptr_t value) {
   return value == 0;
 }
@@ -90,7 +96,11 @@ inline bool ZAddress::is_remapped(uintptr_t value) {
 
 inline bool ZAddress::is_in(uintptr_t value) {
   // Check that exactly one non-offset bit is set
+#ifdef AARCH64
+  if (!is_power_of_2(value & ~ZAddressOffsetMask & ~ZAddressBase)) {
+#else
   if (!is_power_of_2(value & ~ZAddressOffsetMask)) {
+#endif
     return false;
   }
 
@@ -98,12 +108,18 @@ inline bool ZAddress::is_in(uintptr_t value) {
   return value & (ZAddressMetadataMask & ~ZAddressMetadataFinalizable);
 }
 
+#ifdef AARCH64
+inline uintptr_t ZAddress::base(uintptr_t value) {
+  return value | ZAddressBase;
+}
+#endif
+
 inline uintptr_t ZAddress::offset(uintptr_t value) {
   return value & ZAddressOffsetMask;
 }
 
 inline uintptr_t ZAddress::good(uintptr_t value) {
-  return offset(value) | ZAddressGoodMask;
+  return AARCH64_BASE(offset(value) | ZAddressGoodMask);
 }
 
 inline uintptr_t ZAddress::good_or_null(uintptr_t value) {
@@ -111,27 +127,29 @@ inline uintptr_t ZAddress::good_or_null(uintptr_t value) {
 }
 
 inline uintptr_t ZAddress::finalizable_good(uintptr_t value) {
-  return offset(value) | ZAddressMetadataFinalizable | ZAddressGoodMask;
+  return AARCH64_BASE(offset(value) | ZAddressMetadataFinalizable | ZAddressGoodMask);
 }
 
 inline uintptr_t ZAddress::marked(uintptr_t value) {
-  return offset(value) | ZAddressMetadataMarked;
+  return AARCH64_BASE(offset(value) | ZAddressMetadataMarked);
 }
 
 inline uintptr_t ZAddress::marked0(uintptr_t value) {
-  return offset(value) | ZAddressMetadataMarked0;
+  return AARCH64_BASE(offset(value) | ZAddressMetadataMarked0);
 }
 
 inline uintptr_t ZAddress::marked1(uintptr_t value) {
-  return offset(value) | ZAddressMetadataMarked1;
+  return AARCH64_BASE(offset(value) | ZAddressMetadataMarked1);
 }
 
 inline uintptr_t ZAddress::remapped(uintptr_t value) {
-  return offset(value) | ZAddressMetadataRemapped;
+  return AARCH64_BASE(offset(value) | ZAddressMetadataRemapped);
 }
 
 inline uintptr_t ZAddress::remapped_or_null(uintptr_t value) {
   return is_null(value) ? 0 : remapped(value);
 }
+
+#undef AARCH64_BASE
 
 #endif // SHARE_GC_Z_ZADDRESS_INLINE_HPP

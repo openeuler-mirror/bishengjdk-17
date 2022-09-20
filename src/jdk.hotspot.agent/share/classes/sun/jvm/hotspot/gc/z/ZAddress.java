@@ -51,12 +51,18 @@ class ZAddress {
         return !is_weak_bad(value);
     }
 
+    static long base(long address) {
+        // ZAddressBase is a non-zero value only when flag UseTBI is on.
+        // So nothing changes when the arch is not Aarch64 or UseTBI is off.
+        return address | ZGlobals.ZAddressBase();
+    }
+
     static long offset(Address address) {
         return as_long(address) & ZGlobals.ZAddressOffsetMask();
     }
 
     static Address good(Address value) {
-        return VM.getVM().getDebugger().newAddress(offset(value) | ZGlobals.ZAddressGoodMask());
+        return VM.getVM().getDebugger().newAddress(base(offset(value) | ZGlobals.ZAddressGoodMask()));
     }
 
     static Address good_or_null(Address value) {
@@ -69,9 +75,14 @@ class ZAddress {
 
     static boolean isIn(Address addr) {
         long value = as_long(addr);
-        if (!isPowerOf2(value & ~ZGlobals.ZAddressOffsetMask())) {
+        if (!isPowerOf2(value & ~ZGlobals.ZAddressOffsetMask() & ~ZGlobals.ZAddressBase())) {
             return false;
         }
         return (value & (ZGlobals.ZAddressMetadataMask() & ~ZGlobals.ZAddressMetadataFinalizable())) != 0L;
+    }
+
+    static Address clearTopByte(Address value) {
+        // (1L << 56) - 1 = 0x 00ff ffff ffff ffff
+        return VM.getVM().getDebugger().newAddress(as_long(value) & ((1L << 56) - 1));
     }
 }

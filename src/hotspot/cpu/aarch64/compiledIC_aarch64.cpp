@@ -71,8 +71,13 @@ address CompiledStaticCall::emit_to_interp_stub(CodeBuffer &cbuf, address mark) 
 #undef __
 
 int CompiledStaticCall::to_interp_stub_size() {
-  // isb; movk; movz; movz; movk; movz; movz; br
-  return 8 * NativeInstruction::instruction_size;
+  if (!UseTBI) {
+    // isb; movk; movz; movz; movk; movz; movz; br
+    return 8 * NativeInstruction::instruction_size;
+  } else {
+    // emit_to_interp_stub will emit 2 extra movk instructions.
+    return 10 * NativeInstruction::instruction_size;
+  }
 }
 
 int CompiledStaticCall::to_trampoline_stub_size() {

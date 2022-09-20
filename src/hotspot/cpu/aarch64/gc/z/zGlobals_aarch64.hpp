@@ -28,6 +28,11 @@ const size_t ZPlatformGranuleSizeShift = 21; // 2MB
 const size_t ZPlatformHeapViews        = 3;
 const size_t ZPlatformCacheLineSize    = 64;
 
+// The highest bit (bit 63) of the address is occupied by StackWatermarkState (see StackWatermarkState::create).
+// So here we use bits 59~62 as the metadata bits of ZGC.
+const size_t ZPlatformAddressMetadataShiftForTbi = 59;
+
+uintptr_t ZPlatformAddressBase();
 size_t ZPlatformAddressOffsetBits();
 size_t ZPlatformAddressMetadataShift();
 

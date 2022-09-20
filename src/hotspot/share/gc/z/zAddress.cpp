@@ -32,6 +32,12 @@ void ZAddress::set_good_mask(uintptr_t mask) {
 }
 
 void ZAddress::initialize() {
+#ifdef AARCH64
+  ZAddressBase = ZPlatformAddressBase();
+#else
+  ZAddressBase = 0;
+#endif
+
   ZAddressOffsetBits = ZPlatformAddressOffsetBits();
   ZAddressOffsetMask = (((uintptr_t)1 << ZAddressOffsetBits) - 1) << ZAddressOffsetShift;
   ZAddressOffsetMax = (uintptr_t)1 << ZAddressOffsetBits;

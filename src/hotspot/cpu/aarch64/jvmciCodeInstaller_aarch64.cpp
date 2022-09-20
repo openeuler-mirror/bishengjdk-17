@@ -57,9 +57,19 @@ void CodeInstaller::pd_patch_OopConstant(int pc_offset, JVMCIObject constant, JV
       assert(Instruction_aarch64::extract(insn->encoding(), 31, 21) == 0b11010010101 &&
              nativeInstruction_at(pc+4)->is_movk(), "wrong insn in patch");
     } else {
-      // Move wide constant: movz n, movk, movk.
-      assert(nativeInstruction_at(pc+4)->is_movk()
-             && nativeInstruction_at(pc+8)->is_movk(), "wrong insn in patch");
+      if (!UseTBI) {
+        // Move wide constant: movz n, movk, movk.
+        assert(nativeInstruction_at(pc+4)->is_movk()
+               && nativeInstruction_at(pc+8)->is_movk(), "wrong insn in patch");
+      } else {
+        // Move wide constant: movz n, movk, movk, movk.
+        // JVMCI would require code generated for it to use 64 bit literals and
+        // it therefore disables UseTBI until support is enabled.
+        // @see src/hotspot/cpu/aarch64/vm_version_aarch64.cpp - VM_Version::initialize()
+        assert(nativeInstruction_at(pc+4)->is_movk()
+               && nativeInstruction_at(pc+8)->is_movk()
+               && nativeInstruction_at(pc+12)->is_movk(), "wrong insn in patch");
+      }
     }
   }
 #endif // ASSERT

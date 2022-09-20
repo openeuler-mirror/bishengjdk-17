@@ -34,11 +34,52 @@
 #include "utilities/align.hpp"
 #include "utilities/debug.hpp"
 
+// Store the instruction bitmask, bits and name for checking the barrier.
+struct CheckInsn {
+  uint32_t mask;
+  uint32_t bits;
+  const char *name;
+};
+
+static const struct CheckInsn barrierInsn48[] = {
+  { 0xff000000, 0x18000000, "ldr (literal)" },
+  { 0xfffff0ff, 0xd50330bf, "dmb" },
+  { 0xffc00000, 0xb9400000, "ldr"},
+  { 0x7f20001f, 0x6b00001f, "cmp"},
+  { 0xff00001f, 0x54000000, "b.eq"},
+  { 0xff800000, 0xd2800000, "mov"},
+  { 0xff800000, 0xf2800000, "movk"},
+  { 0xff800000, 0xf2800000, "movk"},
+  { 0xfffffc1f, 0xd63f0000, "blr"},
+  { 0xfc000000, 0x14000000, "b"}
+};
+
+static const struct CheckInsn barrierInsn64[] = {
+  { 0xff000000, 0x18000000, "ldr (literal)" },
+  { 0xfffff0ff, 0xd50330bf, "dmb" },
+  { 0xffc00000, 0xb9400000, "ldr"},
+  { 0x7f20001f, 0x6b00001f, "cmp"},
+  { 0xff00001f, 0x54000000, "b.eq"},
+  { 0xff800000, 0xd2800000, "mov"},
+  { 0xff800000, 0xf2800000, "movk"},
+  { 0xff800000, 0xf2800000, "movk"},
+  { 0xff800000, 0xf2800000, "movk"},
+  { 0xfffffc1f, 0xd63f0000, "blr"},
+  { 0xfc000000, 0x14000000, "b"}
+};
+
+static const unsigned int barrier_inst_len48 = sizeof(barrierInsn48) / sizeof(struct CheckInsn);
+static const unsigned int barrier_inst_len64 = sizeof(barrierInsn64) / sizeof(struct CheckInsn);
+
+static int get_entry_barrier_size() {
+  return UseTBI ? (4 * (int)barrier_inst_len64) : (4 * (int)barrier_inst_len48);
+}
+
 class NativeNMethodBarrier: public NativeInstruction {
   address instruction_address() const { return addr_at(0); }
 
   int *guard_addr() {
-    return reinterpret_cast<int*>(instruction_address() + 10 * 4);
+    return reinterpret_cast<int*>(instruction_address() + get_entry_barrier_size());
   }
 
 public:
@@ -53,32 +94,21 @@ public:
   void verify() const;
 };
 
-// Store the instruction bitmask, bits and name for checking the barrier.
-struct CheckInsn {
-  uint32_t mask;
-  uint32_t bits;
-  const char *name;
-};
-
-static const struct CheckInsn barrierInsn[] = {
-  { 0xff000000, 0x18000000, "ldr (literal)" },
-  { 0xfffff0ff, 0xd50330bf, "dmb" },
-  { 0xffc00000, 0xb9400000, "ldr"},
-  { 0x7f20001f, 0x6b00001f, "cmp"},
-  { 0xff00001f, 0x54000000, "b.eq"},
-  { 0xff800000, 0xd2800000, "mov"},
-  { 0xff800000, 0xf2800000, "movk"},
-  { 0xff800000, 0xf2800000, "movk"},
-  { 0xfffffc1f, 0xd63f0000, "blr"},
-  { 0xfc000000, 0x14000000, "b"}
-};
-
 // The encodings must match the instructions emitted by
 // BarrierSetAssembler::nmethod_entry_barrier. The matching ignores the specific
 // register numbers and immediate values in the encoding.
 void NativeNMethodBarrier::verify() const {
+  const CheckInsn *barrierInsn;
+  unsigned int barrier_inst_len;
+  if (UseTBI) {
+    barrierInsn = barrierInsn64;
+    barrier_inst_len = barrier_inst_len64;
+  } else {
+    barrierInsn = barrierInsn48;
+    barrier_inst_len = barrier_inst_len48;
+  }
   intptr_t addr = (intptr_t) instruction_address();
-  for(unsigned int i = 0; i < sizeof(barrierInsn)/sizeof(struct CheckInsn); i++ ) {
+  for(unsigned int i = 0; i < barrier_inst_len; i++) {
     uint32_t inst = *((uint32_t*) addr);
     if ((inst & barrierInsn[i].mask) != barrierInsn[i].bits) {
       tty->print_cr("Addr: " INTPTR_FORMAT " Code: 0x%x", addr, inst);
@@ -132,10 +162,14 @@ void BarrierSetNMethod::deoptimize(nmethod* nm, address* return_address_ptr) {
 // not find the expected native instruction at this offset, which needs updating.
 // Note that this offset is invariant of PreserveFramePointer.
 
-static const int entry_barrier_offset = -4 * 11;
+// offset = entry barrier insns (10 or 11, depending on UseTBI) + int32 (guard value)
+// @see BarrierSetAssembler::nmethod_entry_barrier
+static int entry_barrier_offset() {
+  return -(get_entry_barrier_size() + 4);
+}
 
 static NativeNMethodBarrier* native_nmethod_barrier(nmethod* nm) {
-  address barrier_address = nm->code_begin() + nm->frame_complete_offset() + entry_barrier_offset;
+  address barrier_address = nm->code_begin() + nm->frame_complete_offset() + entry_barrier_offset();
   NativeNMethodBarrier* barrier = reinterpret_cast<NativeNMethodBarrier*>(barrier_address);
   debug_only(barrier->verify());
   return barrier;

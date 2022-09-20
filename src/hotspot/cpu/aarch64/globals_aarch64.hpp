@@ -119,7 +119,10 @@ define_pd_global(intx, InlineSmallCode,          1000);
   product(uint, OnSpinWaitInstCount, 1, DIAGNOSTIC,                     \
           "The number of OnSpinWaitInst instructions to generate."      \
           "It cannot be used with OnSpinWaitInst=none.")                \
-          range(1, 99)
+          range(1, 99)                                                  \
+  product(bool, UseTBI, false, EXPERIMENTAL,                            \
+          "Use the \"Top Byte Ignore\" feature for ZGC."                \
+          "And use 64 bit literal addresses instead of 48 bit.")
 
 // end of ARCH_FLAGS
 

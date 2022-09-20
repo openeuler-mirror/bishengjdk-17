@@ -77,6 +77,8 @@ public:
                                              Register tmp,
                                              Label& slowpath);
 
+  void patch_barrier_relocation(address addr);
+
 #ifdef COMPILER1
   void generate_c1_load_barrier_test(LIR_Assembler* ce,
                                      LIR_Opr ref) const;

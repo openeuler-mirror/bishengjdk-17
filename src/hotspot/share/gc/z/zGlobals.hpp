@@ -102,6 +102,7 @@ extern uint32_t*  ZAddressBadMaskHighOrderBitsAddr;
 const int         ZAddressBadMaskHighOrderBitsOffset = LITTLE_ENDIAN_ONLY(4) BIG_ENDIAN_ONLY(0);
 
 // Pointer part of address
+extern uintptr_t  ZAddressBase;
 extern size_t     ZAddressOffsetBits;
 const  size_t     ZAddressOffsetShift           = 0;
 extern uintptr_t  ZAddressOffsetMask;

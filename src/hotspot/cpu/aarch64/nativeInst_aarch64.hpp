@@ -271,16 +271,19 @@ inline NativeCall* nativeCall_before(address return_address) {
 class NativeMovConstReg: public NativeInstruction {
 public:
   enum Aarch64_specific_constants {
-    instruction_size            =    3 * 4, // movz, movk, movk.  See movptr().
     instruction_offset          =    0,
     displacement_offset         =    0,
   };
+
+  static int instruction_size;
+
+  static void init_for_tbi();
 
   address instruction_address() const { return addr_at(instruction_offset); }
 
   address next_instruction_address() const {
     if (nativeInstruction_at(instruction_address())->is_movz())
-      // Assume movz, movk, movk
+      // Assume movz, movk, movk [, movk].
       return addr_at(instruction_size);
     else if (is_adrp_at(instruction_address()))
       return addr_at(2*4);
@@ -469,11 +472,14 @@ inline NativeJump* nativeJump_at(address address) {
 class NativeGeneralJump: public NativeJump {
 public:
   enum AArch64_specific_constants {
-    instruction_size            =    4 * 4,
     instruction_offset          =    0,
-    data_offset                 =    0,
-    next_instruction_offset     =    4 * 4
+    data_offset                 =    0
   };
+
+  static int instruction_size;
+  static int next_instruction_offset;
+
+  static void init_for_tbi();
 
   address jump_destination() const;
   void set_jump_destination(address dest);

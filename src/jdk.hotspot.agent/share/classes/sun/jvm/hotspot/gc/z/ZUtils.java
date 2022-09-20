@@ -37,4 +37,9 @@ class ZUtils {
         long adjusted = size + mask;
         return adjusted & ~mask;
     }
+
+    static boolean getUseTBI() {
+        VM.Flag flag = VM.getVM().getCommandLineFlag("UseTBI");
+        return flag == null ? false : flag.getBool();
+    }
 }

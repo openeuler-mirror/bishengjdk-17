@@ -24,6 +24,7 @@
 #ifndef SHARE_GC_Z_ZNMETHODDATA_HPP
 #define SHARE_GC_Z_ZNMETHODDATA_HPP
 
+#include "gc/z/zArray.hpp"
 #include "gc/z/zAttachedArray.hpp"
 #include "gc/z/zLock.hpp"
 #include "memory/allocation.hpp"
@@ -57,6 +58,9 @@ class ZNMethodData : public CHeapObj<mtGC> {
 private:
   ZReentrantLock             _lock;
   ZNMethodDataOops* volatile _oops;
+#ifdef AARCH64
+  ZArray<address> _barriers;
+#endif
 
 public:
   ZNMethodData();
@@ -66,6 +70,11 @@ public:
 
   ZNMethodDataOops* oops() const;
   ZNMethodDataOops* swap_oops(ZNMethodDataOops* oops);
+
+#ifdef AARCH64
+  const ZArray<address>* barriers() const;
+  void swap_barriers(ZArray<address>* barriers);
+#endif
 };
 
 #endif // SHARE_GC_Z_ZNMETHODDATA_HPP

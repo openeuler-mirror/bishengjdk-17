@@ -2831,6 +2831,9 @@ JNI_ENTRY(void*, jni_GetPrimitiveArrayCritical(JNIEnv *env, jarray array, jboole
     type = TypeArrayKlass::cast(a->klass())->element_type();
   }
   void* ret = arrayOop(a)->base(type);
+#ifdef AARCH64
+  ret = (void*) CLEAR_COLOR_BITS((uintptr_t) ret);
+#endif // AARCH64
  HOTSPOT_JNI_GETPRIMITIVEARRAYCRITICAL_RETURN(ret);
   return ret;
 JNI_END
@@ -2893,6 +2896,9 @@ JNI_ENTRY(const jchar*, jni_GetStringCritical(JNIEnv *env, jstring string, jbool
     }
     if (isCopy != NULL) *isCopy = JNI_TRUE;
   }
+#ifdef AARCH64
+  ret = (jchar*) CLEAR_COLOR_BITS((uintptr_t) ret);
+#endif // AARCH64
  HOTSPOT_JNI_GETSTRINGCRITICAL_RETURN((uint16_t *) ret);
   return ret;
 JNI_END

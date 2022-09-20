@@ -27,6 +27,7 @@
 ZGlobalsForVMStructs::ZGlobalsForVMStructs() :
     _ZGlobalPhase(&ZGlobalPhase),
     _ZGlobalSeqNum(&ZGlobalSeqNum),
+    _ZAddressBase(&ZAddressBase),
     _ZAddressOffsetMask(&ZAddressOffsetMask),
     _ZAddressMetadataMask(&ZAddressMetadataMask),
     _ZAddressMetadataFinalizable(&ZAddressMetadataFinalizable),

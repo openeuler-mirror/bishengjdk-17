@@ -31,6 +31,10 @@
 #include "runtime/vm_version.hpp"
 #include "utilities/formatBuffer.hpp"
 #include "utilities/macros.hpp"
+#include "code/nativeInst.hpp"
+#ifdef COMPILER1
+#include "c1/c1_LIRAssembler.hpp"
+#endif // COMPILER1
 
 #include OS_HEADER_INLINE(os)
 
@@ -64,6 +68,16 @@ static SpinWait get_spin_wait_desc() {
   }
 
   return SpinWait{};
+}
+
+// Configure instruction sizes for nativeInst_aarch64 and c1_LIRAssembler_aarch64
+// based on flag UseTBI.
+static void init_instruction_sizes_for_tbi() {
+  NativeMovConstReg::init_for_tbi();
+  NativeGeneralJump::init_for_tbi();
+#ifdef COMPILER1
+  LIR_Assembler::init_for_tbi();
+#endif // COMPILER1
 }
 
 void VM_Version::initialize() {
@@ -404,6 +418,20 @@ void VM_Version::initialize() {
   if (!UsePopCountInstruction) {
     warning("UsePopCountInstruction is always enabled on this CPU");
     UsePopCountInstruction = true;
+  }
+
+#if INCLUDE_JVMCI && defined(AARCH64)
+  if (UseTBI && EnableJVMCI) {
+    warning("64-bit Literal Addresses disabled due to EnableJVMCI.");
+    UseTBI = false;
+  }
+#endif
+  if (UseTBI && !UseZGC) {
+    warning("UseTBI only works when UseZGC is on.");
+    UseTBI = false;
+  }
+  if (UseTBI) {
+    init_instruction_sizes_for_tbi();
   }
 
 #ifdef COMPILER2

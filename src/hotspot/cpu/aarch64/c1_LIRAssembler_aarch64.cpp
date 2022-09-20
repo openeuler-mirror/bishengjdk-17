@@ -94,6 +94,11 @@ static void select_different_registers(Register preserve,
   assert_different_registers(preserve, tmp1, tmp2, tmp3);
 }
 
+int LIR_Assembler::_call_stub_size = 13 * NativeInstruction::instruction_size;
+
+void LIR_Assembler::init_for_tbi() {
+  _call_stub_size = 15 * NativeInstruction::instruction_size;
+}
 
 bool LIR_Assembler::is_small_constant(LIR_Opr opr) { Unimplemented(); return false; }
 
