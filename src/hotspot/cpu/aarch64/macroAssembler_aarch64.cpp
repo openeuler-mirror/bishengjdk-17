@@ -734,8 +734,23 @@ address MacroAssembler::trampoline_call(Address entry, CodeBuffer* cbuf) {
          || entry.rspec().type() == relocInfo::static_call_type
          || entry.rspec().type() == relocInfo::virtual_call_type, "wrong reloc type");
 
+  bool need_trampoline = far_branches();
+  if (!need_trampoline && entry.rspec().type() == relocInfo::runtime_call_type && !CodeCache::contains(entry.target())) {
+    // If it is a runtime call of an address outside small CodeCache,
+    // we need to check whether it is in range.
+    address target = entry.target();
+    assert(target < CodeCache::low_bound() || target >= CodeCache::high_bound(), "target is inside CodeCache");
+    // Case 1: -------T-------L====CodeCache====H-------
+    //                ^-------longest branch---|
+    // Case 2: -------L====CodeCache====H-------T-------
+    //                |-------longest branch ---^
+    address longest_branch_start = (target < CodeCache::low_bound()) ? CodeCache::high_bound() - NativeInstruction::instruction_size
+                                                                     : CodeCache::low_bound();
+    need_trampoline = !reachable_from_branch_at(longest_branch_start, target);
+  }
+
   // We need a trampoline if branches are far.
-  if (far_branches()) {
+  if (need_trampoline) {
     bool in_scratch_emit_size = false;
 #ifdef COMPILER2
     // We don't want to emit a trampoline if C2 is generating dummy
@@ -756,7 +771,7 @@ address MacroAssembler::trampoline_call(Address entry, CodeBuffer* cbuf) {
 
   if (cbuf) cbuf->set_insts_mark();
   relocate(entry.rspec());
-  if (!far_branches()) {
+  if (!need_trampoline) {
     bl(entry.target());
   } else {
     bl(pc());
@@ -2288,11 +2303,13 @@ void MacroAssembler::unimplemented(const char* what) {
 
 // If a constant does not fit in an immediate field, generate some
 // number of MOV instructions and then perform the operation.
-void MacroAssembler::wrap_add_sub_imm_insn(Register Rd, Register Rn, unsigned imm,
+void MacroAssembler::wrap_add_sub_imm_insn(Register Rd, Register Rn, uint64_t imm,
                                            add_sub_imm_insn insn1,
-                                           add_sub_reg_insn insn2) {
+                                           add_sub_reg_insn insn2,
+                                           bool is32) {
   assert(Rd != zr, "Rd = zr and not setting flags?");
-  if (operand_valid_for_add_sub_immediate((int)imm)) {
+  bool fits = operand_valid_for_add_sub_immediate(is32 ? (int32_t)imm : imm);
+  if (fits) {
     (this->*insn1)(Rd, Rn, imm);
   } else {
     if (uabs(imm) < (1 << 24)) {
@@ -2300,7 +2317,7 @@ void MacroAssembler::wrap_add_sub_imm_insn(Register Rd, Register Rn, unsigned im
        (this->*insn1)(Rd, Rd, imm & ((1 << 12)-1));
     } else {
        assert_different_registers(Rd, Rn);
-       mov(Rd, (uint64_t)imm);
+       mov(Rd, imm);
        (this->*insn2)(Rd, Rn, Rd, LSL, 0);
     }
   }
@@ -2308,15 +2325,17 @@ void MacroAssembler::wrap_add_sub_imm_insn(Register Rd, Register Rn, unsigned im
 
 // Seperate vsn which sets the flags. Optimisations are more restricted
 // because we must set the flags correctly.
-void MacroAssembler::wrap_adds_subs_imm_insn(Register Rd, Register Rn, unsigned imm,
-                                           add_sub_imm_insn insn1,
-                                           add_sub_reg_insn insn2) {
-  if (operand_valid_for_add_sub_immediate((int)imm)) {
+void MacroAssembler::wrap_adds_subs_imm_insn(Register Rd, Register Rn, uint64_t imm,
+                                             add_sub_imm_insn insn1,
+                                             add_sub_reg_insn insn2,
+                                             bool is32) {
+  bool fits = operand_valid_for_add_sub_immediate(is32 ? (int32_t)imm : imm);
+  if (fits) {
     (this->*insn1)(Rd, Rn, imm);
   } else {
     assert_different_registers(Rd, Rn);
     assert(Rd != zr, "overflow in immediate operand");
-    mov(Rd, (uint64_t)imm);
+    mov(Rd, imm);
     (this->*insn2)(Rd, Rn, Rd, LSL, 0);
   }
 }
@@ -3360,7 +3379,7 @@ void MacroAssembler::kernel_crc32_using_crc32(Register crc, Register buf,
     crc32x(crc, crc, tmp2);
     crc32x(crc, crc, tmp3);
     br(Assembler::GE, CRC_by32_loop);
-    cmn(len, 32);
+    cmn(len, (u1)32);
     br(Assembler::NE, CRC_less32);
     b(L_exit);
 
@@ -3423,7 +3442,7 @@ void MacroAssembler::kernel_crc32_using_crc32(Register crc, Register buf,
 
     sub(len, len, 64);
     add(buf, buf, 8);
-    cmn(len, 128);
+    cmn(len, (u1)128);
     br(Assembler::NE, CRC_less64);
   BIND(L_exit);
     mvnw(crc, crc);
@@ -3657,7 +3676,7 @@ void MacroAssembler::kernel_crc32c_using_crc32c(Register crc, Register buf,
     crc32cx(crc, crc, tmp2);
     crc32cx(crc, crc, tmp3);
     br(Assembler::GE, CRC_by32_loop);
-    cmn(len, 32);
+    cmn(len, (u1)32);
     br(Assembler::NE, CRC_less32);
     b(L_exit);
 
@@ -3720,7 +3739,7 @@ void MacroAssembler::kernel_crc32c_using_crc32c(Register crc, Register buf,
 
     sub(len, len, 64);
     add(buf, buf, 8);
-    cmn(len, 128);
+    cmn(len, (u1)128);
     br(Assembler::NE, CRC_less64);
   BIND(L_exit);
 }
