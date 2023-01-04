@@ -212,11 +212,8 @@ static void change_immediate(uint32_t& instr, uint32_t imm, uint32_t start, uint
 void ZBarrierSetAssembler::patch_barrier_relocation(address addr) {
   uint32_t* const patch_addr = (uint32_t*)addr;
 
-  // The next 3 insns should be movz, andr, cbnz.
-  assert(nativeInstruction_at(addr)->is_movz() &&
-    Instruction_aarch64::extract(*(patch_addr + 1), 30, 24) == 0b0001010 &&
-    Instruction_aarch64::extract(*(patch_addr + 2), 31, 24) == 0b10110101,
-    "wrong insns in barrier patch");
+  // The next insn should be movz.
+  assert(nativeInstruction_at(addr)->is_movz(), "wrong insn in barrier patch");
 
   change_immediate(*patch_addr, (uint16_t) (ZAddressBadMask >> 48), 5, 20);
   OrderAccess::fence();
@@ -232,7 +229,12 @@ void ZBarrierSetAssembler::generate_c1_load_barrier_test(LIR_Assembler* ce,
                                                          LIR_Opr ref) const {
   assert_different_registers(rscratch1, rthread, ref->as_register());
 
-  __ ldr(rscratch1, address_bad_mask_from_thread(rthread));
+  if (UseTBI) {
+    __ relocate(barrier_Relocation::spec());
+    __ movz(rscratch1, barrier_Relocation::unpatched, 48);
+  } else {
+    __ ldr(rscratch1, address_bad_mask_from_thread(rthread));
+  }
   __ tst(ref->as_register(), rscratch1);
 }
 
