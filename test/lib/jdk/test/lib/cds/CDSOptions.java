@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -46,24 +46,43 @@ public class CDSOptions {
 
 
     public CDSOptions addPrefix(String... prefix) {
-        for (String s : prefix) this.prefix.add(s);
+        for (String s : prefix) {
+            this.prefix.add(s);
+        }
         return this;
     }
 
     public CDSOptions addPrefix(String prefix[], String... extra) {
-        for (String s : prefix) this.prefix.add(s);
-        for (String s : extra) this.prefix.add(s);
+        for (String s : prefix) {
+            this.prefix.add(s);
+        }
+        for (String s : extra) {
+            this.prefix.add(s);
+        }
+        return this;
+    }
+
+    public CDSOptions addSuffix(ArrayList<String> suffix) {
+        for (String s : suffix) {
+            this.suffix.add(s);
+        }
         return this;
     }
 
     public CDSOptions addSuffix(String... suffix) {
-        for (String s : suffix) this.suffix.add(s);
+        for (String s : suffix) {
+            this.suffix.add(s);
+        }
         return this;
     }
 
     public CDSOptions addSuffix(String suffix[], String... extra) {
-        for (String s : suffix) this.suffix.add(s);
-        for (String s : extra) this.suffix.add(s);
+        for (String s : suffix) {
+            this.suffix.add(s);
+        }
+        for (String s : extra) {
+            this.suffix.add(s);
+        }
         return this;
     }
 

@@ -674,6 +674,15 @@ static bool has_reached_max_malloc_test_peak(size_t alloc_size) {
   return false;
 }
 
+#ifdef ASSERT
+static void break_if_ptr_caught(void* ptr) {
+  if (p2i(ptr) == (intptr_t)MallocCatchPtr) {
+    log_warning(malloc, free)("ptr caught: " PTR_FORMAT, p2i(ptr));
+    breakpoint();
+  }
+}
+#endif // ASSERT
+
 void* os::malloc(size_t size, MEMFLAGS flags) {
   return os::malloc(size, flags, CALLER_PC);
 }
@@ -746,7 +755,15 @@ void* os::malloc(size_t size, MEMFLAGS memflags, const NativeCallStack& stack) {
 #endif
 
   // we do not track guard memory
-  return MemTracker::record_malloc((address)ptr, size, memflags, stack, level);
+  void* const inner_ptr = MemTracker::record_malloc((address)ptr, size, memflags, stack, level);
+  if (DumpSharedSpaces) {
+    // Need to deterministically fill all the alignment gaps in C++ structures.
+    ::memset(inner_ptr, 0, size);
+  } else {
+    DEBUG_ONLY(::memset(inner_ptr, uninitBlockPad, size);)
+  }
+  DEBUG_ONLY(break_if_ptr_caught(inner_ptr);)
+  return inner_ptr;
 }
 
 void* os::realloc(void *memblock, size_t size, MEMFLAGS flags) {

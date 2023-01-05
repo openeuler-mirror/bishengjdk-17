@@ -113,7 +113,12 @@ instruct zCompareAndSwapP(iRegINoSp res, indirect mem, iRegP oldval, iRegP newva
     __ cset($res$$Register, Assembler::EQ);
     if (barrier_data() != ZLoadBarrierElided) {
       Label good;
-      __ ldr(rscratch1, Address(rthread, ZThreadLocalData::address_bad_mask_offset()));
+      if (UseTBI) {
+        __ relocate(barrier_Relocation::spec());
+        __ movz(rscratch1, barrier_Relocation::unpatched, 48);
+      } else {
+        __ ldr(rscratch1, Address(rthread, ZThreadLocalData::address_bad_mask_offset()));
+      }
       __ andr(rscratch1, rscratch1, rscratch2);
       __ cbz(rscratch1, good);
       z_load_barrier_slow_path(_masm, this, Address($mem$$Register), rscratch2 /* ref */, rscratch1 /* tmp */);
@@ -145,7 +150,12 @@ instruct zCompareAndSwapPAcq(iRegINoSp res, indirect mem, iRegP oldval, iRegP ne
     __ cset($res$$Register, Assembler::EQ);
     if (barrier_data() != ZLoadBarrierElided) {
       Label good;
-      __ ldr(rscratch1, Address(rthread, ZThreadLocalData::address_bad_mask_offset()));
+      if (UseTBI) {
+        __ relocate(barrier_Relocation::spec());
+        __ movz(rscratch1, barrier_Relocation::unpatched, 48);
+      } else {
+        __ ldr(rscratch1, Address(rthread, ZThreadLocalData::address_bad_mask_offset()));
+      }
       __ andr(rscratch1, rscratch1, rscratch2);
       __ cbz(rscratch1, good);
       z_load_barrier_slow_path(_masm, this, Address($mem$$Register), rscratch2 /* ref */, rscratch1 /* tmp */ );
@@ -174,7 +184,12 @@ instruct zCompareAndExchangeP(iRegPNoSp res, indirect mem, iRegP oldval, iRegP n
                false /* acquire */, true /* release */, false /* weak */, $res$$Register);
     if (barrier_data() != ZLoadBarrierElided) {
       Label good;
-      __ ldr(rscratch1, Address(rthread, ZThreadLocalData::address_bad_mask_offset()));
+      if (UseTBI) {
+        __ relocate(barrier_Relocation::spec());
+        __ movz(rscratch1, barrier_Relocation::unpatched, 48);
+      } else {
+        __ ldr(rscratch1, Address(rthread, ZThreadLocalData::address_bad_mask_offset()));
+      }
       __ andr(rscratch1, rscratch1, $res$$Register);
       __ cbz(rscratch1, good);
       z_load_barrier_slow_path(_masm, this, Address($mem$$Register), $res$$Register /* ref */, rscratch1 /* tmp */);
@@ -202,7 +217,12 @@ instruct zCompareAndExchangePAcq(iRegPNoSp res, indirect mem, iRegP oldval, iReg
                true /* acquire */, true /* release */, false /* weak */, $res$$Register);
     if (barrier_data() != ZLoadBarrierElided) {
       Label good;
-      __ ldr(rscratch1, Address(rthread, ZThreadLocalData::address_bad_mask_offset()));
+      if (UseTBI) {
+        __ relocate(barrier_Relocation::spec());
+        __ movz(rscratch1, barrier_Relocation::unpatched, 48);
+      } else {
+        __ ldr(rscratch1, Address(rthread, ZThreadLocalData::address_bad_mask_offset()));
+      }
       __ andr(rscratch1, rscratch1, $res$$Register);
       __ cbz(rscratch1, good);
       z_load_barrier_slow_path(_masm, this, Address($mem$$Register), $res$$Register /* ref */, rscratch1 /* tmp */);
