@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2008, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+
 import jdk.test.lib.security.CertUtils;
 
 public final class BuildEEBasicConstraints {
@@ -68,7 +69,7 @@ public final class BuildEEBasicConstraints {
             (Collections.singleton(anchor), sel);
         params.setRevocationEnabled(false);
 
-       // Certs expired on 7th Nov 2022
+        // Certs expired on 7th Nov 2022
         params.setDate(DateFormat.getDateInstance(DateFormat.MEDIUM,
                 Locale.US).parse("June 01, 2022"));
 
