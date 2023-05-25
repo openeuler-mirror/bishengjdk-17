@@ -2701,9 +2701,7 @@ public abstract class ClassLoader {
      * Called by the VM, during -Xshare:dump
      */
     private void resetArchivedStates() {
-        if (parallelLockMap != null) {
-            parallelLockMap.clear();
-        }
+        parallelLockMap.clear();
         packages.clear();
         package2certs.clear();
         classes.clear();
