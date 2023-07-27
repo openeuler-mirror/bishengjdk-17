@@ -95,6 +95,7 @@ class GraphKit : public Phase {
 
   void record_for_igvn(Node* n) const { C->record_for_igvn(n); }  // delegate to Compile
   void remove_for_igvn(Node* n) const { C->remove_for_igvn(n); }
+
   // Handy well-known nodes:
   Node*         null()          const { return zerocon(T_OBJECT); }
   Node*         top()           const { return C->top(); }
