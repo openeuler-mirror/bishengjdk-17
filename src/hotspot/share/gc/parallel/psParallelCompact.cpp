@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2022, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,6 +41,7 @@
 #include "gc/parallel/psRootType.hpp"
 #include "gc/parallel/psScavenge.hpp"
 #include "gc/parallel/psYoungGen.hpp"
+#include "gc/parallel/psStringDedup.hpp"
 #include "gc/shared/gcCause.hpp"
 #include "gc/shared/gcHeapSummary.hpp"
 #include "gc/shared/gcId.hpp"
@@ -1020,6 +1021,8 @@ void PSParallelCompact::post_compact()
     // Update top().  Must be done after clearing the bitmap and summary data.
     _space_info[id].publish_new_top();
   }
+
+  ParCompactionManager::flush_all_string_dedup_requests();
 
   MutableSpace* const eden_space = _space_info[eden_space_id].space();
   MutableSpace* const from_space = _space_info[from_space_id].space();
@@ -2002,17 +2005,15 @@ void steal_marking_work(TaskTerminator& terminator, uint worker_id) {
   ParCompactionManager* cm =
     ParCompactionManager::gc_thread_compaction_manager(worker_id);
 
-  oop obj = NULL;
-  ObjArrayTask task;
   do {
-    while (ParCompactionManager::steal_objarray(worker_id,  task)) {
+    oop obj = NULL;
+    ObjArrayTask task;
+    if (ParCompactionManager::steal_objarray(worker_id,  task)) {
       cm->follow_array((objArrayOop)task.obj(), task.index());
-      cm->follow_marking_stacks();
-    }
-    while (ParCompactionManager::steal(worker_id, obj)) {
+    } else if (ParCompactionManager::steal(worker_id, obj)) {
       cm->follow_contents(obj);
-      cm->follow_marking_stacks();
     }
+    cm->follow_marking_stacks();
   } while (!terminator.offer_termination());
 }
 
@@ -2139,7 +2140,7 @@ void PSParallelCompact::marking_phase(ParCompactionManager* cm,
 
   {
     GCTraceTime(Debug, gc, phases) tm("Report Object Count", &_gc_timer);
-    _gc_tracer.report_object_count_after_gc(is_alive_closure());
+    _gc_tracer.report_object_count_after_gc(is_alive_closure(), &ParallelScavengeHeap::heap()->workers());
   }
 }
 
@@ -2521,6 +2522,10 @@ public:
     // Once a thread has drained it's stack, it should try to steal regions from
     // other threads.
     compaction_with_stealing_work(&_terminator, worker_id);
+
+    // At this point all regions have been compacted, so it's now safe
+    // to update the deferred objects that cross region boundaries.
+    cm->drain_deferred_objects();
   }
 };
 
@@ -2550,22 +2555,11 @@ void PSParallelCompact::compact() {
     ParallelScavengeHeap::heap()->workers().run_task(&task);
 
 #ifdef  ASSERT
-    // Verify that all regions have been processed before the deferred updates.
+    // Verify that all regions have been processed.
     for (unsigned int id = old_space_id; id < last_space_id; ++id) {
       verify_complete(SpaceId(id));
     }
 #endif
-  }
-
-  {
-    GCTraceTime(Trace, gc, phases) tm("Deferred Updates", &_gc_timer);
-    // Update the deferred objects, if any. In principle, any compaction
-    // manager can be used. However, since the current thread is VM thread, we
-    // use the rightful one to keep the verification logic happy.
-    ParCompactionManager* cm = ParCompactionManager::get_vmthread_cm();
-    for (unsigned int id = old_space_id; id < last_space_id; ++id) {
-      update_deferred_objects(cm, SpaceId(id));
-    }
   }
 
   DEBUG_ONLY(write_block_fill_histogram());
@@ -2694,32 +2688,23 @@ PSParallelCompact::SpaceId PSParallelCompact::space_id(HeapWord* addr) {
   return last_space_id;
 }
 
-void PSParallelCompact::update_deferred_objects(ParCompactionManager* cm,
-                                                SpaceId id) {
-  assert(id < last_space_id, "bad space id");
+void PSParallelCompact::update_deferred_object(ParCompactionManager* cm, HeapWord *addr) {
+#ifdef ASSERT
 
   ParallelCompactData& sd = summary_data();
-  const SpaceInfo* const space_info = _space_info + id;
+  size_t region_idx = sd.addr_to_region_idx(addr);
+  assert(sd.region(region_idx)->completed(), "first region must be completed before deferred updates");
+  assert(sd.region(region_idx + 1)->completed(), "second region must be completed before deferred updates");
+#endif
+
+  const SpaceInfo* const space_info = _space_info + space_id(addr);
   ObjectStartArray* const start_array = space_info->start_array();
-
-  const MutableSpace* const space = space_info->space();
-  assert(space_info->dense_prefix() >= space->bottom(), "dense_prefix not set");
-  HeapWord* const beg_addr = space_info->dense_prefix();
-  HeapWord* const end_addr = sd.region_align_up(space_info->new_top());
-
-  const RegionData* const beg_region = sd.addr_to_region_ptr(beg_addr);
-  const RegionData* const end_region = sd.addr_to_region_ptr(end_addr);
-  const RegionData* cur_region;
-  for (cur_region = beg_region; cur_region < end_region; ++cur_region) {
-    HeapWord* const addr = cur_region->deferred_obj_addr();
-    if (addr != NULL) {
-      if (start_array != NULL) {
-        start_array->allocate_block(addr);
-      }
-      cm->update_contents(cast_to_oop(addr));
-      assert(oopDesc::is_oop_or_null(cast_to_oop(addr)), "Expected an oop or NULL at " PTR_FORMAT, p2i(cast_to_oop(addr)));
-    }
+  if (start_array != NULL) {
+    start_array->allocate_block(addr);
   }
+
+  cm->update_contents(cast_to_oop(addr));
+  assert(oopDesc::is_oop(cast_to_oop(addr)), "Expected an oop at " PTR_FORMAT, p2i(cast_to_oop(addr)));
 }
 
 // Skip over count live words starting from beg, and return the address of the
@@ -2966,7 +2951,6 @@ void PSParallelCompact::fill_region(ParCompactionManager* cm, MoveAndUpdateClosu
     if (closure.is_full()) {
       decrement_destination_counts(cm, src_space_id, src_region_idx,
                                    closure.source());
-      region_ptr->set_deferred_obj_addr(NULL);
       closure.complete_region(cm, dest_addr, region_ptr);
       return;
     }
@@ -3011,7 +2995,7 @@ void PSParallelCompact::fill_region(ParCompactionManager* cm, MoveAndUpdateClosu
     if (status == ParMarkBitMap::would_overflow) {
       // The last object did not fit.  Note that interior oop updates were
       // deferred, then copy enough of the object to fill the region.
-      region_ptr->set_deferred_obj_addr(closure.destination());
+      cm->push_deferred_object(closure.destination());
       status = closure.copy_until_full(); // copies from closure.source()
 
       decrement_destination_counts(cm, src_space_id, src_region_idx,
@@ -3023,7 +3007,6 @@ void PSParallelCompact::fill_region(ParCompactionManager* cm, MoveAndUpdateClosu
     if (status == ParMarkBitMap::full) {
       decrement_destination_counts(cm, src_space_id, src_region_idx,
                                    closure.source());
-      region_ptr->set_deferred_obj_addr(NULL);
       closure.complete_region(cm, dest_addr, region_ptr);
       return;
     }
