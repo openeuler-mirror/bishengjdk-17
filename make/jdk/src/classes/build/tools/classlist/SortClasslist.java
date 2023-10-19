@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2021, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2022, Huawei Technologies Co., Ltd. All rights reserved.
+ * Copyright (c) 2021,2023 Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -47,24 +46,25 @@ import java.util.Scanner;
  */
 public class SortClasslist {
     public static void main(String args[]) throws FileNotFoundException  {
-       ArrayList<String> classes = new ArrayList<>();
-       ArrayList<String> lambdas = new ArrayList<>();
+        ArrayList<String> classes = new ArrayList<>();
+        ArrayList<String> lambdas = new ArrayList<>();
 
-       FileInputStream fis = new FileInputStream(args[0]);
-       Scanner scanner = new Scanner(fis);
-       while (scanner.hasNextLine()) {
-           String line = scanner.nextLine();
-           if (line.startsWith("#")) {
-               // Comments -- print them first without sorting. These appear only at the top
-               // of the file.
-               System.out.println(line);
-           } else if (line.startsWith("@")) {
-               // @lambda-form-invoker, @lambda-proxy, etc.
-               lambdas.add(line);
-           } else {
-               classes.add(line);
-           }
-       }
+        FileInputStream fis = new FileInputStream(args[0]);
+        Scanner scanner = new Scanner(fis);
+        while (scanner.hasNextLine()) {
+            String line = scanner.nextLine();
+            if (line.startsWith("#")) {
+                // Comments -- print them first without sorting. These appear only at the top
+                // of the file.
+                System.out.println(line);
+            } else if (line.startsWith("@")) {
+                // @lambda-form-invoker, @lambda-proxy, etc.
+                lambdas.add(line);
+            } else {
+                // Class name line
+                classes.add(line);
+            }
+        }
 
         Collections.sort(classes);
         Collections.sort(lambdas);

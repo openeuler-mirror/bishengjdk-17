@@ -41,6 +41,7 @@
 #include "gc/shared/gcInitLogger.hpp"
 #include "gc/shared/locationPrinter.inline.hpp"
 #include "gc/shared/scavengableNMethods.hpp"
+#include "gc/shared/suspendibleThreadSet.hpp"
 #include "logging/log.hpp"
 #include "memory/iterator.hpp"
 #include "memory/metaspaceCounters.hpp"
@@ -160,6 +161,18 @@ void ParallelScavengeHeap::initialize_serviceability() {
   _young_manager->add_pool(_eden_pool);
   _young_manager->add_pool(_survivor_pool);
 
+}
+
+void ParallelScavengeHeap::safepoint_synchronize_begin() {
+  if (UseStringDeduplication) {
+    SuspendibleThreadSet::synchronize();
+  }
+}
+
+void ParallelScavengeHeap::safepoint_synchronize_end() {
+  if (UseStringDeduplication) {
+    SuspendibleThreadSet::desynchronize();
+  }
 }
 
 class PSIsScavengable : public BoolObjectClosure {
@@ -588,7 +601,7 @@ void ParallelScavengeHeap::object_iterate_parallel(ObjectClosure* cl,
   }
 }
 
-class PSScavengeParallelObjectIterator : public ParallelObjectIterator {
+class PSScavengeParallelObjectIterator : public ParallelObjectIteratorImpl {
 private:
   ParallelScavengeHeap*  _heap;
   HeapBlockClaimer      _claimer;
@@ -603,7 +616,7 @@ public:
   }
 };
 
-ParallelObjectIterator* ParallelScavengeHeap::parallel_object_iterator(uint thread_num) {
+ParallelObjectIteratorImpl* ParallelScavengeHeap::parallel_object_iterator(uint thread_num) {
   return new PSScavengeParallelObjectIterator();
 }
 
