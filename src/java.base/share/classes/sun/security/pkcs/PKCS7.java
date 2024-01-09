@@ -153,7 +153,9 @@ public class PKCS7 {
         ContentInfo block = new ContentInfo(derin, oldStyle);
         contentType = block.contentType;
         DerValue content = block.getContent();
-
+	if (content == null) {
+		throw new ParsingException("content is null");
+	}
         if (contentType.equals(ContentInfo.SIGNED_DATA_OID)) {
             parseSignedData(content);
         } else if (contentType.equals(ContentInfo.OLD_SIGNED_DATA_OID)) {
