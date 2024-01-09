@@ -94,7 +94,7 @@ public class XMLStreamException extends Exception {
   public XMLStreamException(String msg, Location location, Throwable th) {
     super("ParseError at [row,col]:["+location.getLineNumber()+","+
           location.getColumnNumber()+"]\n"+
-          "Message: "+msg);
+          "Message: "+msg, th);
     nested = th;
     this.location = location;
   }
