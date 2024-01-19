@@ -107,7 +107,7 @@ public class InMemoryJavaCompiler {
         }
     }
 
-    private static class FileManagerWrapper extends ForwardingJavaFileManager<JavaFileManager> {
+    private static class FileManagerWrapper extends ForwardingJavaFileManager {
         private static final Location PATCH_LOCATION = new Location() {
             @Override
             public String getName() {
