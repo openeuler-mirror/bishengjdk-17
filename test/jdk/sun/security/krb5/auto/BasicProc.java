@@ -298,7 +298,9 @@ public class BasicProc {
         Proc p = Proc.create("BasicProc")
                 .inheritProp("jdk.net.hosts.file")
                 .prop("java.security.manager", "")
-                .perm(new javax.security.auth.AuthPermission("doAs"));
+                .perm(new javax.security.auth.AuthPermission("doAs"))
+                .perm(new java.util.PropertyPermission(
+                            "kae.disableKaeDispose", "read"));
         if (lib != null) {
             p.env("KRB5_CONFIG", CONF)
                     .env("KRB5_TRACE", Platform.isWindows() ? "CON" : "/dev/stderr")

@@ -3,6 +3,110 @@
   <logicalFolder name="root" displayName="root" projectFiles="true" kind="ROOT">
     <df root="../.." name="0">
     </df>
+    <df name="jdk.crypto.kaeprovider">
+      <df name="linux">
+        <df name="native">
+          <df name="libj2kae">
+            <in>kae_cipher_rsa.c</in>
+            <in>kae_digest.c</in>
+            <in>kae_exception.c</in>
+            <in>kae_exception.h</in>
+            <in>kae_hmac.c</in>
+            <in>kae_keyagreement_dh.c</in>
+            <in>kae_keyagreement_ecdh.c</in>
+            <in>kae_keypairgenerator_dh.c</in>
+            <in>kae_keypairgenerator_ec.c</in>
+            <in>kae_keypairgenerator_rsa.c</in>
+            <in>kae_provider.c</in>
+            <in>kae_signature_rsa.c</in>
+            <in>kae_symmetric_cipher.c</in>
+            <in>kae_util.c</in>
+            <in>kae_util.h</in>
+            <in>kae_log.h</in>
+          </df>
+        </df>
+      </df>
+    </df>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_cipher_rsa.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_digest.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_exception.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_exception.h"
+          ex="false"
+          tool="3"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_hmac.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_keyagreement_dh.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_keyagreement_ecdh.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_keypairgenerator_dh.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_keypairgenerator_ec.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_keypairgenerator_rsa.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_provider.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_signature_rsa.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_symmetric_cipher.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_util.c"
+          ex="false"
+          tool="0"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_util.h"
+          ex="false"
+          tool="3"
+          flavor2="0">
+    </item>
+    <item path="../../../../src/jdk.crypto.kaeprovider/linux/native/org/openeuler/security/openssl/kae_log.h"
+          ex="false"
+          tool="3"
+          flavor2="0">
+    </item>
     <logicalFolder name="ExternalFiles"
                    displayName="Important Files"
                    projectFiles="false"
