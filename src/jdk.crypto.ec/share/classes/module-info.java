@@ -32,5 +32,11 @@
  * @since 9
  */
 module jdk.crypto.ec {
+    exports sun.security.ec to
+        jdk.crypto.kaeprovider;
+
+    opens sun.security.ec to
+        jdk.crypto.kaeprovider;
+
     provides java.security.Provider with sun.security.ec.SunEC;
 }

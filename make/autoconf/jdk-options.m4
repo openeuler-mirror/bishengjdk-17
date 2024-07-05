@@ -348,6 +348,27 @@ AC_DEFUN_ONCE([JDKOPT_SETUP_DEBUG_SYMBOLS],
   AC_SUBST(SHIP_DEBUG_SYMBOLS)
 ])
 
+###############################################################################
+#
+# Enable or disable the kae crypto implementation
+#
+AC_DEFUN_ONCE([JDKOPT_DETECT_KAE],
+[
+  AC_ARG_ENABLE(kae, [AS_HELP_STRING([--enable-kae],
+      [enable KAE support on aarch64 @<:@disabled@:>@])],
+      [ENABLE_KAE="true"], [ENABLE_KAE="false"])
+  AC_MSG_CHECKING([if kae has been enabled])
+  if test "x$enable_kae" = "xyes"; then
+      AC_MSG_RESULT([yes])
+  elif test "x$enable_kae" = "x" || test "x$enable_kae" = "xno"; then
+      AC_MSG_RESULT([no])
+  else
+      AC_MSG_ERROR([Invalid value for --enable-kae: $enable_kae])
+  fi
+
+  AC_SUBST(ENABLE_KAE)
+])
+
 ################################################################################
 #
 # Native and Java code coverage

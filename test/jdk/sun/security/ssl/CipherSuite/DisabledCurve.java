@@ -91,6 +91,10 @@ public class DisabledCurve extends SSLSocketTemplate {
     }
 
     public static void main(String[] args) throws Exception {
+        // KAEProvider does not support sect283r1
+        if (Security.getProperty("security.provider.1").equals("KAEProvider")) {
+            return;
+        }
         String expected = args[1];
         String disabledName = ("DISABLE_NONE".equals(args[0]) ? "" : args[0]);
         boolean disabled = false;

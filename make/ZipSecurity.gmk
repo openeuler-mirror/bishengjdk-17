@@ -42,6 +42,7 @@ $(eval $(call SetupZipArchive,BUILD_SEC_BIN_ZIP, \
         modules/java.base/sun/security/internal/spec \
         modules/java.base/com/sun/crypto/provider \
         modules/jdk.crypto.ec/sun/security/ec \
+        modules/jdk.crypto.kaeprovider/org/openeuler/security/openssl \
         modules/jdk.crypto.mscapi/sun/security/mscapi \
         modules/jdk.crypto.cryptoki/sun/security/pkcs11 \
         modules/jdk.crypto.cryptoki/sun/security/pkcs11/wrapper \

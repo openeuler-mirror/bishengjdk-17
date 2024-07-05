@@ -304,11 +304,13 @@ module java.base {
     exports sun.security.internal.interfaces to
         jdk.crypto.cryptoki;
     exports sun.security.internal.spec to
+        jdk.crypto.kaeprovider,
         jdk.crypto.cryptoki;
     exports sun.security.jca to
         java.smartcardio,
         jdk.crypto.ec,
         jdk.crypto.cryptoki,
+        jdk.crypto.kaeprovider,
         jdk.naming.dns;
     exports sun.security.pkcs to
         jdk.crypto.ec,
@@ -318,12 +320,15 @@ module java.base {
         java.security.jgss,
         jdk.crypto.cryptoki,
         jdk.crypto.ec,
+        jdk.crypto.kaeprovider,
         jdk.security.auth;
     exports sun.security.provider.certpath to
         java.naming,
         jdk.jartool;
     exports sun.security.rsa to
-        jdk.crypto.cryptoki;
+        jdk.crypto.cryptoki,
+        jdk.crypto.cryptoki,                                                                                           
+        jdk.crypto.kaeprovider;
     exports sun.security.timestamp to
         jdk.jartool;
     exports sun.security.tools to
@@ -338,6 +343,7 @@ module java.base {
         java.xml.crypto,
         jdk.crypto.ec,
         jdk.crypto.cryptoki,
+        jdk.crypto.kaeprovider,
         jdk.jartool,
         jdk.security.auth,
         jdk.security.jgss;
@@ -348,6 +354,7 @@ module java.base {
     exports sun.security.x509 to
         jdk.crypto.ec,
         jdk.crypto.cryptoki,
+        jdk.crypto.kaeprovider,
         jdk.jartool;
     exports sun.security.validator to
         jdk.jartool;

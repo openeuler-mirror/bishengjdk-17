@@ -129,6 +129,11 @@ grant codeBase "jrt:/jdk.crypto.ec" {
     permission java.security.SecurityPermission "removeProviderProperty.SunEC";
 };
 
+grant codeBase "jrt:/jdk.crypto.kaeprovider" {
+    permission java.lang.RuntimePermission
+                   "accessClassInPackage.sun.security.*";
+};
+
 grant codeBase "jrt:/jdk.crypto.cryptoki" {
     permission java.lang.RuntimePermission
                    "accessClassInPackage.com.sun.crypto.provider";

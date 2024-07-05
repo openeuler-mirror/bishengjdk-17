@@ -39,6 +39,7 @@ import java.security.KeyPairGenerator;
 import java.security.spec.NamedParameterSpec;
 import java.security.spec.AlgorithmParameterSpec;
 import java.security.spec.ECGenParameterSpec;
+import java.security.Security;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -53,7 +54,13 @@ public class KeyAgreementTest {
         String kpgAlgo = args[1];
         String provider = args[2];
         System.out.println("Testing " + kaAlgo);
-        AlgoSpec aSpec = AlgoSpec.valueOf(AlgoSpec.class, kaAlgo);
+        AlgoSpec aSpec;
+        if (Security.getProperty("security.provider.1").equals("KAEProvider") &&
+            kaAlgo.equals("ECDH")) {
+            aSpec = AlgoSpec.valueOf(AlgoSpec.class, "KAEECDH");
+        } else {
+            aSpec = AlgoSpec.valueOf(AlgoSpec.class, kaAlgo);
+        }
         List<AlgorithmParameterSpec> specs = aSpec.getAlgorithmParameterSpecs();
         for (AlgorithmParameterSpec spec : specs) {
             testKeyAgreement(provider, kaAlgo, kpgAlgo, spec);
@@ -70,6 +77,7 @@ public class KeyAgreementTest {
         // "java.base/share/classes/sun/security/util/CurveDB.java"
 
         ECDH("secp256r1", "secp384r1", "secp521r1"),
+        KAEECDH("secp224r1", "secp256r1", "secp384r1", "secp521r1"),
         XDH("X25519", "X448", "x25519"),
         // There is no curve for DiffieHellman
         DiffieHellman(new String[]{});
@@ -81,6 +89,7 @@ public class KeyAgreementTest {
             for (String crv : curves) {
                 switch (this.name()) {
                     case "ECDH":
+                    case "KAEECDH":
                         specs.add(new ECGenParameterSpec(crv));
                         break;
                     case "XDH":
