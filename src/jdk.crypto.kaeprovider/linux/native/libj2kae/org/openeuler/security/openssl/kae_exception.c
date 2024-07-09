@@ -26,6 +26,7 @@
 #include <openssl/rsaerr.h>
 #include "kae_log.h"
 #include "kae_exception.h"
+#include "openssl_ad.h"
 
 void KAE_ThrowByName(JNIEnv* env, const char* name, const char* msg) {
     jclass cls = (*env)->FindClass(env, name);

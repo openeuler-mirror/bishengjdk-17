@@ -25,11 +25,6 @@
 
 include LibCommon.gmk
 
-LIBMEMCPY_FILES += \
-        $(addprefix $(TOPDIR)/src/hotspot/share/runtime/, \
-                libc_wrappers.cpp \
-        )
-
 ################################################################################
 
 ifeq ($(ENABLE_KAE), true)
@@ -37,7 +32,6 @@ ifeq ($(ENABLE_KAE), true)
     $(eval $(call SetupJdkLibrary, BUILD_LIBJ2KAE, \
         NAME := j2kae, \
         OPTIMIZATION := LOW, \
-        EXTRA_FILES := $(LIBMEMCPY_FILES), \
         CFLAGS := $(CFLAGS_JDKLIB), \
         CXXFLAGS := $(CXXFLAGS_JDKLIB), \
         LDFLAGS := $(LDFLAGS_JDKLIB) \
