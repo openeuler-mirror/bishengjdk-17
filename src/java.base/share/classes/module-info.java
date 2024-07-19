@@ -327,7 +327,6 @@ module java.base {
         jdk.jartool;
     exports sun.security.rsa to
         jdk.crypto.cryptoki,
-        jdk.crypto.cryptoki,                                                                                           
         jdk.crypto.kaeprovider;
     exports sun.security.timestamp to
         jdk.jartool;
