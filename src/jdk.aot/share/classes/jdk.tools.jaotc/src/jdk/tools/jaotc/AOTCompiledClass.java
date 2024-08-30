@@ -38,6 +38,7 @@ import jdk.tools.jaotc.binformat.Symbol.Binding;
 import jdk.tools.jaotc.binformat.Symbol.Kind;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.meta.ResolvedJavaField;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.ResolvedJavaType;
@@ -82,6 +83,13 @@ final class AOTCompiledClass {
 
         private String[] getMetaspaceNames() {
             String name = metadataName;
+            AOTDynamicTypeStore dynoStore;
+            if (JBoosterCompilationContext.get() != null) {
+                dynoStore = (AOTDynamicTypeStore) JBoosterCompilationContext.get()
+                        .getAOTCompiledClassAOTDynamicTypeStore();
+            } else {
+                dynoStore = AOTCompiledClass.dynoStore;
+            }
             Set<Location> locs = dynoStore.getDynamicClassLocationsForType(type);
             if (locs == null) {
                 return new String[]{name};
@@ -263,6 +271,9 @@ final class AOTCompiledClass {
      * Get the number of all AOT classes.
      */
     static int getClassesCount() {
+        if (JBoosterCompilationContext.get() != null) {
+            return JBoosterCompilationContext.get().getAOTCompiledClassClassesCount().get();
+        }
         return classesCount;
     }
 
@@ -322,7 +333,19 @@ final class AOTCompiledClass {
     static synchronized AOTKlassData addAOTKlassData(BinaryContainer binaryContainer, HotSpotResolvedObjectType type) {
         AOTKlassData data = getAOTKlassData(type);
         if (data == null) {
-            data = new AOTKlassData(binaryContainer, type, classesCount++);
+            int cnt;
+            HashMap<String, AOTKlassData> klassData;
+            JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+            if (ctx != null) {
+                cnt = ctx.getAOTCompiledClassClassesCount().getAndIncrement();
+                @SuppressWarnings({"unchecked"})
+                HashMap<String, AOTKlassData> kd = (HashMap<String, AOTKlassData>) ctx.getAOTCompiledClassKlassData();
+                klassData = kd;
+            } else {
+                cnt = classesCount++;
+                klassData = AOTCompiledClass.klassData;
+            }
+            data = new AOTKlassData(binaryContainer, type, cnt);
             klassData.put(type.getName(), data);
         }
         return data;
@@ -330,6 +353,15 @@ final class AOTCompiledClass {
 
     static synchronized AOTKlassData getAOTKlassData(HotSpotResolvedObjectType type) {
         String name = type.getName();
+        HashMap<String, AOTKlassData> klassData;
+        JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+        if (ctx != null) {
+            @SuppressWarnings({"unchecked"})
+            HashMap<String, AOTKlassData> kd = (HashMap<String, AOTKlassData>) ctx.getAOTCompiledClassKlassData();
+            klassData = kd;
+        } else {
+            klassData = AOTCompiledClass.klassData;
+        }
         AOTKlassData data = klassData.get(name);
         if (data != null) {
             HotSpotResolvedObjectType oldType = data.getType();
@@ -417,6 +449,19 @@ final class AOTCompiledClass {
     }
 
     static void putAOTKlassData(BinaryContainer binaryContainer) {
+        AOTDynamicTypeStore dynoStore;
+        HashMap<String, AOTKlassData> klassData;
+        JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+        if (ctx != null) {
+            dynoStore = (AOTDynamicTypeStore) ctx.getAOTCompiledClassAOTDynamicTypeStore();
+            @SuppressWarnings({"unchecked"})
+            HashMap<String, AOTKlassData> kd = (HashMap<String, AOTKlassData>) ctx.getAOTCompiledClassKlassData();
+            klassData = kd;
+        } else {
+            dynoStore = AOTCompiledClass.dynoStore;
+            klassData = AOTCompiledClass.klassData;
+        }
+
         // record dynamic types
         Set<HotSpotResolvedObjectType> dynoTypes = dynoStore.getDynamicTypes();
         if (dynoTypes != null) {
@@ -468,4 +513,15 @@ final class AOTCompiledClass {
         this.methods = null;
     }
 
+    public static void guaranteeStaticNotUsed() {
+        if (dynoStore != null) {
+            throw new IllegalStateException("Static dynoStore should be null for JBooster!");
+        }
+        if (classesCount != 0) {
+            throw new IllegalStateException("Static classesCount should be 0 for JBooster!");
+        }
+        if (!klassData.isEmpty()) {
+            throw new IllegalStateException("Static klassData should be empty for JBooster!");
+        }
+    }
 }

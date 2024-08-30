@@ -24,7 +24,7 @@
 #ifndef SHARE_JBOOSTER_LAZYAOT_HPP
 #define SHARE_JBOOSTER_LAZYAOT_HPP
 
-#include "jbooster/utilities/ptrHashSet.hpp"
+#include "jbooster/utilities/scalarHashMap.hpp"
 #include "memory/allocation.hpp"
 #include "runtime/handles.hpp"
 #include "runtime/thread.hpp"
@@ -36,6 +36,17 @@ template <class T> class GrowableArray;
 class InstanceKlass;
 class Method;
 class MethodData;
+class OopHandle;
+
+class ClassLoaderKeepAliveMark: public StackObj {
+  GrowableArray<OopHandle> _handles;
+
+public:
+  ~ClassLoaderKeepAliveMark();
+
+  void add(ClassLoaderData* cld);
+  void add_all(GrowableArray<ClassLoaderData*>* clds);
+};
 
 class LazyAOT: public AllStatic {
 private:
@@ -55,29 +66,29 @@ private:
                                                  TRAPS);
 
   static void collect_klasses_by_inheritance(GrowableArray<InstanceKlass*>* dst,
-                                             PtrHashSet<InstanceKlass*>* vis,
+                                             ScalarHashSet<InstanceKlass*>* vis,
                                              InstanceKlass* ik,
                                              TRAPS);
   static void collect_klasses_in_constant_pool(GrowableArray<InstanceKlass*>* dst,
-                                               PtrHashSet<InstanceKlass*>* vis,
+                                               ScalarHashSet<InstanceKlass*>* vis,
                                                InstanceKlass* ik,
                                                int which_klasses,
                                                TRAPS);
   static void collect_klasses_in_constant_pool(GrowableArray<InstanceKlass*>* dst,
-                                               PtrHashSet<InstanceKlass*>* vis,
+                                               ScalarHashSet<InstanceKlass*>* vis,
                                                TRAPS);
   static void collect_klasses_in_method_data(GrowableArray<InstanceKlass*>* dst_ik,
                                              GrowableArray<ArrayKlass*>* dst_ak,
-                                             PtrHashSet<InstanceKlass*>* ik_vis,
+                                             ScalarHashSet<InstanceKlass*>* ik_vis,
                                              TRAPS);
   static void collect_klasses_in_method_data(GrowableArray<InstanceKlass*>* dst_ik,
                                              GrowableArray<ArrayKlass*>* dst_ak,
-                                             PtrHashSet<InstanceKlass*>* ik_vis,
-                                             PtrHashSet<ArrayKlass*>* ak_vis,
+                                             ScalarHashSet<InstanceKlass*>* ik_vis,
+                                             ScalarHashSet<ArrayKlass*>* ak_vis,
                                              MethodData* method_data,
                                              int which_klasses,
                                              TRAPS);
-  static bool sort_klasses_by_inheritance(GrowableArray<InstanceKlass*>* dst_ik,
+  static void sort_klasses_by_inheritance(GrowableArray<InstanceKlass*>* dst_ik,
                                           GrowableArray<ArrayKlass*>* dst_ak,
                                           GrowableArray<InstanceKlass*>* src,
                                           bool reverse_scan_src,
@@ -88,7 +99,8 @@ public:
   static bool can_be_compiled(InstanceKlass* ik, bool check_cld = true);
   static bool can_be_compiled(ClassLoaderData* cld);
 
-  static void collect_all_klasses_to_compile(GrowableArray<ClassLoaderData*>* all_loaders,
+  static void collect_all_klasses_to_compile(ClassLoaderKeepAliveMark& clka,
+                                             GrowableArray<ClassLoaderData*>* all_loaders,
                                              GrowableArray<InstanceKlass*>* klasses_to_compile,
                                              GrowableArray<Method*>* methods_to_compile,
                                              GrowableArray<Method*>* methods_not_compile,
@@ -99,12 +111,14 @@ public:
   static bool compile_classes_by_graal(int session_id,
                                        const char* file_path,
                                        GrowableArray<InstanceKlass*>* klasses,
+                                       bool use_pgo,
                                        TRAPS);
   static bool compile_methods_by_graal(int session_id,
                                        const char* file_path,
                                        GrowableArray<InstanceKlass*>* klasses,
                                        GrowableArray<Method*>* methods_to_compile,
                                        GrowableArray<Method*>* methods_not_compile,
+                                       bool use_pgo,
                                        TRAPS);
 };
 

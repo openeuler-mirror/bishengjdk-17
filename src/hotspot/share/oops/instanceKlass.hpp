@@ -1072,7 +1072,7 @@ public:
            nonstatic_oop_map_size +
            (is_interface ? (int)sizeof(Klass*)/wordSize : 0) +
            (has_stored_fingerprint ? (int)sizeof(uint64_t*)/wordSize : 0) +
-           AOT_ONLY(sizeof(u1)) NOT_AOT(0));
+           AOT_ONLY((int)align_up(sizeof(u1),wordSize)/wordSize) NOT_AOT(0));
   }
 
   int size() const                    { return size(vtable_length(),

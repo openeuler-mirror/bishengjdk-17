@@ -21,17 +21,26 @@
  * questions.
  */
 
-/**
- * Defines the tools and API for JBooster.
- *
- * @moduleGraph
- * @since 9
- */
-module jdk.jbooster {
-    requires jdk.aot;
-    requires jdk.internal.vm.ci;
-    requires jdk.unsupported;
-    requires java.logging;
+package jdk.tools.jaotc.jbooster;
 
-    exports jdk.jbooster.api;
+import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import org.graalvm.compiler.bytecode.Bytecodes;
+import org.graalvm.compiler.hotspot.meta.HotSpotInvokeDynamicPlugin;
+import org.graalvm.compiler.nodes.graphbuilderconf.GraphBuilderContext;
+
+/**
+ * JBoosterHotSpotAOTInvokeDynamicPlugin
+ */
+public class JBoosterHotSpotAOTInvokeDynamicPlugin extends HotSpotInvokeDynamicPlugin {
+    public JBoosterHotSpotAOTInvokeDynamicPlugin(DynamicTypeStore dynoStore) {
+        super(dynoStore);
+    }
+
+    @Override
+    public boolean supportsDynamicInvoke(GraphBuilderContext builder, int index, int opcode) {
+        // Support ConstantCallSite of invokedynamic only.
+        if (opcode != Bytecodes.INVOKEDYNAMIC) return false;
+        HotSpotResolvedJavaMethod target = (HotSpotResolvedJavaMethod) builder.getCode().getConstantPool().lookupMethod(index, opcode);
+        return "linkToTargetMethod".equals(target.getName());
+    }
 }

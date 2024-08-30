@@ -83,7 +83,7 @@
           range(0, 4)                                                       \
                                                                             \
   product(ccstr, UseBoostPackages, "all", DIAGNOSTIC,                       \
-          "\"all\" means \"aot+cds+clr\".")                                 \
+          "\"all\" means \"aot+cds+clr+pgo\".")                             \
                                                                             \
   product(bool, JBoosterClientStrictMatch, false, DIAGNOSTIC,               \
           "Be strict when matching the client data.")                       \

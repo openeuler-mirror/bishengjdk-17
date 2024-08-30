@@ -71,7 +71,13 @@ public class AArch64HotSpotMove {
                 // masm.forceMov(asRegister(result), 0);
                 masm.movNarrowAddress(asRegister(result), 0);
             } else {
-                masm.movNativeAddress(asRegister(result), 0);
+                Register resultRegister = asRegister(result);
+                if (crb.compilationResult.isImmutablePIC()) {
+                    masm.addressOf(resultRegister);
+                    masm.ldr(64, resultRegister, AArch64Address.createBaseRegisterOnlyAddress(resultRegister));
+                } else {
+                    masm.movNativeAddress(resultRegister, 0);
+                }
             }
         }
 

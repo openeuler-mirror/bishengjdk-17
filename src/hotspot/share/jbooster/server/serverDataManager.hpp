@@ -191,6 +191,8 @@ private:
   JClientCacheState _cds_cache_state;
   JClientCacheState _aot_cache_state;
 
+  bool _using_pgo; // use pgo if or not, as boost level 4
+
   NONCOPYABLE(JClientProgramData);
 
 public:
@@ -211,6 +213,7 @@ public:
   JClientCacheState& clr_cache_state() { return _clr_cache_state; }
   JClientCacheState& cds_cache_state() { return _cds_cache_state; }
   JClientCacheState& aot_cache_state() { return _aot_cache_state; }
+  bool using_pgo() { return _using_pgo; }
 };
 
 /**

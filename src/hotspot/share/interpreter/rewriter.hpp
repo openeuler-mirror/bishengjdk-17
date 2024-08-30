@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2019, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -186,8 +186,8 @@ class Rewriter: public StackObj {
   void make_constant_pool_cache(TRAPS);
   void scan_method(Thread* thread, Method* m, bool reverse, bool* invokespecial_error);
   void rewrite_Object_init(const methodHandle& m, TRAPS);
-  void rewrite_member_reference(address bcp, int offset, bool reverse);
-  void maybe_rewrite_invokehandle(address opc, int cp_index, int cache_index, bool reverse);
+  void rewrite_member_reference(address bcp, int offset, bool reverse, Method* current_method = nullptr);
+  void maybe_rewrite_invokehandle(address opc, int cp_index, int cache_index, bool reverse, Method* current_method = nullptr);
   void rewrite_invokedynamic(address bcp, int offset, bool reverse);
   void maybe_rewrite_ldc(address bcp, int offset, bool is_wide, bool reverse);
   void rewrite_invokespecial(address bcp, int offset, bool reverse, bool* invokespecial_error);

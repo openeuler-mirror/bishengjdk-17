@@ -178,6 +178,7 @@ import jdk.vm.ci.hotspot.HotSpotCallingConventionType;
 import jdk.vm.ci.hotspot.HotSpotConstantReflectionProvider;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaField;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.meta.JavaConstant;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.JavaType;
@@ -526,7 +527,8 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
 
             LoweredCallTargetNode loweredCallTarget = null;
             OptionValues options = graph.getOptions();
-            if (InlineVTableStubs.getValue(options) && callTarget.invokeKind().isIndirect() && (AlwaysInlineVTableStubs.getValue(options) || invoke.isPolymorphic())) {
+            JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+            if ((ctx == null || !ctx.usePGO()) && InlineVTableStubs.getValue(options) && callTarget.invokeKind().isIndirect() && (AlwaysInlineVTableStubs.getValue(options) || invoke.isPolymorphic())) {
                 HotSpotResolvedJavaMethod hsMethod = (HotSpotResolvedJavaMethod) callTarget.targetMethod();
                 ResolvedJavaType receiverType = invoke.getReceiverType();
                 if (hsMethod.isInVirtualMethodTable(receiverType)) {

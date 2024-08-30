@@ -59,7 +59,7 @@ public:
   static void universe_init() NOT_AOT_RETURN;
   static void set_narrow_oop_shift() NOT_AOT_RETURN;
   static void set_narrow_klass_shift() NOT_AOT_RETURN;
-  static void load_for_klass(InstanceKlass* ik, TRAPS) NOT_AOT_RETURN;
+  static void load_for_klass(InstanceKlass* ik, Thread* THREAD) NOT_AOT_RETURN;
   static uint64_t get_saved_fingerprint(InstanceKlass* ik) NOT_AOT({ return 0; });
   static void oops_do(OopClosure* f) NOT_AOT_RETURN;
   static void metadata_do(MetadataClosure* f) NOT_AOT_RETURN;

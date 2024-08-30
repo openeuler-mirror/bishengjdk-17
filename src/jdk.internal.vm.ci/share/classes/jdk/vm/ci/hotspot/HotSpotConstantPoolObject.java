@@ -32,7 +32,7 @@ import jdk.vm.ci.meta.JavaKind;
 public final class HotSpotConstantPoolObject implements JavaConstant {
 
     public static JavaConstant forObject(HotSpotResolvedObjectType type, int cpi, JavaConstant object) {
-        return new HotSpotConstantPoolObject(type, cpi, object);
+        return DirectHotSpotObjectConstantImpl.forObject(type, cpi, object);
     }
 
     private final JavaConstant constant;

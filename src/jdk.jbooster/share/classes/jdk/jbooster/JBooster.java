@@ -29,8 +29,7 @@ import java.util.Set;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime;
-import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.Option;
+import jdk.tools.jaotc.Main;
 import sun.misc.Signal;
 import sun.misc.SignalHandler;
 
@@ -175,22 +174,24 @@ public final class JBooster {
     /**
      * This method is invoked only in C++.
      */
-    private static boolean compileClasses(int sessionId, String filePath, Set<Class<?>> classes) {
-        return compileMethods(sessionId, filePath, classes, null, null);
+    private static boolean compileClasses(int sessionId, String filePath, Set<Class<?>> classes, boolean usePGO) {
+        return compileMethods(sessionId, filePath, classes, null, null, usePGO);
     }
 
     /**
      * This method is invoked only in C++.
      */
     private static boolean compileMethods(int sessionId, String filePath, Set<Class<?>> classes,
-                                          Set<String> methodsToCompile, Set<String> methodsNotToCompile) {
+                                          Set<String> methodsToCompile, Set<String> methodsNotToCompile, boolean usePGO) {
         LOGGER.log(INFO, "Compilation task received: classes_to_compile={0}, methods_to_compile={1}, methods_not_compile={2}, session_id={3}.",
                 classes.size(),
                 (methodsToCompile == null ? "all" : String.valueOf(methodsToCompile.size())),
                 (methodsNotToCompile == null ? "none" : String.valueOf(methodsNotToCompile.size())),
                 sessionId);
         try {
-            // [JBOOSTER TODO] jaotc logic
+            JBoosterCompilationContextImpl ctx = new JBoosterCompilationContextImpl(
+                    sessionId, filePath, classes, methodsToCompile, methodsNotToCompile, usePGO);
+            return new Main(ctx).compileForJBooster();
         } catch (Exception e) {
             e.printStackTrace();
         }

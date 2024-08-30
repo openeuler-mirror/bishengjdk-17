@@ -171,10 +171,15 @@ public class InliningLog {
         if (!enabled) {
             return;
         }
-        assert leaves.containsKey(invoke);
+        if (!leaves.containsKey(invoke)) {
+            trackNewCallsite(invoke);
+        }
         assert (!positive && replacements == null && calleeLog == null) || (positive && replacements != null && calleeLog != null) ||
                         (positive && replacements == null && calleeLog == null);
         Callsite callsite = leaves.get(invoke);
+        if (callsite == null) {
+            return;
+        }
         callsite.target = callsite.invoke.getTargetMethod();
         Decision decision = new Decision(positive, String.format(reason, args), phase, invoke.getTargetMethod());
         callsite.decisions.add(decision);

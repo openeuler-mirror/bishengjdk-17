@@ -44,6 +44,7 @@ import org.graalvm.compiler.lir.amd64.AMD64LIRInstruction;
 import org.graalvm.compiler.lir.asm.CompilationResultBuilder;
 
 import jdk.vm.ci.code.Register;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
 import jdk.vm.ci.hotspot.HotSpotObjectConstant;
 import jdk.vm.ci.meta.AllocatableValue;
@@ -65,7 +66,8 @@ public class AMD64HotSpotMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            if (GeneratePIC.getValue(crb.getOptions())) {
+            JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+            if (GeneratePIC.getValue(crb.getOptions()) && (ctx == null || !ctx.usePGO())) {
                 throw GraalError.shouldNotReachHere("Object constant load should not be happening directly");
             }
             boolean compressed = input.isCompressed();
@@ -142,7 +144,8 @@ public class AMD64HotSpotMove {
 
         @Override
         public void emitCode(CompilationResultBuilder crb, AMD64MacroAssembler masm) {
-            if (GeneratePIC.getValue(crb.getOptions())) {
+            JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+            if (GeneratePIC.getValue(crb.getOptions()) && (ctx == null || !ctx.usePGO())) {
                 throw GraalError.shouldNotReachHere("Metaspace constant load should not be happening directly");
             }
             boolean compressed = input.isCompressed();

@@ -148,15 +148,24 @@ final class DataPatchProcessor {
         int alignment = data.getAlignment();
         byte[] value = new byte[size];
         ByteBuffer buffer = ByteBuffer.wrap(value).order(ByteOrder.nativeOrder());
-        DataSection.emit(buffer, data, (p, c) -> {
+        final String[] targetSymbol = {""};
+        DataSection.emit(buffer, data, (position, constant) -> {
+            assert constant instanceof HotSpotMetaspaceConstant : "unknown type:" + constant;
+            HotSpotMetaspaceConstant metaspaceConstant = (HotSpotMetaspaceConstant) constant;
+            HotSpotResolvedObjectType type = metaspaceConstant.asResolvedJavaType();
+            assert type != null : "unexpected null type";
+            methodInfo.addDependentKlassData(binaryContainer, type);
+            targetSymbol[0] = "got." + AOTCompiledClass.metadataName(type);
         });
-        String targetSymbol = "data.M" + methodInfo.getCodeId() + "." + dataOffset;
-        Symbol relocationSymbol = binaryContainer.getSymbol(targetSymbol);
+        if ("".equals(targetSymbol[0])) {
+            targetSymbol[0] = "data.M" + methodInfo.getCodeId() + "." + dataOffset;
+        }
+        Symbol relocationSymbol = binaryContainer.getSymbol(targetSymbol[0]);
         if (relocationSymbol == null) {
             int symSize = Math.max(8, size);
             int symAlig = Math.max(8, alignment);
             int offsetInConstantDataSection = binaryContainer.addConstantData(value, symAlig);
-            relocationSymbol = binaryContainer.getConstantDataContainer().createSymbol(offsetInConstantDataSection, Kind.OBJECT, Binding.LOCAL, symSize, targetSymbol);
+            relocationSymbol = binaryContainer.getConstantDataContainer().createSymbol(offsetInConstantDataSection, Kind.OBJECT, Binding.LOCAL, symSize, targetSymbol[0]);
         }
         Relocation reloc = new Relocation(relocOffset, RelocType.METASPACE_GOT_REFERENCE, 0, binaryContainer.getCodeContainer(), relocationSymbol);
         binaryContainer.addRelocation(reloc);

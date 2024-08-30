@@ -38,6 +38,7 @@ import jdk.tools.jaotc.binformat.ReadOnlyDataContainer;
 import jdk.vm.ci.code.site.Call;
 import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 
 final class CompiledMethodInfo {
 
@@ -243,10 +244,16 @@ final class CompiledMethodInfo {
     }
 
     static int getMethodsCount() {
+        if (JBoosterCompilationContext.get() != null) {
+            return JBoosterCompilationContext.get().getCompiledMethodInfoMethodsCount().get();
+        }
         return methodsCount.get();
     }
 
     static int getNextCodeId() {
+        if (JBoosterCompilationContext.get() != null) {
+            return JBoosterCompilationContext.get().getCompiledMethodInfoMethodsCount().getAndIncrement();
+        }
         return methodsCount.getAndIncrement();
     }
 
@@ -337,5 +344,11 @@ final class CompiledMethodInfo {
         this.stubs = null;
         this.compilationResult = null;
         this.methodInfo = null;
+    }
+
+    public static void guaranteeStaticNotUsed() {
+        if (methodsCount.get() != 0) {
+            throw new IllegalStateException("Static methodsCount should be 0 for JBooster!");
+        }
     }
 }

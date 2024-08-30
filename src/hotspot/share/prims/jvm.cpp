@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -3879,6 +3879,15 @@ JVM_END
 JVM_ENTRY(void, JVM_JBoosterPrintStoredClientData(JNIEnv *env, jboolean print_all))
 #if INCLUDE_JBOOSTER
   ServerDataManager::get().log_all_state(print_all);
+#endif // INCLUDE_JBOOSTER
+JVM_END
+
+JVM_ENTRY(jlong, JVM_JBoosterGetMetaspaceMethodData(JNIEnv *env, jint session_id, jlong metaspace_method))
+#if INCLUDE_JBOOSTER
+  TempJClientSessionData session_data = ServerDataManager::get().get_session(session_id, THREAD);
+  return (jlong) session_data->method_data_address((address) metaspace_method, THREAD);
+#else
+  return 0;
 #endif // INCLUDE_JBOOSTER
 JVM_END
 

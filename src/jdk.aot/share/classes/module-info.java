@@ -34,4 +34,8 @@ module jdk.aot {
     requires jdk.internal.vm.ci;
     requires jdk.internal.vm.compiler;
     requires jdk.management;
+
+    exports jdk.tools.jaotc to jdk.jbooster;
+    exports jdk.tools.jaotc.collect to jdk.jbooster;
+    exports jdk.tools.jaotc.collect.module to jdk.jbooster;
 }

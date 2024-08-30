@@ -332,6 +332,8 @@ AC_DEFUN_ONCE([JVM_FEATURES_CHECK_JBOOSTER],
     AC_MSG_CHECKING([if platform is supported by JBOOSTER])
     if test "x$OPENJDK_TARGET_CPU" = "xx86_64"; then
       AC_MSG_RESULT([yes])
+    elif test "x$OPENJDK_TARGET_CPU" = "xaarch64"; then
+      AC_MSG_RESULT([yes])
     else
       AC_MSG_RESULT([no, $OPENJDK_TARGET_CPU])
       AVAILABLE=false

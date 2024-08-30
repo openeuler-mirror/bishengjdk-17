@@ -74,7 +74,6 @@ public class InstanceKlass extends Klass {
   private static int MISC_HAS_NONSTATIC_CONCRETE_METHODS;
   private static int MISC_DECLARES_NONSTATIC_CONCRETE_METHODS;
   private static int MISC_HAS_BEEN_REDEFINED;
-  private static int MISC_HAS_PASSED_FINGERPRINT_CHECK;
   private static int MISC_IS_SCRATCH_CLASS;
   private static int MISC_IS_SHARED_BOOT_CLASS;
   private static int MISC_IS_SHARED_PLATFORM_CLASS;
@@ -132,7 +131,6 @@ public class InstanceKlass extends Klass {
     MISC_HAS_NONSTATIC_CONCRETE_METHODS      = db.lookupIntConstant("InstanceKlass::_misc_has_nonstatic_concrete_methods").intValue();
     MISC_DECLARES_NONSTATIC_CONCRETE_METHODS = db.lookupIntConstant("InstanceKlass::_misc_declares_nonstatic_concrete_methods").intValue();
     MISC_HAS_BEEN_REDEFINED           = db.lookupIntConstant("InstanceKlass::_misc_has_been_redefined").intValue();
-    MISC_HAS_PASSED_FINGERPRINT_CHECK = db.lookupIntConstant("InstanceKlass::_misc_has_passed_fingerprint_check").intValue();
     MISC_IS_SCRATCH_CLASS             = db.lookupIntConstant("InstanceKlass::_misc_is_scratch_class").intValue();
     MISC_IS_SHARED_BOOT_CLASS         = db.lookupIntConstant("InstanceKlass::_misc_is_shared_boot_class").intValue();
     MISC_IS_SHARED_PLATFORM_CLASS     = db.lookupIntConstant("InstanceKlass::_misc_is_shared_platform_class").intValue();
@@ -288,6 +286,10 @@ public class InstanceKlass extends Klass {
       size += 8; // uint64_t
     }
 
+    if (VM.getVM().hasAOT()) {
+      size += 1; // u1 aot_flags
+    }
+
     return alignSize(size);
   }
 
@@ -301,6 +303,9 @@ public class InstanceKlass extends Klass {
       return true;
     }
     if (vm.getCommandLineBooleanFlag("DumpSharedSpaces")) {
+      return true;
+    }
+    if (vm.getCommandLineBooleanFlag("CalculateClassFingerprint")) {
       return true;
     }
     return false;

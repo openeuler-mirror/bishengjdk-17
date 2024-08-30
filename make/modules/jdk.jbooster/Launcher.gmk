@@ -26,9 +26,26 @@
 include LauncherCommon.gmk
 
 $(eval $(call SetupBuildLauncher, jbooster, \
-    MAIN_CLASS := jdk.jbooster.Main, \
-    JAVA_ARGS := \
-        -XX:+UnlockExperimentalVMOptions \
-        -XX:+AsJBooster \
+    MAIN_CLASS := jdk.jbooster.JBooster, \
+    EXTRA_JAVA_ARGS := -XX:+UnlockExperimentalVMOptions -XX:+EnableJVMCI \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.aarch64=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.amd64=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.code=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.code.site=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.code.stack=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.common=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.hotspot=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+    , \
+    JAVA_ARGS := -XX:+UnlockExperimentalVMOptions -XX:+UseAOT -XX:+AsJBooster \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.hotspot.aarch64=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.hotspot.amd64=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.hotspot.aarch64=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.meta=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+        --add-exports=jdk.internal.vm.ci/jdk.vm.ci.runtime=$(call CommaList, jdk.internal.vm.compiler  jdk.aot) \
+        -XX:+CalculateClassFingerprint \
+        -Dgraal.UseExceptionProbability=false \
+        -Dgraal.RemoveNeverExecutedCode=false \
+        -Djvmci.Compiler=graal \
+        --add-modules ALL-DEFAULT \
     , \
 ))

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,6 +22,7 @@
  */
 package jdk.vm.ci.hotspot;
 
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.meta.DeoptimizationReason;
 import jdk.vm.ci.meta.JavaMethodProfile;
 import jdk.vm.ci.meta.JavaTypeProfile;
@@ -50,7 +51,12 @@ final class HotSpotProfilingInfo implements ProfilingInfo {
         }
         this.includeNormal = includeNormal;
         this.includeOSR = includeOSR;
-        this.isMature = methodData.isProfileMature();
+        if (methodData.isProfileMature()) {
+            this.isMature = true;
+        } else {
+            JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+            this.isMature = ctx != null && ctx.usePGO();
+        }
         hintPosition = 0;
         hintBCI = -1;
     }
@@ -110,7 +116,11 @@ final class HotSpotProfilingInfo implements ProfilingInfo {
 
     @Override
     public TriState getExceptionSeen(int bci) {
-        findBCI(bci, true);
+        if (JBoosterCompilationContext.get() != null) {
+            findBCI(bci, false);
+        } else {
+            findBCI(bci, true);
+        }
         return dataAccessor.getExceptionSeen(methodData, position);
     }
 

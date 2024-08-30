@@ -1120,6 +1120,12 @@ JNIEXPORT void JNICALL
 JVM_JBoosterPrintStoredClientData(JNIEnv *env, jboolean print_all);
 
 /**
+ * Get metaspaceMethodData.
+ */
+JNIEXPORT long JNICALL
+JVM_JBoosterGetMetaspaceMethodData(JNIEnv *env, jint session_id, jlong metaspace_method);
+
+/**
  * Callback of startup signal.
  */
 JNIEXPORT void JNICALL

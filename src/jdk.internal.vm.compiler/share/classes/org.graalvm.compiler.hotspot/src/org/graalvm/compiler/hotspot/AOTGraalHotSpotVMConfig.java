@@ -41,8 +41,13 @@ public class AOTGraalHotSpotVMConfig extends GraalHotSpotVMConfig {
         // always equal to alignment to avoid emitting zero-shift AOT code.
         CompressEncoding vmOopEncoding = super.getOopEncoding();
         aotOopEncoding = new CompressEncoding(vmOopEncoding.getBase(), logMinObjAlignment());
+
+        // For compressed klass, there is always zero-shift in aarch64
         CompressEncoding vmKlassEncoding = super.getKlassEncoding();
-        aotKlassEncoding = new CompressEncoding(vmKlassEncoding.getBase(), logKlassAlignment);
+        String archStr = System.getProperty("os.arch").toLowerCase();
+        int zeroShift = 0;
+        aotKlassEncoding = new CompressEncoding(vmKlassEncoding.getBase(), "aarch64".equals(archStr) ? zeroShift : logKlassAlignment);
+
         assert check();
         reportErrors();
     }

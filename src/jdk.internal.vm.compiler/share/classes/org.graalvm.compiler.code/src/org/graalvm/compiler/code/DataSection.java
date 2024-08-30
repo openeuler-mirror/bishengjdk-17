@@ -47,6 +47,17 @@ public final class DataSection implements Iterable<Data> {
     }
 
     public abstract static class Data {
+        public static final int MIN_ALIGNMENT;
+        static {
+            String archStr = System.getProperty("os.arch").toLowerCase();
+            if ("aarch64".equals(archStr)) {
+                // AArch64 Relocations are 4-aligned
+                // see relocInfo_aarch64.hpp -> offset_unit
+                MIN_ALIGNMENT = 4;
+            } else {
+                MIN_ALIGNMENT = 1;
+            }
+        }
 
         private int alignment;
         private final int size;
@@ -54,7 +65,7 @@ public final class DataSection implements Iterable<Data> {
         private DataSectionReference ref;
 
         protected Data(int alignment, int size) {
-            this.alignment = alignment;
+            this.alignment = lcm(alignment, MIN_ALIGNMENT);
             this.size = size;
 
             // initialized in DataSection.insertData(Data)

@@ -243,25 +243,39 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
     range = 4 * G;
 
   } else {
+#if defined(AARCH64) && INCLUDE_AOT
+    if (UseAOT && AOTLoader::libraries_count() > 0) {
+      constexpr uint64_t unscaled_max = nth_bit(32);
+      assert(len <= unscaled_max, "Klass range larger than 32 bits?");
 
-    // Otherwise we attempt to use a zero base if the range fits in lower 32G.
-    if (end <= (address)KlassEncodingMetaspaceMax) {
-      base = 0;
-    } else {
-      base = addr;
-    }
-
-    // Highest offset a Klass* can ever have in relation to base.
-    range = end - base;
-
-    // We may not even need a shift if the range fits into 32bit:
-    const uint64_t UnscaledClassSpaceMax = (uint64_t(max_juint) + 1);
-    if (range < UnscaledClassSpaceMax) {
+      // Shift is always 0 on aarch64(AOT enabled).
       shift = 0;
-    } else {
-      shift = LogKlassAlignmentInBytes;
-    }
 
+      // On aarch64(AOT enabled), we don't bother with zero-based encoding (base=0 shift>0).
+      base = (end <= (address)unscaled_max) ? nullptr : addr;
+
+      range = end - base;
+    } else
+#endif // defined(AARCH64) && INCLUDE_AOT
+    {
+      // Otherwise we attempt to use a zero base if the range fits in lower 32G.
+      if (end <= (address)KlassEncodingMetaspaceMax) {
+        base = 0;
+      } else {
+        base = addr;
+      }
+
+      // Highest offset a Klass* can ever have in relation to base.
+      range = end - base;
+
+      // We may not even need a shift if the range fits into 32bit:
+      const uint64_t UnscaledClassSpaceMax = (uint64_t(max_juint) + 1);
+      if (range < UnscaledClassSpaceMax) {
+        shift = 0;
+      } else {
+        shift = LogKlassAlignmentInBytes;
+      }
+    }
   }
 
   set_base(base);

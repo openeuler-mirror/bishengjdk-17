@@ -136,6 +136,12 @@ int SerializationImpl<InstanceKlass>::serialize(MessageBuffer& buf, const Instan
     }
     MemoryWrapper mw((void*) cf_buf, cf_size);
     JB_RETURN(buf.serialize_no_meta(mw));
+
+    if (should_send_class_file) {
+      // fingerprint of ClassFileStream
+      InstanceKlass* ik = const_cast<InstanceKlass*>(&arg);
+      JB_RETURN(buf.serialize_no_meta(ik->get_stored_fingerprint()));
+    }
   }
 
   return 0;
@@ -268,6 +274,16 @@ int SerializationImpl<InstanceKlass>::deserialize_ptr(MessageBuffer& buf, Instan
     JClientSessionData* session_data = ((ServerStream*) buf.stream())->session_data();
     session_data->add_klass_address((address) client_klass, (address) res, THREAD);
     arg_ptr = res;
+  }
+
+  if (!mw.is_null()) {
+    // fingerprint of ClassFileStream
+    uint64_t fingerprint;
+    JB_RETURN(buf.deserialize_ref_no_meta(fingerprint));
+    if (res != nullptr) {
+      // force to set the fingerprint that from client
+      res->store_fingerprint(fingerprint);
+    }
   }
   return 0;
 }

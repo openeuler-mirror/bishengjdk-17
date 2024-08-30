@@ -54,7 +54,15 @@ final class Collector {
     }
 
     Set<Class<?>> collectClassesToCompile() {
-        Set<Class<?>> classesToCompile = new HashSet<>();
+        Set<Class<?>> classesToCompile;
+        if (main.options.getClassesToCompile() != null) {
+            if (main.options.files.isEmpty()) {
+                return main.options.getClassesToCompile();
+            }
+            classesToCompile = main.options.getClassesToCompile();
+        } else {
+            classesToCompile = new HashSet<>();
+        }
         FileSupport fileSupport = new FileSupport();
         ClassSearch lookup = new ClassSearch();
         lookup.addProvider(new ModuleSourceProvider());
@@ -104,11 +112,11 @@ final class Collector {
      *
      * @return array list of AOT classes which have compiled methods.
      */
-    List<AOTCompiledClass> collectMethodsToCompile(Set<Class<?>> classesToCompile, MetaAccessProvider metaAccess) {
+    List<AOTCompiledClass> collectMethodsToCompile(Set<Class<?>> classesToCompile, Set<String> methodsToCompile, Set<String> methodsNotToCompile, MetaAccessProvider metaAccess) {
         int total = 0;
         int count = 0;
         List<AOTCompiledClass> classes = new ArrayList<>();
-        CompilationSpec compilationRestrictions = collectSpecifiedMethods();
+        CompilationSpec compilationRestrictions = collectSpecifiedMethods(methodsToCompile, methodsNotToCompile);
 
         for (Class<?> c : classesToCompile) {
             ResolvedJavaType resolvedJavaType = metaAccess.lookupJavaType(c);
@@ -160,8 +168,8 @@ final class Collector {
      * If a file with compilation limitations is specified using flag --compile-commands, read the
      * file's contents and collect the restrictions.
      */
-    private CompilationSpec collectSpecifiedMethods() {
-        CompilationSpec compilationRestrictions = new CompilationSpec();
+    private CompilationSpec collectSpecifiedMethods(Set<String> methodsToCompile, Set<String> methodsNotToCompile) {
+        CompilationSpec compilationRestrictions = new CompilationSpec((HashSet<String>) methodsToCompile, (HashSet<String>) methodsNotToCompile);
         String methodListFileName = main.options.methodList;
 
         if (methodListFileName != null && !methodListFileName.equals("")) {

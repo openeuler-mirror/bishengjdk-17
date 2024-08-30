@@ -31,8 +31,9 @@ import jdk.tools.jaotc.binformat.elf.Elf.Elf64_Rel;
 import jdk.tools.jaotc.binformat.elf.Elf.Elf64_Rela;
 import jdk.tools.jaotc.binformat.elf.Elf.Elf64_Shdr;
 import jdk.tools.jaotc.binformat.elf.Elf.Elf64_Sym;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 
-final class ElfSection {
+public final class ElfSection {
     private final String name;
     private final ByteBuffer section;
     private final byte[] data;
@@ -53,6 +54,17 @@ final class ElfSection {
     ElfSection(String sectName, byte[] sectData, int sectFlags, int sectType,
                     boolean hasRelocations, int align, int sectIndex) {
 
+        JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+        StringBuilder sectNameTab;
+        int shStrTabNrOfBytes;
+        if (ctx != null) {
+            sectNameTab = ctx.getElfSectionSectNameTab();
+            shStrTabNrOfBytes = ctx.getElfSectionShStrTabNrOfBytes().get();
+        } else {
+            sectNameTab = ElfSection.sectNameTab;
+            shStrTabNrOfBytes = ElfSection.shStrTabNrOfBytes;
+        }
+
         section = ElfByteBuffer.allocate(Elf64_Shdr.totalsize);
         name = sectName;
         // Return all 0's for NULL section
@@ -62,6 +74,12 @@ final class ElfSection {
             data = null;
             hasrelocations = false;
             sectionIndex = 0;
+
+            if (ctx != null) {
+                ctx.getElfSectionShStrTabNrOfBytes().set(shStrTabNrOfBytes);
+            } else {
+                ElfSection.shStrTabNrOfBytes = shStrTabNrOfBytes;
+            }
             return;
         }
 
@@ -103,6 +121,12 @@ final class ElfSection {
 
         hasrelocations = hasRelocations;
         sectionIndex = sectIndex;
+
+        if (ctx != null) {
+            ctx.getElfSectionShStrTabNrOfBytes().set(shStrTabNrOfBytes);
+        } else {
+            ElfSection.shStrTabNrOfBytes = shStrTabNrOfBytes;
+        }
     }
 
     String getName() {
@@ -154,4 +178,12 @@ final class ElfSection {
         return sectionIndex;
     }
 
+    public static void guaranteeStaticNotUsed() {
+        if (sectNameTab.length() != 0) {
+            throw new IllegalStateException("Static sectNameTab should be empty for JBooster!");
+        }
+        if (shStrTabNrOfBytes != 0) {
+            throw new IllegalStateException("Static shStrTabNrOfBytes should be 0 for JBooster!");
+        }
+    }
 }

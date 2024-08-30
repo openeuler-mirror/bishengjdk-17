@@ -29,6 +29,7 @@ import java.text.MessageFormat;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Set;
 
 import jdk.tools.jaotc.collect.ClassSearch;
 import jdk.tools.jaotc.collect.ClassSource;
@@ -64,6 +65,24 @@ final class Options {
     boolean version;
     boolean compileWithAssertions;
     boolean tiered;
+
+    boolean asJBooster = false;
+    Set<Class<?>> classesToCompile = null;
+    Set<String> methodsToCompile = null;
+    Set<String> methodsNotToCompile = null;
+    boolean dynamicInvokeSupported = false;
+
+    public boolean isAsJBooster() {
+        return asJBooster;
+    }
+
+    public Set<Class<?>> getClassesToCompile() {
+        return classesToCompile;
+    }
+
+    public boolean isDynamicInvokeSupported() {
+        return isAsJBooster() && dynamicInvokeSupported;
+    }
 
     private String defaultOutputName() {
         osName = System.getProperty("os.name");

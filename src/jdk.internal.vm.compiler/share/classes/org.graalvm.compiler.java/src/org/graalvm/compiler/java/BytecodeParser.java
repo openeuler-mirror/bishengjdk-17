@@ -444,6 +444,7 @@ import jdk.vm.ci.code.BailoutException;
 import jdk.vm.ci.code.BytecodeFrame;
 import jdk.vm.ci.code.CodeUtil;
 import jdk.vm.ci.code.site.InfopointReason;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.ConstantReflectionProvider;
@@ -4432,7 +4433,8 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     private JavaTypeProfile getProfileForTypeCheck(TypeReference type) {
-        if (parsingIntrinsic() || profilingInfo == null || !optimisticOpts.useTypeCheckHints(getOptions()) || type.isExact()) {
+        JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+        if ((ctx != null && ctx.usePGO()) || parsingIntrinsic() || profilingInfo == null || !optimisticOpts.useTypeCheckHints(getOptions()) || type.isExact()) {
             return null;
         } else {
             return profilingInfo.getTypeProfile(bci());

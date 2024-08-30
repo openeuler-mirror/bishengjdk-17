@@ -70,6 +70,7 @@ import org.graalvm.compiler.phases.common.inlining.policy.InliningPolicy;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 
 import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.meta.Assumptions.AssumptionResult;
 import jdk.vm.ci.meta.JavaTypeProfile;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
@@ -152,7 +153,7 @@ public class InliningData {
             return "it is a non-intrinsic native method";
         } else if (method.isAbstract()) {
             return "it is an abstract method";
-        } else if (!method.getDeclaringClass().isInitialized()) {
+        } else if (!method.getDeclaringClass().isInitialized() && (JBoosterCompilationContext.get() == null || !JBoosterCompilationContext.get().usePGO())) {
             return "the method's class is not initialized";
         } else if (!method.canBeInlined()) {
             return "it is marked non-inlinable";
@@ -192,6 +193,16 @@ public class InliningData {
         }
         MethodCallTargetNode callTarget = (MethodCallTargetNode) invoke.callTarget();
         ResolvedJavaMethod targetMethod = callTarget.targetMethod();
+
+        JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+        if (ctx != null && ctx.usePGO()) {
+            String methodName = targetMethod.getDeclaringClass().toClassName() + "." + targetMethod.getName() + targetMethod.getSignature().toMethodDescriptor();
+            if (JBoosterCompilationContext.get().isInlineExcluded(methodName)) {
+                InliningUtil.traceNotInlinedMethod(invoke, inliningDepth(), targetMethod, "can not inline invokehandle calls");
+                invoke.asNode().graph().getInliningLog().addDecision(invoke, false, "InliningPhase", null, null, "can not inline invokehandle calls");
+                return null;
+            }
+        }
 
         InvokeKind invokeKind = callTarget.invokeKind();
         if (invokeKind == CallTargetNode.InvokeKind.Special || invokeKind == CallTargetNode.InvokeKind.Static || targetMethod.canBeStaticallyBound()) {
@@ -271,7 +282,8 @@ public class InliningData {
         double notRecordedTypeProbability = typeProfile.getNotRecordedProbability();
         final OptimisticOptimizations optimisticOpts = context.getOptimisticOptimizations();
         OptionValues options = invoke.asNode().getOptions();
-        if (ptypes.length == 1 && notRecordedTypeProbability == 0) {
+        JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+        if ((ctx == null || !ctx.usePGO()) && ptypes.length == 1 && notRecordedTypeProbability == 0) {
             if (!optimisticOpts.inlineMonomorphicCalls(options)) {
                 InliningUtil.traceNotInlinedMethod(invoke, inliningDepth(), targetMethod, "inlining monomorphic calls is disabled");
                 invoke.asNode().graph().getInliningLog().addDecision(invoke, false, "InliningPhase", null, null, "inlining monomorphic calls is disabled");
@@ -384,6 +396,10 @@ public class InliningData {
                                     "it is a polymorphic method call and at least one invoked method cannot be inlined");
                     return null;
                 }
+            }
+            if (ctx != null && ctx.usePGO() && notRecordedTypeProbability == 0) {
+                // always inline with megamorphic, never deopt
+                notRecordedTypeProbability = 0.01D;
             }
             return new MultiTypeGuardInlineInfo(invoke, concreteMethods, usedTypes, typesToConcretes, notRecordedTypeProbability);
         }

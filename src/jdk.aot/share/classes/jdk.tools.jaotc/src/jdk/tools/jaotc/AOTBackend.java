@@ -50,6 +50,7 @@ import org.graalvm.compiler.phases.tiers.Suites;
 
 import jdk.vm.ci.code.InstalledCode;
 import jdk.vm.ci.hotspot.HotSpotCodeCacheProvider;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.hotspot.HotSpotResolvedJavaMethod;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
 import jdk.vm.ci.meta.ProfilingInfo;
@@ -116,7 +117,9 @@ final class AOTBackend {
     @SuppressWarnings("try")
     private StructuredGraph buildStructuredGraph(ResolvedJavaMethod javaMethod, DebugContext debug) {
         try (DebugContext.Scope s = debug.scope("AOTParseMethod")) {
-            StructuredGraph graph = new StructuredGraph.Builder(graalOptions, debug).method(javaMethod).useProfilingInfo(false).build();
+            JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+            boolean useProfilingInfo = ctx != null ? ctx.usePGO() : false;
+            StructuredGraph graph = new StructuredGraph.Builder(graalOptions, debug).method(javaMethod).useProfilingInfo(useProfilingInfo).build();
             graphBuilderSuite.apply(graph, highTierContext);
             return graph;
         } catch (Throwable e) {
@@ -128,7 +131,13 @@ final class AOTBackend {
     @SuppressWarnings("try")
     private CompilationResult compileGraph(ResolvedJavaMethod resolvedMethod, StructuredGraph graph, DebugContext debug) {
         try (DebugContext.Scope s = debug.scope("AOTCompileMethod")) {
-            ProfilingInfo profilingInfo = DefaultProfilingInfo.get(TriState.FALSE);
+            ProfilingInfo profilingInfo;
+            JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+            if (ctx != null && ctx.usePGO()) {
+                profilingInfo = resolvedMethod.getProfilingInfo(true, true);
+            } else {
+                profilingInfo = DefaultProfilingInfo.get(TriState.FALSE);
+            }
 
             final boolean isImmutablePIC = true;
             CompilationIdentifier id = new CompilationIdentifier() {

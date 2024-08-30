@@ -1975,7 +1975,7 @@ MethodData* MethodData::create_instance_for_jbooster(Method* method, int size, c
 
   // memcpy
   int start = in_bytes(byte_offset_of(MethodData, _method)) + sizeof(res->_method);
-  memcpy((void*) (((char*) res) + start), mem + start, size);
+  memcpy((void*) (((char*) res) + start), mem + start, size - start);
 
   // restore
   memcpy((void*) &res->_extra_data_lock, lock_bak, sizeof(res->_extra_data_lock));

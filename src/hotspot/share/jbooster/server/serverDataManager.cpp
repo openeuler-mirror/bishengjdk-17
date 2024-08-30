@@ -279,12 +279,15 @@ JClientProgramData::JClientProgramData(uint32_t program_id, JClientArguments* pr
   bool allow_clr = _program_args->jbooster_allow_clr();
   bool allow_cds = _program_args->jbooster_allow_cds();
   bool allow_aot = _program_args->jbooster_allow_aot();
+  bool allow_pgo = _program_args->jbooster_allow_pgo();
   const char* clr_path = JBoosterManager::calc_cache_path(sd, _program_str_id, "clr.log");
   const char* cds_path = JBoosterManager::calc_cache_path(sd, _program_str_id, "cds.jsa");
-  const char* aot_path = JBoosterManager::calc_cache_path(sd, _program_str_id, "aot.so");
+  const char* aot_path_suffix = allow_pgo ? "aot-pgo.so" : "aot.so";
+  const char* aot_path = JBoosterManager::calc_cache_path(sd, _program_str_id, aot_path_suffix);
   clr_cache_state().init(allow_clr, clr_path);
   cds_cache_state().init(allow_cds, cds_path);
   aot_cache_state().init(allow_aot, aot_path);
+  _using_pgo = allow_pgo;
 }
 
 JClientProgramData::~JClientProgramData() {

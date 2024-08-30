@@ -58,12 +58,15 @@ final class DataBuilder {
 
     private static final HashMap<Long, String> vmAddresses = new HashMap<>();
 
+    static {
+        fillVMAddresses(HotSpotJVMCIRuntime.runtime().getConfigStore());
+    }
+
     DataBuilder(Main main, HotSpotHostBackend backend, List<AOTCompiledClass> classes, BinaryContainer binaryContainer) {
         this.main = main;
         this.backend = backend;
         this.classes = classes;
         this.binaryContainer = binaryContainer;
-        fillVMAddresses(HotSpotJVMCIRuntime.runtime().getConfigStore());
     }
 
     /**

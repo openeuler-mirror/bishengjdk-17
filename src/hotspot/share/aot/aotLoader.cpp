@@ -47,7 +47,7 @@ GrowableArray<AOTLib*>* AOTLoader::_libraries = new(ResourceObj::C_HEAP, mtCode)
 // Iterate over all AOT Libraries
 #define FOR_ALL_AOT_LIBRARIES(lib) for (GrowableArrayIterator<AOTLib*> lib = libraries()->begin(); lib != libraries()->end(); ++lib)
 
-void AOTLoader::load_for_klass(InstanceKlass* ik, TRAPS) {
+void AOTLoader::load_for_klass(InstanceKlass* ik, Thread* THREAD) {
   if (ik->is_hidden()) {
     // don't even bother
     return;
@@ -155,6 +155,7 @@ void AOTLoader::initialize() {
     if (AOTLibrary != NULL) {
       const int len = (int)strlen(AOTLibrary);
       char* cp  = NEW_C_HEAP_ARRAY(char, len+1, mtCode);
+      char* cp_start = cp;
       memcpy(cp, AOTLibrary, len);
       cp[len] = '\0';
       char* end = cp + len;
@@ -165,6 +166,7 @@ void AOTLoader::initialize() {
         cp++;
         load_library(name, true);
       }
+      FREE_C_HEAP_ARRAY(char, cp_start);
     }
 
     // Load well-know AOT libraries from Java installation directory.
@@ -191,11 +193,11 @@ void AOTLoader::universe_init() {
       FOR_ALL_AOT_LIBRARIES(lib) {
         (*lib)->verify_flag((*lib)->config()->_narrowOopShift, oop_shift, "CompressedOops::shift");
       }
-      if (UseCompressedClassPointers) { // It is set only if UseCompressedOops is set
-        int klass_shift = CompressedKlassPointers::shift();
-        FOR_ALL_AOT_LIBRARIES(lib) {
-          (*lib)->verify_flag((*lib)->config()->_narrowKlassShift, klass_shift, "CompressedKlassPointers::shift");
-        }
+    }
+    if (UseCompressedClassPointers && AOTLib::narrow_klass_shift_initialized()) {
+      int klass_shift = CompressedKlassPointers::shift();
+      FOR_ALL_AOT_LIBRARIES(lib) {
+        (*lib)->verify_flag((*lib)->config()->_narrowKlassShift, klass_shift, "CompressedKlassPointers::shift");
       }
     }
     // Create heaps for all valid libraries
@@ -239,11 +241,15 @@ void AOTLoader::set_narrow_oop_shift() {
 void AOTLoader::set_narrow_klass_shift() {
   // This method is called from Metaspace::set_narrow_klass_base_and_shift().
   if (UseAOT && libraries_count() > 0 &&
-      UseCompressedOops && AOTLib::narrow_oop_shift_initialized() &&
-      UseCompressedClassPointers) {
+      UseCompressedClassPointers && AOTLib::narrow_klass_shift_initialized()) {
+#ifdef AARCH64
+    // the shift in aarch64 cannot be altered, just check it
+    guarantee(CompressedKlassPointers::shift() == AOTLib::narrow_klass_shift(), "sanity");
+#else
     if (CompressedKlassPointers::shift() == 0) {
       CompressedKlassPointers::set_shift(AOTLib::narrow_klass_shift());
     }
+#endif
   }
 }
 

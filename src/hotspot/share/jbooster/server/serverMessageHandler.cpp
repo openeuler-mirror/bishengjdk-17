@@ -321,8 +321,10 @@ int ServerMessageHandler::handle_lazy_aot_compilation_task(TRAPS) {
       JB_THROW(request_missing_class_loaders(THREAD));
       JB_THROW(request_missing_klasses(THREAD));
       JB_THROW(request_methods_to_compile(&klasses_to_compile, &methods_to_compile, THREAD));
-      JB_THROW(request_methods_not_compile(&methods_not_compile, THREAD));
-      JB_THROW(request_method_data(THREAD));
+      if (pd->using_pgo()) {
+        JB_THROW(request_methods_not_compile(&methods_not_compile, THREAD));
+        JB_THROW(request_method_data(THREAD));
+      }
       JB_THROW(ss().send_request(MessageType::EndOfCurrentPhase));
     }
   } JB_TRY_END JB_CATCH_REST() {
@@ -336,6 +338,7 @@ int ServerMessageHandler::handle_lazy_aot_compilation_task(TRAPS) {
     JB_RETURN(try_to_compile_lazy_aot(&klasses_to_compile,
                                       &methods_to_compile,
                                       &methods_not_compile,
+                                      pd->using_pgo(),
                                       THREAD));
   } else {  // not compile in current thread
     if (aot_cache_state.is_being_generated()) {
@@ -356,6 +359,7 @@ int ServerMessageHandler::handle_lazy_aot_compilation_task(TRAPS) {
 int ServerMessageHandler::try_to_compile_lazy_aot(GrowableArray<InstanceKlass*>* klasses_to_compile,
                                                   GrowableArray<Method*>* methods_to_compile,
                                                   GrowableArray<Method*>* methods_not_compile,
+                                                  bool use_pgo,
                                                   TRAPS) {
   JClientProgramData* pd = ss().session_data()->program_data();
   JClientCacheState& aot_cache_state = pd->aot_cache_state();

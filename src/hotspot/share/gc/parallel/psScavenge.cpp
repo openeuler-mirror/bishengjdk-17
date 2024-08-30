@@ -91,6 +91,7 @@ static void scavenge_roots_work(ParallelRootType::Value root_type, uint worker_i
   assert(ParallelScavengeHeap::heap()->is_gc_active(), "called outside gc");
 
   PSPromotionManager* pm = PSPromotionManager::gc_thread_promotion_manager(worker_id);
+  PSScavengeRootsClosure roots_closure(pm);
   PSPromoteRootsClosure  roots_to_old_closure(pm);
 
   switch (root_type) {

@@ -42,10 +42,12 @@ class ClientDataManager: public CHeapObj<mtJBooster> {
   bool _allow_clr;
   bool _allow_cds;
   bool _allow_aot;
+  bool _allow_pgo;
 
   bool _using_clr;
   bool _using_cds;
   bool _using_aot;
+  bool _using_pgo;
 
   const char* _cache_clr_path;
   const char* _cache_cds_path;
@@ -103,16 +105,18 @@ public:
   bool is_clr_allowed() { return _allow_clr; }
   bool is_cds_allowed() { return _allow_cds; }
   bool is_aot_allowed() { return _allow_aot; }
+  bool is_pgo_allowed() { return _allow_pgo; }
 
   bool is_clr_being_used() { return _using_clr; }
   bool is_cds_being_used() { return _using_cds; }
   bool is_aot_being_used() { return _using_aot; }
+  bool is_pgo_being_used() { return _using_pgo; }
 
   // <cache_dir>/client/cache-<parogram_str_id>-clr.log
   const char* cache_clr_path() { return _cache_clr_path; }
   // <cache_dir>/client/cache-<parogram_str_id>-cds.jsa
   const char* cache_cds_path() { return _cache_cds_path; }
-  // <cache_dir>/client/cache-<parogram_str_id>-aot.so
+  // <cache_dir>/client/cache-<parogram_str_id>-aot[-pgo].so
   const char* cache_aot_path() { return _cache_aot_path; }
 
   uint32_t session_id() { return _session_id; }

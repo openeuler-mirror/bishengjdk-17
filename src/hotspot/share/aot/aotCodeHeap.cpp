@@ -57,6 +57,7 @@
 #include "utilities/sizes.hpp"
 
 bool AOTLib::_narrow_oop_shift_initialized = false;
+bool AOTLib::_narrow_klass_shift_initialized = false;
 int  AOTLib::_narrow_oop_shift = 0;
 int  AOTLib::_narrow_klass_shift = 0;
 
@@ -197,15 +198,18 @@ void AOTLib::verify_config() {
   if (UseCompressedOops && _valid) {
     if (!_narrow_oop_shift_initialized) {
       _narrow_oop_shift = _config->_narrowOopShift;
-      if (UseCompressedClassPointers) { // It is set only if UseCompressedOops is set
-        _narrow_klass_shift = _config->_narrowKlassShift;
-      }
       _narrow_oop_shift_initialized = true;
     } else {
       verify_flag(_config->_narrowOopShift, _narrow_oop_shift, "aot_config->_narrowOopShift");
-      if (UseCompressedClassPointers) { // It is set only if UseCompressedOops is set
-        verify_flag(_config->_narrowKlassShift, _narrow_klass_shift, "aot_config->_narrowKlassShift");
-      }
+    }
+  }
+
+  if (UseCompressedClassPointers && _valid) {
+    if (!_narrow_klass_shift_initialized) {
+      _narrow_klass_shift = _config->_narrowKlassShift;
+      _narrow_klass_shift_initialized = true;
+    } else {
+      verify_flag(_config->_narrowKlassShift, _narrow_klass_shift, "aot_config->_narrowKlassShift");
     }
   }
 }
@@ -618,7 +622,7 @@ void AOTCodeHeap::print_statistics() {
 }
 #endif
 
-Method* AOTCodeHeap::find_method(Klass* klass, TRAPS, const char* method_name) {
+Method* AOTCodeHeap::find_method(Klass* klass, Thread* THREAD, const char* method_name) {
   int method_name_len = Bytes::get_Java_u2((address)method_name);
   method_name += 2;
   const char* signature_name = method_name + method_name_len;
@@ -656,11 +660,6 @@ Method* AOTCodeHeap::find_method(Klass* klass, TRAPS, const char* method_name) {
     memcpy(&meta_name[klass_len + 1], method_name, method_name_len);
     memcpy(&meta_name[klass_len + 1 + method_name_len], signature_name, signature_name_len);
     meta_name[klass_len + 1 + method_name_len + signature_name_len] = '\0';
-    Handle exception = Exceptions::new_exception(THREAD, vmSymbols::java_lang_NoSuchMethodError(), meta_name);
-    java_lang_Throwable::print(exception(), tty);
-    tty->cr();
-    java_lang_Throwable::print_stack_trace(exception, tty);
-    tty->cr();
     fatal("Failed to find method '%s'", meta_name);
   }
   NOT_PRODUCT( aot_methods_found++; )
@@ -771,14 +770,14 @@ void AOTCodeHeap::sweep_method(AOTCompiledMethod *aot) {
 }
 
 
-bool AOTCodeHeap::load_klass_data(InstanceKlass* ik, TRAPS) {
+bool AOTCodeHeap::load_klass_data(InstanceKlass* ik, Thread* THREAD) {
   ResourceMark rm;
 
   NOT_PRODUCT( klasses_seen++; )
 
   // AOT does not support custom class loaders.
   ClassLoaderData* cld = ik->class_loader_data();
-  if (!cld->is_builtin_class_loader_data()) {
+  if (!cld->is_builtin_class_loader_data() JBOOSTER_ONLY(&& !UseJBooster)) {
     log_trace(aot, class, load)("skip class  %s  for custom classloader %s (%p) tid=" INTPTR_FORMAT,
                                 ik->internal_name(), cld->loader_name(), cld, p2i(THREAD));
     return false;

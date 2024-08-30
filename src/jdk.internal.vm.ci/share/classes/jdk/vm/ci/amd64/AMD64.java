@@ -35,6 +35,7 @@ import jdk.vm.ci.code.CPUFeatureName;
 import jdk.vm.ci.code.Register;
 import jdk.vm.ci.code.Register.RegisterCategory;
 import jdk.vm.ci.code.RegisterArray;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.meta.JavaKind;
 import jdk.vm.ci.meta.PlatformKind;
 
@@ -253,10 +254,17 @@ public class AMD64 extends Architecture {
 
     @Override
     public EnumSet<CPUFeature> getFeatures() {
+        if (JBoosterCompilationContext.get() != null) {
+            // [AMD64]can't get features from client now, just return empty set
+            return EnumSet.noneOf(CPUFeature.class);
+        }
         return features;
     }
 
     public EnumSet<Flag> getFlags() {
+        if (JBoosterCompilationContext.get() != null) {
+            return EnumSet.noneOf(Flag.class);
+        }
         return flags;
     }
 

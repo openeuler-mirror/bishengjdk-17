@@ -56,6 +56,8 @@
   f(intx,     MaxVectorSize                 ) \
   f(bool,     UseTLAB                       ) \
   f(bool,     UseG1GC                       ) \
+  f(bool,     BytecodeVerificationLocal     ) \
+  f(bool,     BytecodeVerificationRemote    ) \
 
 #define JCLIENT_VM_FLAGS(f) \
   JCLIENT_CDS_VM_FLAGS(f)   \

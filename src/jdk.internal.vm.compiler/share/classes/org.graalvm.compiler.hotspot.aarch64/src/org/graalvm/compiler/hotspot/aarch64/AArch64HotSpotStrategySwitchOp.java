@@ -28,6 +28,7 @@ import static jdk.vm.ci.code.ValueUtil.asRegister;
 
 import java.util.function.Function;
 
+import org.graalvm.compiler.asm.aarch64.AArch64Address;
 import org.graalvm.compiler.asm.aarch64.AArch64Assembler;
 import org.graalvm.compiler.asm.aarch64.AArch64MacroAssembler;
 import org.graalvm.compiler.core.common.calc.Condition;
@@ -71,8 +72,14 @@ final class AArch64HotSpotStrategySwitchOp extends AArch64ControlFlow.StrategySw
                     throw GraalError.unimplemented();
                 } else {
                     crb.recordInlineDataInCode(meta);
-                    masm.movNativeAddress(asRegister(scratch), 0x0000_DEAD_DEAD_DEADL);
-                    masm.cmp(64, keyRegister, asRegister(scratch));
+                    Register scratchRegister = asRegister(scratch);
+                    if (crb.compilationResult.isImmutablePIC()) {
+                        masm.addressOf(scratchRegister);
+                        masm.ldr(64, scratchRegister, AArch64Address.createBaseRegisterOnlyAddress(scratchRegister));
+                    } else {
+                        masm.movNativeAddress(scratchRegister, 0x0000_DEAD_DEAD_DEADL);
+                    }
+                    masm.cmp(64, keyRegister, scratchRegister);
                 }
             } else {
                 super.emitComparison(c);

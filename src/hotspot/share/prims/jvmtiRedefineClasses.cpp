@@ -4432,7 +4432,7 @@ void VM_RedefineClasses::redefine_single_class(Thread* current, jclass the_jclas
   if (!the_class->should_be_initialized()) {
     // Class was already initialized, so AOT has only seen the original version.
     // We need to let AOT look at it again.
-    AOTLoader::load_for_klass(the_class, current->as_Java_thread());
+    AOTLoader::load_for_klass(the_class, current);
   }
 #endif
 

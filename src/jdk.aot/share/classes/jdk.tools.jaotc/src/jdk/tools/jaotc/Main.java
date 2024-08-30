@@ -29,6 +29,7 @@ import static org.graalvm.compiler.core.common.GraalOptions.GeneratePIC;
 import static org.graalvm.compiler.core.common.GraalOptions.ImmutableCode;
 import static org.graalvm.compiler.hotspot.meta.HotSpotAOTProfilingPlugin.Options.TieredAOT;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.nio.file.Files;
@@ -40,6 +41,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.Set;
 import java.util.StringTokenizer;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.Stream;
 
 import org.graalvm.compiler.api.replacements.SnippetReflectionProvider;
@@ -68,6 +70,9 @@ import org.graalvm.compiler.runtime.RuntimeProvider;
 
 import jdk.tools.jaotc.Options.Option;
 import jdk.tools.jaotc.binformat.BinaryContainer;
+import jdk.tools.jaotc.binformat.elf.ElfSection;
+import jdk.tools.jaotc.jbooster.JBoosterHotSpotAOTInvokeDynamicPlugin;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.meta.MetaAccessProvider;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.runtime.JVMCI;
@@ -78,6 +83,8 @@ public final class Main {
     private PrintWriter log;
     LogPrinter printer;
     GraalFilters filters;
+
+    private final JBoosterCompilationContext jboosterContext;
 
     private static final int EXIT_OK = 0;        // No errors.
     private static final int EXIT_CMDERR = 2;    // Bad command-line arguments and/or switches.
@@ -91,6 +98,81 @@ public final class Main {
         Main t = new Main();
         final int exitCode = t.run(parse(args));
         System.exit(exitCode);
+    }
+
+    public static void initForJBooster() {
+        AOTCompiler.initJBoosterGlobalCompileQueue();
+    }
+
+    public static ThreadPoolExecutor getJBoosterGlobalCompileQueue() {
+        return AOTCompiler.getJBoosterGlobalCompileQueue();
+    }
+
+    public Main() {
+        this(null);
+    }
+
+    public Main(JBoosterCompilationContext jboosterContext) {
+        this.jboosterContext = jboosterContext;
+        log = new PrintWriter(System.out);
+        printer = new LogPrinter(this, log);
+    }
+
+    public JBoosterCompilationContext getJBoosterCompilationContext() {
+        return jboosterContext;
+    }
+
+    /**
+     * This method is for JBooster.
+     * Compile all specified methods to one lib.
+     * This method can only be invoked once for each Main instance.
+     */
+    @SuppressWarnings("try")
+    public boolean compileForJBooster() {
+        JBoosterCompilationContext.set(jboosterContext);
+
+        options.asJBooster = true;
+        options.outputName = jboosterContext.getFilePath();
+        options.classesToCompile = jboosterContext.getClassesToCompile();
+        options.methodsToCompile = jboosterContext.getMethodsToCompile();
+        options.methodsNotToCompile = jboosterContext.getMethodsNotToCompile();
+        options.dynamicInvokeSupported = true;
+
+        options.info = true;
+        options.verbose = false;
+        options.debug = false;
+
+        options.tiered = false;
+        options.ignoreClassLoadingErrors = true;
+
+        try (Timer t = new Timer(this, "Total time of compilation")) {
+            File compiledFile = new File(options.outputName);
+            if (compiledFile.isFile()) {
+                compiledFile.delete();
+            }
+
+            if (run()) {
+                return true;
+            } else {
+                if (compiledFile.isFile()) {
+                    compiledFile.delete();
+                }
+                return false;
+            }
+        } catch (InterruptedException e) {
+            printer.printlnInfo("Compilation interrupted.");
+        } catch (Exception e) {
+            e.printStackTrace();
+        } finally {
+            log.flush();
+            JBoosterCompilationContext.set(null);
+
+            // Make sure the static fields are not used.
+            CompiledMethodInfo.guaranteeStaticNotUsed();
+            AOTCompiledClass.guaranteeStaticNotUsed();
+            ElfSection.guaranteeStaticNotUsed();
+        }
+        return false;
     }
 
     /**
@@ -194,7 +276,7 @@ public final class Main {
             List<AOTCompiledClass> classes;
 
             try (Timer t = new Timer(this, "")) {
-                classes = collector.collectMethodsToCompile(classesToCompile, metaAccess);
+                classes = collector.collectMethodsToCompile(classesToCompile, options.methodsToCompile, options.methodsNotToCompile, metaAccess);
             }
 
             // Free memory!
@@ -205,23 +287,39 @@ public final class Main {
             }
 
             AOTDynamicTypeStore dynoStore = new AOTDynamicTypeStore();
-            AOTCompiledClass.setDynamicTypeStore(dynoStore);
+            if (!options.isAsJBooster()) {
+                AOTCompiledClass.setDynamicTypeStore(dynoStore);
+            } else {
+                jboosterContext.setAotCompiledClassAOTDynamicTypeStore(dynoStore);
+            }
 
             // AOTBackend aotBackend = new AOTBackend(this, graalOptions, backend, new
             // HotSpotInvokeDynamicPlugin(dynoStore));
             // Temporary workaround until JDK-8223533 is fixed.
             // Disable invokedynamic support.
-            var indyPlugin = new HotSpotInvokeDynamicPlugin(dynoStore) {
-                @Override
-                public boolean supportsDynamicInvoke(GraphBuilderContext builder, int index, int opcode) {
-                    return false;
-                }
-            };
+            HotSpotInvokeDynamicPlugin indyPlugin;
+            if (options.isDynamicInvokeSupported()) {
+                printer.printlnInfo("Using JBoosterHotSpotAOTInvokeDynamicPlugin.");
+                indyPlugin = new JBoosterHotSpotAOTInvokeDynamicPlugin(dynoStore);
+            } else {
+                indyPlugin = new HotSpotInvokeDynamicPlugin(dynoStore) {
+                    @Override
+                    public boolean supportsDynamicInvoke(GraphBuilderContext builder, int index, int opcode) {
+                        return false;
+                    }
+                };
+            }
 
             AOTBackend aotBackend = new AOTBackend(this, graalOptions, backend, indyPlugin);
             SnippetReflectionProvider snippetReflection = aotBackend.getProviders().getSnippetReflection();
-            AOTCompiler compiler = new AOTCompiler(this, graalOptions, aotBackend, options.threads);
-            classes = compiler.compileClasses(classes);
+            AOTCompiler compiler;
+            if (!options.isAsJBooster()) {
+                compiler = new AOTCompiler(this, graalOptions, aotBackend, options.threads);
+                classes = compiler.compileClasses(classes);
+            } else {
+                compiler = null;
+                classes = AOTCompiler.compileClassesInJBooster(this, graalOptions, aotBackend, classes);
+            }
 
             PhaseSuite<HighTierContext> graphBuilderSuite = aotBackend.getGraphBuilderSuite();
             ListIterator<BasePhase<? super HighTierContext>> iterator = graphBuilderSuite.findPhase(GraphBuilderPhase.class);

@@ -48,6 +48,15 @@ final class CompilationSpec {
     private HashSet<String> excludeStrings = new HashSet<>();
     private HashSet<Pattern> excludePatterns = new HashSet<>();
 
+    CompilationSpec(HashSet<String> compileOnlyStrings, HashSet<String> excludeStrings) {
+        if (compileOnlyStrings != null) {
+            this.compileOnlyStrings = compileOnlyStrings;
+        }
+        if (excludeStrings != null) {
+            this.excludeStrings = excludeStrings;
+        }
+    }
+
     /**
      * Add a {@code compileOnly} directive to the compile-only list.
      *

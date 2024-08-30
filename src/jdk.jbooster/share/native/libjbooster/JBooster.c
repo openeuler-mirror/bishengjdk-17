@@ -43,3 +43,9 @@ Java_jdk_jbooster_JBooster_printStoredClientData(JNIEnv * env, jclass unused, jb
 {
   JVM_JBoosterPrintStoredClientData(env, print_all);
 }
+
+JNIEXPORT long JNICALL
+Java_jdk_jbooster_JBoosterCompilationContextImpl_getMetaspaceMethodData(JNIEnv * env, jclass unused, jint session_id, jlong metaspace_method)
+{
+  return JVM_JBoosterGetMetaspaceMethodData(env, session_id, metaspace_method);
+}

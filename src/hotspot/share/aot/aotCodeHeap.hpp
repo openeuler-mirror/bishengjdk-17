@@ -112,6 +112,7 @@ typedef struct {
 
 class AOTLib : public CHeapObj<mtCode> {
   static bool _narrow_oop_shift_initialized;
+  static bool _narrow_klass_shift_initialized;
   static int _narrow_oop_shift;
   static int _narrow_klass_shift;
 
@@ -130,6 +131,7 @@ public:
   static int  narrow_oop_shift() { return _narrow_oop_shift; }
   static int  narrow_klass_shift() { return _narrow_klass_shift; }
   static bool narrow_oop_shift_initialized() { return _narrow_oop_shift_initialized; }
+  static bool narrow_klass_shift_initialized() { return _narrow_klass_shift_initialized; }
 
   bool is_valid() const {
     return _valid;
@@ -235,7 +237,7 @@ public:
   virtual void* next(void *p) const;
 
   AOTKlassData* find_klass(InstanceKlass* ik);
-  bool load_klass_data(InstanceKlass* ik, TRAPS);
+  bool load_klass_data(InstanceKlass* ik, Thread* THREAD);
   Klass* get_klass_from_got(const char* klass_name, int klass_len, const Method* method);
 
   bool is_dependent_method(Klass* dependee, AOTCompiledMethod* aot);
@@ -273,7 +275,7 @@ public:
     return NULL;
   }
 
-  static Method* find_method(Klass* klass, TRAPS, const char* method_name);
+  static Method* find_method(Klass* klass, Thread* THREAD, const char* method_name);
 
   void cleanup_inline_caches();
 

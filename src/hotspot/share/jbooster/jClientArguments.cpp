@@ -212,6 +212,7 @@ void JClientArguments::init_for_client() {
   _jbooster_allow_clr = ClientDataManager::get().is_clr_allowed();
   _jbooster_allow_cds = ClientDataManager::get().is_cds_allowed();
   _jbooster_allow_aot = ClientDataManager::get().is_aot_allowed();
+  _jbooster_allow_pgo = ClientDataManager::get().is_pgo_allowed();
   _related_flags = new JClientVMFlags(true);
 
   _hash = calc_hash();
@@ -234,6 +235,7 @@ uint32_t JClientArguments::calc_hash() {
   result = calc_new_hash(result, primitive_hash(_jbooster_allow_clr));
   result = calc_new_hash(result, primitive_hash(_jbooster_allow_cds));
   result = calc_new_hash(result, primitive_hash(_jbooster_allow_aot));
+  result = calc_new_hash(result, primitive_hash(_jbooster_allow_pgo));
   result = calc_new_hash(result, _related_flags->hash(_jbooster_allow_clr, _jbooster_allow_cds, _jbooster_allow_aot));
 
   return result;
@@ -309,6 +311,7 @@ int JClientArguments::serialize(MessageBuffer& buf) const {
   JB_RETURN(buf.serialize_no_meta(_jbooster_allow_clr));
   JB_RETURN(buf.serialize_no_meta(_jbooster_allow_cds));
   JB_RETURN(buf.serialize_no_meta(_jbooster_allow_aot));
+  JB_RETURN(buf.serialize_no_meta(_jbooster_allow_pgo));
   JB_RETURN(buf.serialize_with_meta(_related_flags));
 
   JB_RETURN(buf.serialize_no_meta(_hash));
@@ -351,6 +354,7 @@ int JClientArguments::deserialize(MessageBuffer& buf) {
   JB_RETURN(buf.deserialize_ref_no_meta(_jbooster_allow_clr));
   JB_RETURN(buf.deserialize_ref_no_meta(_jbooster_allow_cds));
   JB_RETURN(buf.deserialize_ref_no_meta(_jbooster_allow_aot));
+  JB_RETURN(buf.deserialize_ref_no_meta(_jbooster_allow_pgo));
 
   _related_flags = new JClientVMFlags(false);
   JB_RETURN(buf.deserialize_with_meta(_related_flags));

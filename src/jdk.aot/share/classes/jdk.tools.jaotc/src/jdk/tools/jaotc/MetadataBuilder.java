@@ -198,6 +198,12 @@ final class MetadataBuilder {
 
         for (int index = 0; index < metaDataEntries.length; index++) {
             Object ref = metaDataEntries[index];
+
+            // types that brought by agentlib should be added in here
+            if (methodInfo.getDependentKlassData(getType(ref)) == null) {
+                methodInfo.addDependentKlassData(binaryContainer, getType(ref));
+            }
+
             String name = metadataName(ref);
             // Create GOT cells for klasses referenced in metadata
             addMetadataEntry(binaryContainer, name);

@@ -67,6 +67,7 @@ private:
   bool        _jbooster_allow_clr;
   bool        _jbooster_allow_cds;
   bool        _jbooster_allow_aot;
+  bool        _jbooster_allow_pgo;
   JClientVMFlags* _related_flags;
   // ========================= end =========================
 

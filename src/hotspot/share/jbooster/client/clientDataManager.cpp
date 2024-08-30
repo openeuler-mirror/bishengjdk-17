@@ -44,10 +44,12 @@ ClientDataManager::ClientDataManager() {
   _allow_aot = false;
   _allow_cds = false;
   _allow_clr = false;
+  _allow_pgo = false;
 
   _using_aot = false;
   _using_cds = false;
   _using_clr = false;
+  _using_pgo = false;
 
   _cache_clr_path = nullptr;
   _cache_cds_path = nullptr;
@@ -110,7 +112,8 @@ void ClientDataManager::init_const() {
                                                             _program_args->hash());
   _cache_clr_path = JBoosterManager::calc_cache_path(_cache_dir_path, _program_str_id, "clr.log");
   _cache_cds_path = JBoosterManager::calc_cache_path(_cache_dir_path, _program_str_id, "cds.jsa");
-  _cache_aot_path = JBoosterManager::calc_cache_path(_cache_dir_path, _program_str_id, "aot.so");
+  const char* aot_path_suffix = _allow_pgo ? "aot-pgo.so" : "aot.so";
+  _cache_aot_path = JBoosterManager::calc_cache_path(_cache_dir_path, _program_str_id, aot_path_suffix);
 }
 
 void ClientDataManager::init_client_duty() {
@@ -142,11 +145,22 @@ jint ClientDataManager::init_cds_options() {
 
 jint ClientDataManager::init_aot_options() {
   if (!is_aot_allowed()) return JNI_OK;
+  if (FLAG_SET_CMDLINE(UseAOT, true) != JVMFlag::SUCCESS) {
+    return JNI_EINVAL;
+  }
+  if (is_aot_being_used()) {
+    if (FLAG_SET_CMDLINE(AOTLibrary, cache_aot_path()) != JVMFlag::SUCCESS) {
+      return JNI_EINVAL;
+    }
+  }
   return JNI_OK;
 }
 
 jint ClientDataManager::init_pgo_options() {
   if (!is_pgo_allowed()) return JNI_OK;
+  if (FLAG_SET_CMDLINE(TypeProfileWidth, 8) != JVMFlag::SUCCESS) {
+    return JNI_EINVAL;
+  }
   return JNI_OK;
 }
 

@@ -72,6 +72,7 @@ public class JdkQualifiedExportTest {
         Set.of("jdk.internal.vm.ci/jdk.vm.ci.services",
                "jdk.internal.vm.ci/jdk.vm.ci.runtime",
                "jdk.internal.vm.ci/jdk.vm.ci.hotspot",
+               "jdk.internal.vm.ci/jdk.vm.ci.jbooster",
                "jdk.internal.vm.ci/jdk.vm.ci.meta",
                "jdk.internal.vm.ci/jdk.vm.ci.code",
                "java.base/jdk.internal.javac");

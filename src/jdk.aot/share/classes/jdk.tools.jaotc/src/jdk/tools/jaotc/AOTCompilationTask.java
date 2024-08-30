@@ -160,6 +160,10 @@ final class AOTCompilationTask implements Runnable, Comparable<Object> {
         return JVMCICompiler.INVOCATION_ENTRY_BCI;
     }
 
+    Main getMain() {
+        return main;
+    }
+
     ResolvedJavaMethod getMethod() {
         return method;
     }
