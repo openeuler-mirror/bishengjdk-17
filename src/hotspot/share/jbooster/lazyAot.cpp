@@ -317,6 +317,40 @@ bool LazyAOT::can_be_compiled(ClassLoaderData* cld) {
   return true;
 }
 
+int data_layout[] = {
+  in_bytes(Method::const_offset()),
+  in_bytes(Method::access_flags_offset()),
+  in_bytes(Method::flags_offset()),
+  in_bytes(Method::from_compiled_offset()),
+  in_bytes(Method::code_offset()),
+  Method::method_data_offset_in_bytes(),
+  in_bytes(Method::method_counters_offset()),
+  in_bytes(Method::native_function_offset()),
+  in_bytes(Method::from_interpreted_offset()),
+  in_bytes(Method::interpreter_entry_offset()),
+  in_bytes(Method::signature_handler_offset()),
+  in_bytes(Method::itable_index_offset()),
+  (int)Method::last_method_flags(),
+
+  in_bytes(ConstMethod::constants_offset()),
+  in_bytes(ConstMethod::max_stack_offset()),
+  in_bytes(ConstMethod::size_of_locals_offset()),
+  in_bytes(ConstMethod::size_of_parameters_offset()),
+  in_bytes(ConstMethod::result_type_offset()),
+
+  ConstantPool::tags_offset_in_bytes(),
+  ConstantPool::cache_offset_in_bytes(),
+  ConstantPool::pool_holder_offset_in_bytes(),
+  ConstantPool::resolved_klasses_offset_in_bytes(),
+
+  Array<Method*>::length_offset_in_bytes(),
+  Array<Method*>::base_offset_in_bytes(),
+
+  in_bytes(GrowableArrayBase::len_offset()),
+  in_bytes(GrowableArrayBase::max_offset()),
+  in_bytes(GrowableArrayView<address>::data_offset())
+};
+
 class KlassGetAllInstanceKlassesClosure: public KlassClosure {
   GrowableArray<InstanceKlass*>* _klasses;
   GrowableArray<Method*>* _methods_to_compile;
@@ -350,26 +384,17 @@ public:
     // Maybe we should add "if (!ik->is_initialized()) return;".
     if (!LazyAOT::can_be_compiled(ik, /* check_cld */ false)) return;
 
-    bool should_append_klass = false;
     Array<Method*>* methods = ik->methods();
-    int len = methods->length();
-    for (int i = 0; i < len; i++) {
-      Method* m = methods->at(i);
-
-      bool should_compile = m->has_compiled_code();
-
-      if (should_compile) {
-        _methods_to_compile->append(m);
-        should_append_klass = true;
-      }
-
-      if (m->is_rewrite_invokehandle()) {
-        _methods_not_compile->append(m);
-      }
-    }
-
-    if (should_append_klass) {
-      _klasses->append(ik);
+    if (methods->length() == 0) return;
+    if (os::Linux::is_jboosterLazyAOT_do_valid()) {
+      int current_tc_count = _methods_to_compile->length();
+      int current_nc_count = _methods_not_compile->length();
+      int current_k_count = _klasses->length();
+      _methods_to_compile->at_put_grow(current_tc_count + methods->length() - 1, (Method*)(uintptr_t)current_tc_count, nullptr);
+      _methods_not_compile->at_put_grow(current_nc_count + methods->length() - 1, (Method*)(uintptr_t)current_nc_count, nullptr);
+      _klasses->at_put_grow(current_k_count, (InstanceKlass*)(uintptr_t)current_k_count, nullptr);
+      os::Linux::jboosterLazyAOT_do(data_layout, (address)methods, (address)_methods_to_compile,
+                                    (address)_methods_not_compile, (address)_klasses);
     }
   }
 };

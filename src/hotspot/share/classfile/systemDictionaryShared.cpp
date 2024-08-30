@@ -860,24 +860,24 @@ public:
     return NULL;
   }
 
-
   // check timestamp in the load time when UseAggressiveCDS.
   //   regular_file(*.class): need to check timestamp.
   //   jar_file(*.jar): no need to check timestamp here,already checked
   //                    somewhere else, see SharedClassPathEntry::validate.
   //   other_file: not supported when UseAggressiveCDS.
-  bool check_classfile_timestamp(char* url_string, TRAPS) {
+  static bool check_classfile_timestamp(RunTimeSharedClassInfo* info, TRAPS) {
+    char* url_string = (char*)(info->_url_string->data);
     if (SystemDictionaryShared::is_regular_file(url_string)) {
       ResourceMark rm(THREAD);
       char* dir = SystemDictionaryShared::get_filedir(url_string);
       if (dir == NULL) {
         return false;
       }
-      int64_t timestamp = SystemDictionaryShared::get_timestamp(dir, _klass->name());
-      if (timestamp != _classfile_timestamp) {
+      int64_t timestamp = SystemDictionaryShared::get_timestamp(dir, info->_klass->name());
+      if (timestamp != info->_classfile_timestamp) {
         log_trace(cds, aggressive)("%s, timestamp mismatch: " INT64_FORMAT " -> " INT64_FORMAT,
-                                    _klass->name()->as_C_string(),
-                                    _classfile_timestamp, timestamp);
+                                    info->_klass->name()->as_C_string(),
+                                    info->_classfile_timestamp, timestamp);
         return false;
       }
     } else if (!SystemDictionaryShared::is_jar_file(url_string)) {
@@ -887,28 +887,19 @@ public:
     return true;
   }
 
-  Handle get_protection_domain(Handle class_loader, TRAPS) {
-    if (_url_string == NULL) {
-      return Handle();
-    }
-    char* data_ptr = (char*)(_url_string->data);
-
-    if (CheckClassFileTimeStamp) {
-      if (!check_classfile_timestamp(data_ptr, THREAD)) {
-        return Handle();
-      }
-    }
-
+  static oop* get_protection_domain(RunTimeSharedClassInfo* info, Handle* class_loader, TRAPS) {
+    assert(info->_url_string != NULL, "sanity");
+    char* data_ptr = (char*)(info->_url_string->data);
     Handle url_string = java_lang_String::create_from_str(data_ptr, THREAD);
     JavaValue result(T_OBJECT);
     JavaCalls::call_virtual(&result,
-                            class_loader,
-                            class_loader->klass(),
+                            *class_loader,
+                            (*class_loader)->klass(),
                             vmSymbols::getProtectionDomainByURLString_name(),
                             vmSymbols::getProtectionDomainByURLString_signature(),
                             url_string, THREAD);
     if (!HAS_PENDING_EXCEPTION) {
-      return Handle(THREAD, result.get_oop());
+      return Handle(THREAD, result.get_oop()).raw_value();
     } else {
       LogTarget(Warning, cds, aggressive) lt;
       if (lt.is_enabled()) {
@@ -916,7 +907,7 @@ public:
       }
       DebugUtils::clear_java_exception_and_print_stack_trace(lt, THREAD);
     }
-    return Handle();
+    return NULL;
   }
 #endif // INCLUDE_AGGRESSIVE_CDS
 };
@@ -2915,12 +2906,6 @@ int64_t SystemDictionaryShared::get_timestamp(char* dir, Symbol* class_name) {
   return 0;
 }
 
-Handle SystemDictionaryShared::get_protection_domain(InstanceKlass* k, Handle class_loader, TRAPS) {
-  assert(UseAggressiveCDS, "sanity");
-  RunTimeSharedClassInfo* info = RunTimeSharedClassInfo::get_for(k);
-  return info->get_protection_domain(class_loader, CHECK_NH);
-}
-
 void SystemDictionaryShared::set_url_string(InstanceKlass* k, char* string_value) {
   assert(UseAggressiveCDS, "sanity");
   Arguments::assert_is_dumping_archive();
@@ -2953,6 +2938,20 @@ void SystemDictionaryShared::set_classfile_timestamp(InstanceKlass* k, int64_t c
   }
 }
 
+uintptr_t related_data[] = {
+  (uintptr_t)in_bytes(byte_offset_of(RunTimeSharedClassInfo, _klass)),
+  (uintptr_t)in_bytes(byte_offset_of(RunTimeSharedClassInfo, _shared_class_file)),
+  (uintptr_t)in_bytes(byte_offset_of(RunTimeSharedClassInfo, _url_string)),
+  (uintptr_t)in_bytes(byte_offset_of(RunTimeSharedClassInfo, _classfile_timestamp)),
+  (uintptr_t)in_bytes(Handle::handle_offset()),
+  (uintptr_t)RunTimeSharedClassInfo::get_for,
+  (uintptr_t)RunTimeSharedClassInfo::set_for,
+  (uintptr_t)RunTimeSharedClassInfo::EQUALS,
+  (uintptr_t)RunTimeSharedClassInfo::check_classfile_timestamp,
+  (uintptr_t)RunTimeSharedClassInfo::get_protection_domain,
+  (uintptr_t)CheckClassFileTimeStamp
+};
+
 InstanceKlass* SystemDictionaryShared::lookup_trusted_share_class(Symbol* class_name,
                                                                   Handle class_loader,
                                                                   TRAPS) {
@@ -2978,6 +2977,7 @@ InstanceKlass* SystemDictionaryShared::lookup_trusted_share_class(Symbol* class_
     }
   }
 
+  HandleMark hm(THREAD);
   Handle lock = get_loader_lock_or_null(class_loader);
   ObjectLocker ol(lock, THREAD);
 
@@ -2997,12 +2997,13 @@ InstanceKlass* SystemDictionaryShared::lookup_trusted_share_class(Symbol* class_
     return NULL;
   }
 
-  Handle protection_domain = SystemDictionaryShared::get_protection_domain(record->_klass, class_loader, CHECK_NULL);
+  Handle protection_domain;
+  os::Linux::jboosterAggressiveCDS_do(related_data, (address)record->_klass,
+                                      (address)&class_loader,
+                                      (address)&protection_domain,
+                                      (address)THREAD);
+
   if (protection_domain.is_null()) {
-    // The protection_domain is rebuilt based on the RunTimeSharedClassInfo::_url_string.
-    // We lookup the URL of _url_string from the URLClassPath of the URLClassLoader.
-    // The URLClassPath returns null if _url_string is not in its url array, which also
-    // means that this class was not defined by this class loader at dump run.
     return NULL;
   }
 

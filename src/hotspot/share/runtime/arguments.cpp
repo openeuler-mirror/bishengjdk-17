@@ -54,6 +54,7 @@
 #include "runtime/vm_version.hpp"
 #include "services/management.hpp"
 #include "services/nmtCommon.hpp"
+#include "services/heapRedactor.hpp"
 #include "utilities/align.hpp"
 #include "utilities/defaultStream.hpp"
 #include "utilities/macros.hpp"
@@ -119,6 +120,8 @@ PathString *Arguments::_system_boot_class_path = NULL;
 bool Arguments::_has_jimage = false;
 
 char* Arguments::_ext_dirs = NULL;
+
+char* Arguments::_heap_dump_redact_auth = NULL;
 
 bool PathString::set_value(const char *value) {
   if (_value != NULL) {
@@ -3732,6 +3735,29 @@ jint Arguments::match_special_option_and_act(const JavaVMInitArgs* args,
     if (match_option(option, "-XX:+PrintFlagsInitial")) {
       JVMFlag::printFlags(tty, false);
       vm_exit(0);
+    }
+
+    if (match_option(option, "-XX:HeapDumpRedact", &tail)) {
+      // HeapDumpRedact arguments.
+      if (!HeapRedactor::check_launcher_heapdump_redact_support(tail)) {
+        warning("Heap dump redacting did not setup properly, using wrong argument?");
+        vm_exit_during_initialization("Syntax error, expecting -XX:HeapDumpRedact=[off|names|basic|full|diyrules|annotation]",NULL);
+      }
+    }
+
+    // heapDump redact password
+    if(match_option(option, "-XX:RedactPassword=", &tail)) {
+      if(tail == NULL || strlen(tail) == 0) {
+          VerifyRedactPassword = false;
+          jio_fprintf(defaultStream::output_stream(), "redact password is null, disable verify heap dump authority.\n");
+      } else {
+          VerifyRedactPassword = true;
+          size_t redact_password_len = strlen(tail);
+          _heap_dump_redact_auth = NEW_C_HEAP_ARRAY(char, redact_password_len+1, mtArguments);
+          memcpy(_heap_dump_redact_auth, tail, redact_password_len);
+          _heap_dump_redact_auth[redact_password_len] = '\0';
+          memset((void*)tail, '0', redact_password_len);
+      }
     }
 
 #ifndef PRODUCT

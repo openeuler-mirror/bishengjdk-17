@@ -99,6 +99,10 @@ public:
     assert(length <= _len,"cannot increase length");
     _len = length;
   }
+#if INCLUDE_JBOOSTER
+  static ByteSize len_offset()  { return byte_offset_of(GrowableArrayBase, _len); }
+  static ByteSize max_offset()  { return byte_offset_of(GrowableArrayBase, _max); }
+#endif // INCLUDE_JBOOSTER
 };
 
 template <typename E> class GrowableArrayIterator;
@@ -125,6 +129,9 @@ protected:
 
 public:
   const static GrowableArrayView EMPTY;
+#if INCLUDE_JBOOSTER
+  static ByteSize data_offset()  { return byte_offset_of(GrowableArrayView, _data); }
+#endif // INCLUDE_JBOOSTER
 
   bool operator==(const GrowableArrayView& rhs) const {
     if (_len != rhs._len)

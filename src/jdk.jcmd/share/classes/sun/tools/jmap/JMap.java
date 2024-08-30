@@ -25,11 +25,17 @@
 
 package sun.tools.jmap;
 
+import java.io.Console;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
+import java.nio.CharBuffer;
+import java.nio.charset.Charset;
+import java.security.MessageDigest;
+import java.util.Arrays;
 import java.util.Collection;
+import java.util.regex.Pattern;
 
 import com.sun.tools.attach.VirtualMachine;
 import com.sun.tools.attach.VirtualMachineDescriptor;
@@ -210,6 +216,8 @@ public class JMap {
         String filename = null;
         String liveopt = "-all";
         String compress_level = null;
+        RedactParams redactParams = new RedactParams();
+        String redactPassword = ",RedactPassword=";
 
         for (int i = 0; i < subopts.length; i++) {
             String subopt = subopts[i];
@@ -231,6 +239,18 @@ public class JMap {
                     System.err.println("Fail: no number provided in option: '" + subopt + "'");
                     usage(1);
                 }
+            } else if (subopt.startsWith("HeapDumpRedact=")) {
+                if (!redactParams.setAndCheckHeapDumpRedact(subopt.substring("HeapDumpRedact=".length()))) {
+                    usage(1);
+                }
+            } else if (subopt.startsWith("RedactMap=")) {
+                redactParams.setRedactMap(subopt.substring("RedactMap=".length()));
+            } else if (subopt.startsWith("RedactMapFile=")) {
+                redactParams.setRedactMapFile(subopt.substring("RedactMapFile=".length()));
+            } else if (subopt.startsWith("RedactClassPath")) {
+                redactParams.setRedactClassPath(subopt.substring("RedactClassPath=".length()));
+            }  else if (subopt.startsWith("RedactPassword")) {
+                redactPassword = getRedactPassword();
             } else {
                 System.err.println("Fail: invalid option: '" + subopt + "'");
                 usage(1);
@@ -242,10 +262,78 @@ public class JMap {
             usage(1);
         }
 
+        checkRedactParams(redactParams);
+
         System.out.flush();
 
         // dumpHeap is not the same as jcmd GC.heap_dump
-        executeCommandForPid(pid, "dumpheap", filename, liveopt, compress_level);
+        String heapDumpRedactParams = redactParams.isEnableRedact() ? ";" + redactParams.toDumpArgString() + redactPassword : "";
+        executeCommandForPid(pid, "dumpheap", filename + heapDumpRedactParams, liveopt, compress_level);
+    }
+
+    private static void checkRedactParams(RedactParams redactParams) {
+        if (redactParams.getHeapDumpRedact() == null) {
+            if (redactParams.getRedactMap() == null && redactParams.getRedactMapFile() == null) {
+                redactParams.setEnableRedact(false);
+            } else {
+                System.err.println("Error: HeapDumpRedact must be specified to enable heap-dump-redacting");
+                usage(1);
+            }
+        }
+    }
+
+    private static String getRedactPassword() {
+        String redactPassword = ",RedactPassword=";
+        // heap dump may need a password
+        Console console = System.console();
+        char[] passwords = null;
+        if (console == null) {
+            return redactPassword;
+        }
+
+        try {
+            passwords = console.readPassword("redact authority password:");
+        } catch (Exception e) {
+        }
+        if(passwords == null) {
+            return redactPassword;
+        }
+
+        String digestStr = null;
+        byte[] passwordBytes = null;
+        try {
+            CharBuffer cb = CharBuffer.wrap(passwords);
+            String passwordPattern = "^[0-9a-zA-Z!@#$]{1,9}$";
+            if(!Pattern.matches(passwordPattern, cb)) {
+                return redactPassword;
+            }
+            Charset cs = Charset.forName("UTF-8");
+            passwordBytes= cs.encode(cb).array();
+
+            StringBuilder digestStrBuilder = new StringBuilder();
+            MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
+            byte[] digestBytes = messageDigest.digest(passwordBytes);
+            for(byte b : digestBytes) {
+                String hex = Integer.toHexString(0xff & b);
+                if(hex.length() == 1) {
+                    digestStrBuilder.append('0');
+                }
+                digestStrBuilder.append(hex);
+            }
+            digestStr = digestStrBuilder.toString();
+        } catch (Exception e) {
+        }finally {
+            // clear all password
+            if(passwords != null) {
+                Arrays.fill(passwords, '0');
+            }
+            if(passwordBytes != null) {
+                Arrays.fill(passwordBytes, (byte) 0);
+            }
+        }
+
+        redactPassword += (digestStr == null ? "" : digestStr);
+        return redactPassword;
     }
 
     private static void checkForUnsupportedOptions(String[] args) {
@@ -312,6 +400,12 @@ public class JMap {
         System.err.println("      file=<file>  dump heap to <file>");
         System.err.println("      gz=<number>  If specified, the heap dump is written in gzipped format using the given compression level.");
         System.err.println("                   1 (recommended) is the fastest, 9 the strongest compression.");
+        System.err.println("      HeapDumpRedact=<basic|names|full|diyrules|annotation|off>     redact the heapdump information to remove sensitive data,");
+        System.err.println("      RedactMap=<name1:value1;name2:value2;...>            Redact the class and field names to other strings");
+        System.err.println("      RedactMapFile=<file>                                 file path of the redact map");
+        System.err.println("      RedactClassPath=<classpath>                          full path of the redact annotation");
+        System.err.println("      RedactPassword                                       maybe redact feature has an authority, will wait for a password, ");
+        System.err.println("                                                           without a correct password, heap dump with default redact level");
         System.err.println("");
         System.err.println("    Example: jmap -dump:live,format=b,file=heap.bin <pid>");
         System.err.println("");
@@ -326,5 +420,113 @@ public class JMap {
         System.err.println("");
         System.err.println("    Example: jmap -histo:live,file=/tmp/histo.data <pid>");
         System.exit(exit);
+    }
+
+    public static class RedactParams {
+        private boolean enableRedact = false;
+        private String heapDumpRedact;
+        private String redactMap;
+        private String redactMapFile;
+        private String redactClassPath;
+
+        public RedactParams() {
+        }
+
+        public RedactParams(String heapDumpRedact, String redactMap, String redactMapFile, String redactClassPath) {
+            if (heapDumpRedact != null && checkLauncherHeapdumpRedactSupport(heapDumpRedact)) {
+                enableRedact = true;
+            }
+            this.heapDumpRedact = heapDumpRedact;
+            this.redactMap = redactMap;
+            this.redactMapFile = redactMapFile;
+            this.redactClassPath = redactClassPath;
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder builder = new StringBuilder();
+            if (heapDumpRedact != null) {
+                builder.append("HeapDumpRedact=");
+                builder.append(heapDumpRedact);
+                builder.append(",");
+            }
+            if (redactMap != null) {
+                builder.append("RedactMap=");
+                builder.append(redactMap);
+                builder.append(",");
+            }
+            if (redactMapFile != null) {
+                builder.append("RedactMapFile=");
+                builder.append(redactMapFile);
+                builder.append(",");
+            }
+            if (redactClassPath != null) {
+                builder.append("RedactClassPath=");
+                builder.append(redactClassPath);
+            }
+            return builder.toString();
+        }
+
+        public String toDumpArgString() {
+            return "-HeapDumpRedact=" + (heapDumpRedact == null ? "off" : heapDumpRedact) +
+                    ",RedactMap=" + (redactMap == null ? "" : redactMap) +
+                    ",RedactMapFile=" + (redactMapFile == null ? "" : redactMapFile) +
+                    ",RedactClassPath=" + (redactClassPath == null ? "" : redactClassPath);
+        }
+
+        public static boolean checkLauncherHeapdumpRedactSupport(String value) {
+            String[] validValues = {"basic", "names", "full", "diyrules", "annotation", "off"};
+            for (String validValue : validValues) {
+                if (validValue.equals(value)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public boolean isEnableRedact() {
+            return enableRedact;
+        }
+
+        public void setEnableRedact(boolean enableRedact) {
+            this.enableRedact = enableRedact;
+        }
+
+        public String getHeapDumpRedact() {
+            return heapDumpRedact;
+        }
+
+        public boolean setAndCheckHeapDumpRedact(String heapDumpRedact) {
+            if (!checkLauncherHeapdumpRedactSupport(heapDumpRedact)) {
+                return false;
+            }
+            this.heapDumpRedact = heapDumpRedact;
+            this.enableRedact = true;
+            return true;
+        }
+
+        public String getRedactMap() {
+            return redactMap;
+        }
+
+        public void setRedactMap(String redactMap) {
+            this.redactMap = redactMap;
+        }
+
+        public String getRedactMapFile() {
+            return redactMapFile;
+        }
+
+        public void setRedactMapFile(String redactMapFile) {
+            this.redactMapFile = redactMapFile;
+        }
+
+        public String getRedactClassPath() {
+            return redactClassPath;
+        }
+
+        public void setRedactClassPath(String redactClassPath) {
+            this.redactClassPath = redactClassPath;
+        }
     }
 }

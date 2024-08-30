@@ -235,6 +235,13 @@ JVMFlag::Error WriteableFlags::set_flag(const char* name, const void* value, JVM
 
   JVMFlag* f = JVMFlag::find_flag(name);
   if (f) {
+    if(VerifyRedactPassword) {
+        if(strcmp(name, "HeapDumpRedact") == 0 || strcmp(name, "RedactMap") == 0 || strcmp(name, "RedactMapFile") == 0
+          || strcmp(name, "RedactClassPath") == 0) {
+          err_msg.print("has no authority to reset redact params");
+          return JVMFlag::NON_WRITABLE;
+        }
+    }
     // only writeable flags are allowed to be set
     if (f->is_writeable()) {
       return setter(f, value, origin, err_msg);

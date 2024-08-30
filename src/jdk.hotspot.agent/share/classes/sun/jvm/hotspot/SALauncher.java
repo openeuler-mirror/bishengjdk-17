@@ -130,6 +130,10 @@ public class SALauncher {
         System.out.println("    --histo                 To print histogram of java object heap.");
         System.out.println("    --clstats               To print class loader statistics.");
         System.out.println("    --finalizerinfo         To print information on objects awaiting finalization.");
+        System.out.println("    --HeapDumpRedact <basic|names|full|annotation||off>         redact the heapdump information to remove sensitive data.");
+        System.out.println("    --RedactMap <name1:value1;name2:value2;...>     Redact the class and field names to other strings.");
+        System.out.println("    --RedactMapFile <file>                          file path of the redact map.");
+        System.err.println("    --RedactClassPath <classpath>                   full path of the redact annotation");
         return commonHelpWithConnect("jmap");
     }
 
@@ -302,8 +306,8 @@ public class SALauncher {
         jstack.runWithArgs(buildAttachArgs(newArgMap, false));
     }
 
-    private static void runJMAP(String[] oldArgs) {
-        Map<String, String> longOptsMap = Map.ofEntries(
+    private static Map<String, String> getLongOptsMap() {
+        return Map.ofEntries(
                 Map.entry("exe=", "exe"),
                 Map.entry("core=", "core"),
                 Map.entry("pid=", "pid"),
@@ -314,13 +318,25 @@ public class SALauncher {
                 Map.entry("gz=", "gz"),
                 Map.entry("histo", "-histo"),
                 Map.entry("clstats", "-clstats"),
-                Map.entry("finalizerinfo", "-finalizerinfo"));
+                Map.entry("finalizerinfo", "-finalizerinfo"),
+                Map.entry("HeapDumpRedact=", "HeapDumpRedact"),
+                Map.entry("RedactMap=", "RedactMap"),
+                Map.entry("RedactMapFile=", "RedactMapFile"),
+                Map.entry("RedactClassPath=", "RedactClassPath"));
+    }
+
+    private static void runJMAP(String[] oldArgs) {
+        Map<String, String> longOptsMap = getLongOptsMap();
         Map<String, String> newArgMap = parseOptions(oldArgs, longOptsMap);
 
         boolean requestHeapdump = newArgMap.containsKey("binaryheap");
         String dumpfile = newArgMap.get("dumpfile");
         String gzLevel = newArgMap.get("gz");
         String command = "-heap:format=b";
+        String heapDumpRedact = newArgMap.get("HeapDumpRedact");
+        String redactMap = newArgMap.get("RedactMap");
+        String redactMapFile = newArgMap.get("RedactMapFile");
+        String redactClassPath = newArgMap.get("RedactClassPath");
         if (!requestHeapdump && (dumpfile != null)) {
             throw new IllegalArgumentException("Unexpected argument: dumpfile");
         }
@@ -331,12 +347,28 @@ public class SALauncher {
             if (dumpfile != null) {
                 command += ",file=" + dumpfile;
             }
+            if (heapDumpRedact != null) {
+                command += ",HeapDumpRedact=" + heapDumpRedact;
+            }
+            if (redactMap != null) {
+                command += ",RedactMap=" + redactMap;
+            }
+            if (redactMapFile != null) {
+                command += ",RedactMapFile=" + redactMapFile;
+            }
+            if (redactClassPath != null) {
+                command += ",RedactClassPath=" + redactClassPath;
+            }
             newArgMap.put(command, null);
         }
 
         newArgMap.remove("binaryheap");
         newArgMap.remove("dumpfile");
         newArgMap.remove("gz");
+        newArgMap.remove("HeapDumpRedact");
+        newArgMap.remove("RedactMap");
+        newArgMap.remove("RedactMapFile");
+        newArgMap.remove("RedactClassPath");
         JMap.main(buildAttachArgs(newArgMap, false));
     }
 

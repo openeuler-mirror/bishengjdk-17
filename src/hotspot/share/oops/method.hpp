@@ -93,7 +93,8 @@ class Method : public Metadata {
     _scoped                = 1 << 7
 #if INCLUDE_JBOOSTER
     ,
-    _rewrite_invokehandle  = 1 << 8
+    _rewrite_invokehandle  = 1 << 8, /* always be the last */
+    _last_method_flags = _rewrite_invokehandle
 #endif // INCLUDE_JBOOSTER
   };
   mutable u2 _flags;
@@ -1017,6 +1018,9 @@ public:
 
 #if INCLUDE_JBOOSTER
  public:
+  static ByteSize flags_offset()                 { return byte_offset_of(Method, _flags); }
+  static u2 last_method_flags()                  { return _last_method_flags; }
+
   bool is_rewrite_invokehandle() {
     return (_flags & _rewrite_invokehandle) != 0;
   }

@@ -385,7 +385,6 @@ public:
   static ClassFileStream* get_shared_class_file_stream(InstanceKlass* k);
   static ClassFileStream* get_byte_code_from_cache(Symbol* class_name, Handle class_loader, TRAPS);
   static void set_shared_class_file(InstanceKlass* k, ClassFileStream* cfs);
-  static Handle get_protection_domain(InstanceKlass* k, Handle class_loader, TRAPS);
   static void set_url_string(InstanceKlass* k, char* string_value);
   static void save_timestamp(InstanceKlass* k, char* string_value);
   static void set_classfile_timestamp(InstanceKlass* k, int64_t classfile_timestamp);

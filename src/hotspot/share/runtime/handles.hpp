@@ -100,6 +100,9 @@ class Handle {
   // since duplicates is only valid as long as original handle is alive.
   oop* raw_value() const                         { return _handle; }
   static oop raw_resolve(oop *handle)            { return handle == NULL ? (oop)NULL : *handle; }
+#if INCLUDE_JBOOSTER
+  static ByteSize handle_offset()                { return byte_offset_of(Handle, _handle); }
+#endif // INCLUDE_JBOOSTER
 };
 
 // Specific Handles for different oop types

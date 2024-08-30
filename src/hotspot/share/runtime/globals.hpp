@@ -549,6 +549,24 @@ const intx ObjectAlignmentInBytes = 8;
           "compression. Otherwise the level must be between 1 and 9.")      \
           range(0, 9)                                                       \
                                                                             \
+  product(ccstr, HeapDumpRedact, NULL, MANAGEABLE,                          \
+          "Redact the heapdump information to remove sensitive data")       \
+                                                                            \
+  product(ccstr, RedactMap, NULL, MANAGEABLE,                               \
+          "Redact the class and field names to other strings")              \
+                                                                            \
+  product(ccstr, RedactMapFile, NULL, MANAGEABLE,                           \
+          "File path of the Redact Map")                                    \
+                                                                            \
+  product(ccstr, RedactClassPath, NULL, MANAGEABLE,                         \
+          "full path of the Redact Annotation")                             \
+                                                                            \
+  product(bool, VerifyRedactPassword, false,                                \
+         "verify authority for operating heapDump redact feature")          \
+                                                                            \
+  product(ccstr, RedactPassword, NULL,                                      \
+         "authority for operating heapDump redact feature")                 \
+                                                                            \
   product(ccstr, NativeMemoryTracking, DEBUG_ONLY("summary") NOT_DEBUG("off"), \
           "Native memory tracking options")                                 \
                                                                             \
