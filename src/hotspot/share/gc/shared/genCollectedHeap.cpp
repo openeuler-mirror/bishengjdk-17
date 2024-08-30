@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -77,6 +77,9 @@
 #include "utilities/vmError.hpp"
 #if INCLUDE_JVMCI
 #include "jvmci/jvmci.hpp"
+#endif
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
 #endif
 
 GenCollectedHeap::GenCollectedHeap(Generation::Name young,
@@ -788,6 +791,12 @@ void GenCollectedHeap::process_roots(ScanningOption so,
   CodeBlobToOopClosure* roots_from_code_p = (so & SO_AllCodeCache) ? NULL : code_roots;
 
   Threads::oops_do(strong_roots, roots_from_code_p);
+
+#if INCLUDE_AOT
+  if (UseAOT) {
+    AOTLoader::oops_do(strong_roots);
+  }
+#endif
 
   OopStorageSet::strong_oops_do(strong_roots);
 

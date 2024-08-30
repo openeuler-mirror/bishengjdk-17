@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -3149,6 +3149,21 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
   if (UseSharedSpaces && !DumpSharedSpaces && check_unsupported_cds_runtime_properties()) {
     FLAG_SET_DEFAULT(UseSharedSpaces, false);
   }
+#endif
+
+#if !INCLUDE_AOT
+  UNSUPPORTED_OPTION(UseAOT);
+  UNSUPPORTED_OPTION(PrintAOT);
+  UNSUPPORTED_OPTION(UseAOTStrictLoading);
+  UNSUPPORTED_OPTION_NULL(AOTLibrary);
+
+  UNSUPPORTED_OPTION_INIT(Tier3AOTInvocationThreshold, 0);
+  UNSUPPORTED_OPTION_INIT(Tier3AOTMinInvocationThreshold, 0);
+  UNSUPPORTED_OPTION_INIT(Tier3AOTCompileThreshold, 0);
+  UNSUPPORTED_OPTION_INIT(Tier3AOTBackEdgeThreshold, 0);
+#ifndef PRODUCT
+  UNSUPPORTED_OPTION(PrintAOTStatistics);
+#endif
 #endif
 
 #ifndef CAN_SHOW_REGISTERS_ON_ASSERT

@@ -638,6 +638,9 @@ public class WhiteBox {
   // Protection Domain Table
   public native int protectionDomainRemovedCount();
 
+  // Number of loaded AOT libraries
+  public native int aotLibrariesCount();
+
   public native int getKlassMetadataSize(Class<?> c);
 
   // ThreadSMR GC safety check for threadObj

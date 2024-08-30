@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2011, 2021, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2011, 2023, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -533,6 +533,9 @@ CPP := @CPP@
 # The linker can be gcc or ld on unix systems, or link.exe on windows systems.
 LD := @LD@
 
+# Linker used by the jaotc tool for AOT compilation.
+LD_JAOTC:=@LD_JAOTC@
+
 # Xcode SDK path
 SDKROOT:=@SDKROOT@
 
@@ -777,6 +780,7 @@ TAR_SUPPORTS_TRANSFORM:=@TAR_SUPPORTS_TRANSFORM@
 
 # Build setup
 ENABLE_KAE:=@ENABLE_KAE@
+ENABLE_AOT:=@ENABLE_AOT@
 USE_EXTERNAL_LIBJPEG:=@USE_EXTERNAL_LIBJPEG@
 USE_EXTERNAL_LIBGIF:=@USE_EXTERNAL_LIBGIF@
 USE_EXTERNAL_LIBZ:=@USE_EXTERNAL_LIBZ@

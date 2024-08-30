@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -79,6 +79,9 @@
 #include "utilities/macros.hpp"
 #include "utilities/ostream.hpp"
 #include "utilities/preserveException.hpp"
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
+#endif
 
 // Known objects
 Klass* Universe::_typeArrayKlassObjs[T_LONG+1]        = { NULL /*, NULL...*/ };
@@ -742,6 +745,10 @@ jint universe_init() {
 
   // Initialize performance counters for metaspaces
   MetaspaceCounters::initialize_performance_counters();
+
+#if INCLUDE_AOT
+  AOTLoader::universe_init();
+#endif
 
   // Checks 'AfterMemoryInit' constraints.
   if (!JVMFlagLimit::check_all_constraints(JVMFlagConstraintPhase::AfterMemoryInit)) {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -115,6 +115,10 @@ class Method : public Metadata {
   // NULL only at safepoints (because of a de-opt).
   CompiledMethod* volatile _code;                       // Points to the corresponding piece of native code
   volatile address           _from_interpreted_entry; // Cache of _code ? _adapter->i2c_entry() : _i2i_entry
+
+#if INCLUDE_AOT
+  CompiledMethod* _aot_code;
+#endif
 
   // Constructor
   Method(ConstMethod* xconst, AccessFlags access_flags);
@@ -401,6 +405,18 @@ class Method : public Metadata {
     }
   }
 
+#if INCLUDE_AOT
+  void set_aot_code(CompiledMethod* aot_code) {
+    _aot_code = aot_code;
+  }
+
+  CompiledMethod* aot_code() const {
+    return _aot_code;
+  }
+#else
+  CompiledMethod* aot_code() const { return NULL; }
+#endif // INCLUDE_AOT
+
   int nmethod_age() const {
     if (method_counters() == NULL) {
       return INT_MAX;
@@ -658,6 +674,8 @@ public:
   // NOTE: code() is inherently racy as deopt can be clearing code
   // simultaneously. Use with caution.
   bool has_compiled_code() const;
+
+  bool has_aot_code() const                      { return aot_code() != NULL; }
 
   bool needs_clinit_barrier() const;
 

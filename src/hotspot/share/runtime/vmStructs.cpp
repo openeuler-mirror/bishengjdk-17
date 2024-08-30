@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -300,6 +300,7 @@ typedef HashtableEntry<InstanceKlass*, mtClass>  KlassHashtableEntry;
   JVMTI_ONLY(nonstatic_field(MethodCounters,   _number_of_breakpoints,                        u2))                                   \
   nonstatic_field(MethodCounters,              _invocation_counter,                           InvocationCounter)                     \
   nonstatic_field(MethodCounters,              _backedge_counter,                             InvocationCounter)                     \
+  AOT_ONLY(nonstatic_field(MethodCounters,     _method,                                       Method*))                              \
   nonstatic_field(Method,                      _constMethod,                                  ConstMethod*)                          \
   nonstatic_field(Method,                      _method_data,                                  MethodData*)                           \
   nonstatic_field(Method,                      _method_counters,                              MethodCounters*)                       \
@@ -2494,6 +2495,7 @@ typedef HashtableEntry<InstanceKlass*, mtClass>  KlassHashtableEntry;
   declare_constant(CompLevel_limited_profile)                             \
   declare_constant(CompLevel_full_profile)                                \
   declare_constant(CompLevel_full_optimization)                           \
+  declare_constant(CompLevel_aot)                                         \
                                                                           \
   /***************/                                                       \
   /* OopMapValue */                                                       \

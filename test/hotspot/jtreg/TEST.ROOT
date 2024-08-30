@@ -67,6 +67,8 @@ requires.properties= \
     vm.hasDTrace \
     vm.rtm.cpu \
     vm.rtm.compiler \
+    vm.aot \
+    vm.aot.enabled \
     vm.cds \
     vm.cds.custom.loaders \
     vm.cds.write.archived.java.heap \

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -36,7 +36,7 @@
   LOG_TAG(age) \
   LOG_TAG(alloc) \
   LOG_TAG(annotation) \
-  JBOOSTER_ONLY(LOG_TAG(aot)) \
+  AOT_ONLY(LOG_TAG(aot)) \
   LOG_TAG(arguments) \
   LOG_TAG(attach) \
   LOG_TAG(barrier) \
@@ -45,7 +45,7 @@
   LOG_TAG(bot) \
   LOG_TAG(breakpoint) \
   LOG_TAG(bytecode) \
-  LOG_TAG(cds) \
+  CDS_ONLY(LOG_TAG(cds)) \
   LOG_TAG(census) \
   LOG_TAG(class) \
   LOG_TAG(classhisto) \

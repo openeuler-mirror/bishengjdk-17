@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -44,6 +44,9 @@
 #include "services/management.hpp"
 #include "utilities/enumIterator.hpp"
 #include "utilities/growableArray.hpp"
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
+#endif
 
 class ReferenceLocateClosure : public OopClosure {
  protected:
@@ -100,6 +103,9 @@ class ReferenceToRootClosure : public StackObj {
   bool do_cldg_roots();
   bool do_oop_storage_roots();
   bool do_string_table_roots();
+#if INCLUDE_AOT
+  bool do_aot_loader_roots();
+#endif
 
   bool do_roots();
 
@@ -148,6 +154,15 @@ bool ReferenceToRootClosure::do_oop_storage_roots() {
   return false;
 }
 
+#if INCLUDE_AOT
+bool ReferenceToRootClosure::do_aot_loader_roots() {
+  assert(!complete(), "invariant");
+  ReferenceLocateClosure rcl(_callback, OldObjectRoot::_aot, OldObjectRoot::_type_undetermined, NULL);
+  AOTLoader::oops_do(&rcl);
+  return rcl.complete();
+}
+#endif
+
 bool ReferenceToRootClosure::do_roots() {
   assert(!complete(), "invariant");
   assert(OldObjectRoot::_system_undetermined == _info._system, "invariant");
@@ -162,6 +177,13 @@ bool ReferenceToRootClosure::do_roots() {
    _complete = true;
     return true;
   }
+
+#if INCLUDE_AOT
+  if (do_aot_loader_roots()) {
+   _complete = true;
+    return true;
+  }
+#endif
 
   return false;
 }

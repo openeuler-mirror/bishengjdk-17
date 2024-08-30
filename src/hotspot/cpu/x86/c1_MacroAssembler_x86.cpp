@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -336,7 +336,7 @@ void C1_MacroAssembler::build_frame(int frame_size_in_bytes, int bang_size_in_by
     mov(rbp, rsp);
   }
 #if !defined(_LP64) && defined(COMPILER2)
-  if (UseSSE < 2 && !CompilerConfig::is_c1_only_no_jvmci()) {
+  if (UseSSE < 2 && !CompilerConfig::is_c1_only_no_aot_or_jvmci()) {
     // c2 leaves fpu stack dirty. Clean it on entry
     empty_FPU_stack();
   }

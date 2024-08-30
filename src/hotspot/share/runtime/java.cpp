@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -96,6 +96,9 @@
 #if INCLUDE_JBOOSTER
 #include "jbooster/client/clientMessageHandler.hpp"
 #endif // INCLUDE_JBOOSTER
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
+#endif
 
 GrowableArray<Method*>* collected_profiled_methods;
 
@@ -269,6 +272,12 @@ void print_statistics() {
 #endif // COMPILER1
 #endif // INCLUDE_JVMCI
 #endif // COMPILER2
+
+#if INCLUDE_AOT
+  if (PrintAOTStatistics) {
+    AOTLoader::print_statistics();
+  }
+#endif
 
   if (PrintNMethodStatistics) {
     nmethod::print_statistics();

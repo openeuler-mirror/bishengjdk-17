@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -723,7 +723,7 @@ OopMapSet* Runtime1::generate_handle_exception(StubID id, StubAssembler *sasm) {
   }
 
 #if !defined(_LP64) && defined(COMPILER2)
-  if (UseSSE < 2 && !CompilerConfig::is_c1_only_no_jvmci()) {
+  if (UseSSE < 2 && !CompilerConfig::is_c1_only_no_aot_or_jvmci()) {
     // C2 can leave the fpu stack dirty
     __ empty_FPU_stack();
   }

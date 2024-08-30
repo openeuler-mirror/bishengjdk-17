@@ -112,6 +112,7 @@ import jdk.vm.ci.meta.Value;
  * global invariants such as using {@link Object#equals(Object)} to compare certain types instead of
  * identity comparisons.
  */
+@AddExports("jdk.internal.vm.ci/*=jdk.aot")
 public class CheckGraalInvariants extends GraalCompilerTest {
 
     /**

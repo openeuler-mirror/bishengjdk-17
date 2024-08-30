@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2005, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2005, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -88,6 +88,9 @@
 #include "utilities/stack.inline.hpp"
 #if INCLUDE_JVMCI
 #include "jvmci/jvmci.hpp"
+#endif
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
 #endif
 
 #include <math.h>
@@ -1987,6 +1990,9 @@ static void mark_from_roots_work(ParallelRootType::Value root_type, uint worker_
     case ParallelRootType::code_cache:
       // Do not treat nmethods as strong roots for mark/sweep, since we can unload them.
       //ScavengableNMethods::scavengable_nmethods_do(CodeBlobToOopClosure(&mark_and_push_closure));
+#if INCLUDE_AOT
+      AOTLoader::oops_do(&mark_and_push_closure);
+#endif
       break;
 
     case ParallelRootType::sentinel:
@@ -2165,6 +2171,9 @@ class PSAdjustTask final : public AbstractGangTask {
 
   enum PSAdjustSubTask {
     PSAdjustSubTask_code_cache,
+#if INCLUDE_AOT
+    PSAdjustSubTask_aot,
+#endif
     PSAdjustSubTask_old_ref_process,
     PSAdjustSubTask_young_ref_process,
 
@@ -2208,6 +2217,11 @@ public:
       CodeBlobToOopClosure adjust_code(&adjust, CodeBlobToOopClosure::FixRelocations);
       CodeCache::blobs_do(&adjust_code);
     }
+#if INCLUDE_AOT
+    if (_sub_tasks.try_claim_task(PSAdjustSubTask_aot)) {
+      AOTLoader::oops_do(&adjust);
+    }
+#endif
     if (_sub_tasks.try_claim_task(PSAdjustSubTask_old_ref_process)) {
       PSParallelCompact::ref_processor()->weak_oops_do(&adjust);
     }

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -441,6 +441,7 @@ void nmethod::init_defaults() {
   _stack_traversal_mark       = 0;
   _load_reported              = false; // jvmti state
   _unload_reported            = false;
+  _is_far_code                = false; // nmethods are located in CodeCache
 
 #ifdef ASSERT
   _oops_are_stale             = false;
@@ -2379,6 +2380,7 @@ nmethodLocker::nmethodLocker(address pc) {
 // should pass zombie_ok == true.
 void nmethodLocker::lock_nmethod(CompiledMethod* cm, bool zombie_ok) {
   if (cm == NULL)  return;
+  if (cm->is_aot()) return;  // FIXME: Revisit once _lock_count is added to aot_method
   nmethod* nm = cm->as_nmethod();
   Atomic::inc(&nm->_lock_count);
   assert(zombie_ok || !nm->is_zombie(), "cannot lock a zombie method: %p", nm);
@@ -2386,6 +2388,7 @@ void nmethodLocker::lock_nmethod(CompiledMethod* cm, bool zombie_ok) {
 
 void nmethodLocker::unlock_nmethod(CompiledMethod* cm) {
   if (cm == NULL)  return;
+  if (cm->is_aot()) return;  // FIXME: Revisit once _lock_count is added to aot_method
   nmethod* nm = cm->as_nmethod();
   Atomic::dec(&nm->_lock_count);
   assert(nm->_lock_count >= 0, "unmatched nmethod lock/unlock");
@@ -2533,11 +2536,11 @@ void nmethod::verify_scopes() {
         verify_interrupt_point(iter.addr());
         break;
       case relocInfo::opt_virtual_call_type:
-        stub = iter.opt_virtual_call_reloc()->static_stub();
+        stub = iter.opt_virtual_call_reloc()->static_stub(false);
         verify_interrupt_point(iter.addr());
         break;
       case relocInfo::static_call_type:
-        stub = iter.static_call_reloc()->static_stub();
+        stub = iter.static_call_reloc()->static_stub(false);
         //verify_interrupt_point(iter.addr());
         break;
       case relocInfo::runtime_call_type:
@@ -3480,11 +3483,28 @@ public:
   }
 
   virtual void set_destination_mt_safe(address dest) {
+#if INCLUDE_AOT
+    if (UseAOT) {
+      CodeBlob* callee = CodeCache::find_blob(dest);
+      CompiledMethod* cm = callee->as_compiled_method_or_null();
+      if (cm != NULL && cm->is_far_code()) {
+        // Temporary fix, see JDK-8143106
+        CompiledDirectStaticCall* csc = CompiledDirectStaticCall::at(instruction_address());
+        csc->set_to_far(methodHandle(Thread::current(), cm->method()), dest);
+        return;
+      }
+    }
+#endif
     _call->set_destination_mt_safe(dest);
   }
 
   virtual void set_to_interpreted(const methodHandle& method, CompiledICInfo& info) {
     CompiledDirectStaticCall* csc = CompiledDirectStaticCall::at(instruction_address());
+#if INCLUDE_AOT
+    if (info.to_aot()) {
+      csc->set_to_far(method, info.entry());
+    } else
+#endif
     {
       csc->set_to_interpreted(method, info.entry());
     }

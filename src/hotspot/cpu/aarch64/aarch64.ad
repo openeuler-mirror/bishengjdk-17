@@ -1,6 +1,6 @@
 //
-// Copyright (c) 2003, 2021, Oracle and/or its affiliates. All rights reserved.
-// Copyright (c) 2014, 2021, Red Hat, Inc. All rights reserved.
+// Copyright (c) 2003, 2023, Oracle and/or its affiliates. All rights reserved.
+// Copyright (c) 2014, 2023, Red Hat, Inc. All rights reserved.
 // DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 //
 // This code is free software; you can redistribute it and/or modify it
@@ -1360,7 +1360,7 @@ source %{
 
     // r27 is not allocatable when compressed oops is on and heapbase is not
     // zero, compressed klass pointers doesn't use r27 after JDK-8234794
-    if (UseCompressedOops && (CompressedOops::ptrs_base() != NULL)) {
+    if (UseCompressedOops && (CompressedOops::ptrs_base() != NULL || UseAOT)) {
       _NO_SPECIAL_REG32_mask.Remove(OptoReg::as_OptoReg(r27->as_VMReg()));
       _NO_SPECIAL_REG_mask.SUBTRACT(_HEAPBASE_REG_mask);
       _NO_SPECIAL_PTR_REG_mask.SUBTRACT(_HEAPBASE_REG_mask);

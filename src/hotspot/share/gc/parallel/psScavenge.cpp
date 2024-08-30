@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -69,6 +69,9 @@
 #include "runtime/vmOperations.hpp"
 #include "services/memoryService.hpp"
 #include "utilities/stack.inline.hpp"
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
+#endif
 
 HeapWord*                     PSScavenge::_to_space_top_before_gc = NULL;
 int                           PSScavenge::_consecutive_skipped_scavenges = 0;
@@ -102,6 +105,9 @@ static void scavenge_roots_work(ParallelRootType::Value root_type, uint worker_i
       {
         MarkingCodeBlobClosure code_closure(&roots_to_old_closure, CodeBlobToOopClosure::FixRelocations);
         ScavengableNMethods::nmethods_do(&code_closure);
+#if INCLUDE_AOT
+        AOTLoader::oops_do(&roots_closure);
+#endif
       }
       break;
 

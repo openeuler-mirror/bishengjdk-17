@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,6 +33,9 @@
 #include "gc/shared/collectedHeap.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/globals.hpp"
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
+#endif
 
 // For UseCompressedOops.
 NarrowPtrStruct CompressedOops::_narrow_oop = { NULL, 0, true };
@@ -63,6 +66,10 @@ void CompressedOops::initialize(const ReservedHeapSpace& heap_space) {
   } else {
     set_base((address)heap_space.compressed_oop_base());
   }
+
+#if INCLUDE_AOT
+  AOTLoader::set_narrow_oop_shift();
+#endif
 
   _heap_address_range = heap_space.region();
 
@@ -260,6 +267,12 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
   set_base(base);
   set_shift(shift);
   set_range(range);
+
+#if INCLUDE_AOT
+  // Note: this may modify our shift.
+  AOTLoader::set_narrow_klass_shift();
+#endif // INCLUDE_AOT
+
 #else
   fatal("64bit only.");
 #endif

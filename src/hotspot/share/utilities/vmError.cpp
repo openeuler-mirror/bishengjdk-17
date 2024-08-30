@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2003, 2021, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2017, 2020 SAP SE. All rights reserved.
+ * Copyright (c) 2003, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2023 SAP SE. All rights reserved.
  * Copyright (c) 2023, Red Hat, Inc. and/or its affiliates.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -371,7 +371,7 @@ void VMError::print_native_stack(outputStream* st, frame fr, Thread* t, char* bu
 
   // see if it's a valid frame
   if (fr.pc()) {
-    st->print_cr("Native frames: (J=compiled Java code, j=interpreted, Vv=VM code, C=native code)");
+    st->print_cr("Native frames: (J=compiled Java code, A=aot compiled Java code, j=interpreted, Vv=VM code, C=native code)");
 
     int count = 0;
     while (count++ < StackPrintLimit) {

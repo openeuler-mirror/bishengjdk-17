@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -95,7 +95,9 @@
 #if INCLUDE_JFR
 #include "jfr/jfrEvents.hpp"
 #endif
-
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
+#endif
 
 #ifdef DTRACE_ENABLED
 
@@ -426,7 +428,8 @@ InstanceKlass* InstanceKlass::allocate_instance_klass(const ClassFileParser& par
   const int size = InstanceKlass::size(parser.vtable_size(),
                                        parser.itable_size(),
                                        nonstatic_oop_map_size(parser.total_oop_map_count()),
-                                       parser.is_interface());
+                                       parser.is_interface(),
+                                       AOT_ONLY(should_store_fingerprint(parser.is_hidden())) NOT_AOT(false));
 
   const Symbol* const class_name = parser.class_name();
   assert(class_name != NULL, "invariant");
@@ -1169,6 +1172,11 @@ void InstanceKlass::initialize_impl(TRAPS) {
     }
   }
 
+
+#if INCLUDE_AOT
+  // Look for aot compiled methods for this klass, including class initializer.
+  AOTLoader::load_for_klass(this, THREAD);
+#endif
 
   // Step 8
   {
@@ -2390,6 +2398,84 @@ void InstanceKlass::clean_method_data() {
     }
   }
 }
+
+#if INCLUDE_AOT
+bool InstanceKlass::supers_have_passed_fingerprint_checks() {
+  if (java_super() != NULL && !java_super()->has_passed_fingerprint_check()) {
+    ResourceMark rm;
+    log_trace(class, fingerprint)("%s : super %s not fingerprinted", external_name(), java_super()->external_name());
+    return false;
+  }
+
+  Array<InstanceKlass*>* local_interfaces = this->local_interfaces();
+  if (local_interfaces != NULL) {
+    int length = local_interfaces->length();
+    for (int i = 0; i < length; i++) {
+      InstanceKlass* intf = local_interfaces->at(i);
+      if (!intf->has_passed_fingerprint_check()) {
+        ResourceMark rm;
+        log_trace(class, fingerprint)("%s : interface %s not fingerprinted", external_name(), intf->external_name());
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+u1 InstanceKlass::get_aot_flags() const {
+  address adr = adr_aot_flags();
+  return (u1)(*adr);
+}
+
+void InstanceKlass::set_aot_flags(u1 aot_flags) {
+  address adr = adr_aot_flags();
+  *(u1*)adr = aot_flags;
+}
+
+
+bool InstanceKlass::should_store_fingerprint(bool is_hidden) {
+  // We store the fingerprint into the InstanceKlass only in the following 2 cases:
+  if (CalculateClassFingerprint) {
+    // (1) We are running AOT to generate a shared library.
+    return true;
+  }
+  if (Arguments::is_dumping_archive()) {
+    // (2) We are running -Xshare:dump or -XX:ArchiveClassesAtExit to create a shared archive
+    return true;
+  }
+  if (UseAOT && is_hidden) {
+    // (3) We are using AOT code from a shared library and see a hidden class
+    return true;
+  }
+
+  // In all other cases we might set the _has_passed_fingerprint_check bit,
+  // but do not store the 64-bit fingerprint to save space.
+  return false;
+}
+
+bool InstanceKlass::has_stored_fingerprint() const {
+  return should_store_fingerprint() || is_shared();
+}
+
+uint64_t InstanceKlass::get_stored_fingerprint() const {
+  address adr = adr_fingerprint();
+  if (adr != NULL) {
+    return (uint64_t)Bytes::get_native_u8(adr); // adr may not be 64-bit aligned
+  }
+  return 0;
+}
+
+void InstanceKlass::store_fingerprint(uint64_t fingerprint) {
+  address adr = adr_fingerprint();
+  if (adr != NULL) {
+    Bytes::put_native_u8(adr, (u8)fingerprint); // adr may not be 64-bit aligned
+
+    ResourceMark rm;
+    log_trace(class, fingerprint)("stored as " PTR64_FORMAT " for class %s", fingerprint, external_name());
+  }
+}
+#endif
 
 void InstanceKlass::metaspace_pointers_do(MetaspaceClosure* it) {
   Klass::metaspace_pointers_do(it);

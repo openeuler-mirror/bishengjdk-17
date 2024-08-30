@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -128,13 +128,17 @@ const char* Abstract_VM_Version::vm_info_string() {
       return UseSharedSpaces ? "interpreted mode, sharing" : "interpreted mode";
     case Arguments::_mixed:
       if (UseSharedSpaces) {
-        if (CompilationModeFlag::quick_only()) {
+        if (UseAOT) {
+          return "mixed mode, aot, sharing";
+        } else if (CompilationModeFlag::quick_only()) {
           return "mixed mode, emulated-client, sharing";
         } else {
           return "mixed mode, sharing";
          }
       } else {
-        if (CompilationModeFlag::quick_only()) {
+        if (UseAOT) {
+          return "mixed mode, aot";
+        } else if (CompilationModeFlag::quick_only()) {
           return "mixed mode, emulated-client";
         } else {
           return "mixed mode";
