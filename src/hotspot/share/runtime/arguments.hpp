@@ -641,6 +641,12 @@ class Arguments : AllStatic {
     assert(Arguments::is_dumping_archive(), "dump time only");
   }
 
+#if INCLUDE_JBOOSTER
+  static jint init_jbooster_startup_signal_properties(const char* klass_name,
+                                                      const char* method_name,
+                                                      const char* method_signature);
+#endif // INCLUDE_JBOOSTER
+
   DEBUG_ONLY(static bool verify_special_jvm_flags(bool check_globals);)
 };
 

@@ -62,6 +62,9 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#if INCLUDE_JBOOSTER
+#include "jbooster/jBoosterManager.hpp"
+#endif // INCLUDE_JBOOSTER
 
 #define DEFAULT_JAVA_LAUNCHER  "generic"
 
@@ -3998,6 +4001,21 @@ jint Arguments::apply_ergo() {
 
   GCConfig::arguments()->initialize();
 
+#if INCLUDE_JBOOSTER
+  // The jbooster server identifies the client based on the client VM flags.
+  // After identifying the client, the server sends the corresponding caches
+  // to the client (or no cache to send).
+  // Depending on whether the caches are present, different flags will be set
+  // by JBoosterManager, especially for Dynamic CDS.
+  // So the time for sending client VM flags to the server should be later
+  // than most VM flags are initialized, but earlier than the time for CDS
+  // initialization.
+  if (UseJBooster || AsJBooster) {
+    result = JBoosterManager::init_phase1();
+    if (result != JNI_OK) return result;
+  }
+#endif // INCLUDE_JBOOSTER
+
   result = set_shared_spaces_flags_and_archive_paths();
   if (result != JNI_OK) return result;
 
@@ -4318,3 +4336,38 @@ bool Arguments::copy_expand_pid(const char* src, size_t srclen,
   *b = '\0';
   return (p == src_end); // return false if not all of the source was copied
 }
+
+#if INCLUDE_JBOOSTER
+jint Arguments::init_jbooster_startup_signal_properties(const char* klass_name,
+                                                        const char* method_name,
+                                                        const char* method_signature) {
+  bool added;
+  int jio_res;
+  const int buf_len = 4096;
+  char buffer[buf_len];
+
+  if (klass_name != nullptr) {
+    jio_res = jio_snprintf(buffer, buf_len, "jdk.jbooster.startup_klass_name=%s", klass_name);
+    if (jio_res < 0) return JNI_ENOMEM;
+    added = add_property(buffer, UnwriteableProperty, InternalProperty);
+    if (!added) return JNI_ENOMEM;
+  }
+
+  if (method_name != nullptr) {
+    jio_res = jio_snprintf(buffer, buf_len, "jdk.jbooster.startup_method_name=%s", method_name);
+    if (jio_res < 0) return JNI_ENOMEM;
+    added = add_property(buffer, UnwriteableProperty, InternalProperty);
+    if (!added) return JNI_ENOMEM;
+  }
+
+  if (method_signature != nullptr) {
+    jio_res = jio_snprintf(buffer, buf_len, "jdk.jbooster.startup_method_signature=%s", method_signature);
+    if (jio_res < 0) return JNI_ENOMEM;
+    added = add_property(buffer, UnwriteableProperty, InternalProperty);
+    if (!added) return JNI_ENOMEM;
+  }
+
+  return JNI_OK;
+}
+
+#endif // INCLUDE_JBOOSTER

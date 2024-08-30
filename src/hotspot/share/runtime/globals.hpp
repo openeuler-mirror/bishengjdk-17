@@ -2008,6 +2008,11 @@ const intx ObjectAlignmentInBytes = 8;
   product(ccstr, ArchiveClassesAtExit, NULL,                                \
           "The path and name of the dynamic archive file")                  \
                                                                             \
+  product(bool, SkipSharedClassPathCheck, false, DIAGNOSTIC,                \
+          "Skips SharedClassPath check in DynamicCDS, which allows"         \
+          "non-empty directories to exist in classpath when DynamicDS"      \
+          "is used")                                                        \
+                                                                            \
   product(ccstr, ExtraSharedClassListFile, NULL,                            \
           "Extra classlist for building the CDS archive file")              \
                                                                             \

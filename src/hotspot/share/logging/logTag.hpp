@@ -36,6 +36,7 @@
   LOG_TAG(age) \
   LOG_TAG(alloc) \
   LOG_TAG(annotation) \
+  JBOOSTER_ONLY(LOG_TAG(aot)) \
   LOG_TAG(arguments) \
   LOG_TAG(attach) \
   LOG_TAG(barrier) \
@@ -91,6 +92,7 @@
   LOG_TAG(install) \
   LOG_TAG(interpreter) \
   LOG_TAG(itables) \
+  JBOOSTER_ONLY(LOG_TAG(jbooster)) \
   LOG_TAG(jfr) \
   LOG_TAG(jit) \
   LOG_TAG(jni) \
@@ -154,10 +156,12 @@
   LOG_TAG(reloc) \
   LOG_TAG(remset) \
   LOG_TAG(resolve) \
+  JBOOSTER_ONLY(LOG_TAG(rpc)) \
   LOG_TAG(safepoint) \
   LOG_TAG(sampling) \
   LOG_TAG(scavenge) \
   LOG_TAG(sealed) \
+  JBOOSTER_ONLY(LOG_TAG(serialization)) \
   LOG_TAG(setting) \
   LOG_TAG(smr) \
   LOG_TAG(stackbarrier) \

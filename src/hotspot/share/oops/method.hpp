@@ -91,6 +91,10 @@ class Method : public Metadata {
     _intrinsic_candidate   = 1 << 5,
     _reserved_stack_access = 1 << 6,
     _scoped                = 1 << 7
+#if INCLUDE_JBOOSTER
+    ,
+    _rewrite_invokehandle  = 1 << 8
+#endif // INCLUDE_JBOOSTER
   };
   mutable u2 _flags;
 
@@ -992,6 +996,17 @@ public:
   // Inlined elements
   address* native_function_addr() const          { assert(is_native(), "must be native"); return (address*) (this+1); }
   address* signature_handler_addr() const        { return native_function_addr() + 1; }
+
+#if INCLUDE_JBOOSTER
+ public:
+  bool is_rewrite_invokehandle() {
+    return (_flags & _rewrite_invokehandle) != 0;
+  }
+
+  void set_rewrite_invokehandle(bool x) {
+    _flags = x ? (_flags | _rewrite_invokehandle) : (_flags & ~_rewrite_invokehandle);
+  }
+#endif // INCLUDE_JBOOSTER
 };
 
 

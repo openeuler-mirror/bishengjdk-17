@@ -177,6 +177,7 @@ module java.base {
         java.logging;
     exports jdk.internal.org.objectweb.asm to
         jdk.jartool,
+        jdk.jbooster,
         jdk.jfr,
         jdk.jlink;
     exports jdk.internal.org.objectweb.asm.tree to

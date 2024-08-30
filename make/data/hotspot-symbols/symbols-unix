@@ -206,3 +206,9 @@ JVM_AddReadsModule
 JVM_DefineArchivedModules
 JVM_DefineModule
 JVM_SetBootLoaderUnnamedModule
+
+# JBooster related
+JVM_JBoosterInitVM
+JVM_JBoosterHandleConnection
+JVM_JBoosterPrintStoredClientData
+JVM_JBoosterStartupNativeCallback

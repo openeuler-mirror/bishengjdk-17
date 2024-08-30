@@ -113,6 +113,7 @@ ifeq ($(call isTargetOs, windows), true)
       -hidePath .jcheck \
       -hidePath jdk.hotspot.agent \
       -hidePath jdk.internal.vm.ci \
+      -hidePath jdk.jbooster \
       -hidePath jdk.jfr \
       -compiler VC10 \
       -jdkTargetRoot $(call FixPath, $(JDK_OUTPUTDIR)) \

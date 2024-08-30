@@ -25,6 +25,11 @@
 #include "precompiled.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/stringUtils.hpp"
+#if INCLUDE_JBOOSTER
+#include "classfile/javaClasses.hpp"
+#include "memory/allocation.hpp"
+#include "oops/symbol.hpp"
+#endif // INCLUDE_JBOOSTER
 
 int StringUtils::replace_no_expand(char* string, const char* from, const char* to) {
   int replace_count = 0;
@@ -65,3 +70,61 @@ double StringUtils::similarity(const char* str1, size_t len1, const char* str2, 
 
   return 2.0 * (double) hit / (double) total;
 }
+
+#if INCLUDE_JBOOSTER
+
+uint32_t StringUtils::hash_code(const char* str) {
+  if (str == nullptr) return 0u;
+  return hash_code(str, strlen(str) + 1);
+}
+
+uint32_t StringUtils::hash_code(const char* str, int len) {
+  assert(str != nullptr && str[len - 1] == '\0', "sanity");
+  return java_lang_String::hash_code((const jbyte*) str, len - 1);
+}
+
+uint32_t StringUtils::hash_code(Symbol* sym) {
+  if (sym == nullptr) return 0u;
+  return java_lang_String::hash_code((const jbyte*) sym->base(), sym->utf8_length());
+}
+
+int StringUtils::compare(const char* str1, const char* str2) {
+  if (str1 == nullptr) {
+    return str2 == nullptr ? 0 : -1;
+  }
+  if (str2 == nullptr) {
+    return str1 == nullptr ? 0 : +1;
+  }
+  return strcmp(str1, str2);
+}
+
+char* StringUtils::copy_to_resource(const char* str) {
+  if (str == nullptr) return nullptr;
+  return copy_to_resource(str, strlen(str) + 1);
+}
+
+char* StringUtils::copy_to_resource(const char* str, int len) {
+  assert(str != nullptr && str[len - 1] == '\0', "sanity");
+  return (char*) memcpy(NEW_RESOURCE_ARRAY(char, len), str, len);
+}
+
+char* StringUtils::copy_to_heap(const char* str, MEMFLAGS mt) {
+  if (str == nullptr) return nullptr;
+  return copy_to_heap(str, strlen(str) + 1, mt);
+}
+
+char* StringUtils::copy_to_heap(const char* str, int len, MEMFLAGS mt) {
+  assert(str != nullptr && str[len - 1] == '\0', "sanity");
+  return (char*) memcpy(NEW_C_HEAP_ARRAY(char, len, mt), str, len);
+}
+
+void StringUtils::free_from_heap(const char* str) {
+  if (str == nullptr) return;
+  FREE_C_HEAP_ARRAY(char, str);
+}
+
+const char* StringUtils::str(Symbol* sym) {
+  return sym == nullptr ? "<null>" : sym->as_C_string();
+}
+
+#endif // INCLUDE_JBOOSTER

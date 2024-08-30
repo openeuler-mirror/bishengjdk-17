@@ -66,6 +66,11 @@ ifeq ($(INCLUDE_JVMCI), false)
   MODULES_FILTER += jdk.internal.vm.compiler.management
 endif
 
+# Filter out jbooster specific modules if jbooster is disabled
+ifeq ($(INCLUDE_JBOOSTER), false)
+  MODULES_FILTER += jdk.jbooster
+endif
+
 # jpackage is only on windows, macosx, and linux
 ifeq ($(call isTargetOs, windows macosx linux), false)
   MODULES_FILTER += jdk.jpackage

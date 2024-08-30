@@ -185,6 +185,15 @@ grant codeBase "jrt:/jdk.internal.vm.compiler.management" {
     permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.serviceprovider";
 };
 
+grant codeBase "jrt:/jdk.jbooster" {
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.internal.org.objectweb.asm";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.tools.jaotc";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.tools.jaotc.collect";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.tools.jaotc.collect.module";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.vm.ci.hotspot";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.vm.ci.jbooster";
+};
+
 grant codeBase "jrt:/jdk.jsobject" {
     permission java.security.AllPermission;
 };

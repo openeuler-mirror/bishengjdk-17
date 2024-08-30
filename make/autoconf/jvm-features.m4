@@ -44,7 +44,7 @@
 m4_define(jvm_features_valid, m4_normalize( \
     ifdef([custom_jvm_features_valid], custom_jvm_features_valid) \
     \
-    cds compiler1 compiler2 dtrace epsilongc g1gc jfr jni-check \
+    cds compiler1 compiler2 dtrace epsilongc g1gc jbooster jfr jni-check \
     jvmci jvmti link-time-opt management minimal nmt opt-size parallelgc \
     serialgc services shenandoahgc static-build vm-structs zero zgc \
 ))
@@ -61,6 +61,7 @@ m4_define(jvm_feature_desc_compiler2, [enable hotspot compiler C2])
 m4_define(jvm_feature_desc_dtrace, [enable dtrace support])
 m4_define(jvm_feature_desc_epsilongc, [include the epsilon (no-op) garbage collector])
 m4_define(jvm_feature_desc_g1gc, [include the G1 garbage collector])
+m4_define(jvm_feature_desc_jbooster, [enable JBooster])
 m4_define(jvm_feature_desc_jfr, [enable JDK Flight Recorder (JFR)])
 m4_define(jvm_feature_desc_jni_check, [enable -Xcheck:jni support])
 m4_define(jvm_feature_desc_jvmci, [enable JVM Compiler Interface (JVMCI)])
@@ -269,6 +270,22 @@ AC_DEFUN_ONCE([JVM_FEATURES_CHECK_DTRACE],
 ])
 
 ###############################################################################
+# Check if the feature 'jbooster' is available on this platform.
+#
+AC_DEFUN_ONCE([JVM_FEATURES_CHECK_JBOOSTER],
+[
+  JVM_FEATURES_CHECK_AVAILABILITY(jbooster, [
+    AC_MSG_CHECKING([if platform is supported by JBOOSTER])
+    if test "x$OPENJDK_TARGET_CPU" = "xx86_64"; then
+      AC_MSG_RESULT([yes])
+    else
+      AC_MSG_RESULT([no, $OPENJDK_TARGET_CPU])
+      AVAILABLE=false
+    fi
+  ])
+])
+
+###############################################################################
 # Check if the feature 'jfr' is available on this platform.
 #
 AC_DEFUN_ONCE([JVM_FEATURES_CHECK_JFR],
@@ -405,6 +422,7 @@ AC_DEFUN_ONCE([JVM_FEATURES_PREPARE_PLATFORM],
 
   JVM_FEATURES_CHECK_CDS
   JVM_FEATURES_CHECK_DTRACE
+  JVM_FEATURES_CHECK_JBOOSTER
   JVM_FEATURES_CHECK_JFR
   JVM_FEATURES_CHECK_JVMCI
   JVM_FEATURES_CHECK_SHENANDOAHGC
@@ -433,21 +451,21 @@ AC_DEFUN([JVM_FEATURES_PREPARE_VARIANT],
   # Check which features are unavailable for this JVM variant.
   # This means that is not possible to build these features for this variant.
   if test "x$variant" = "xminimal"; then
-    JVM_FEATURES_VARIANT_UNAVAILABLE="cds zero"
+    JVM_FEATURES_VARIANT_UNAVAILABLE="cds jbooster zero"
   elif test "x$variant" = "xcore"; then
-    JVM_FEATURES_VARIANT_UNAVAILABLE="cds minimal zero"
+    JVM_FEATURES_VARIANT_UNAVAILABLE="cds jbooster minimal zero"
   elif test "x$variant" = "xzero"; then
     JVM_FEATURES_VARIANT_UNAVAILABLE="cds compiler1 compiler2 \
-        jvmci minimal zgc"
+        jbooster jvmci minimal zgc"
   else
     JVM_FEATURES_VARIANT_UNAVAILABLE="minimal zero"
   fi
 
   # Check which features should be off by default for this JVM variant.
   if test "x$variant" = "xclient"; then
-    JVM_FEATURES_VARIANT_FILTER="compiler2 jvmci link-time-opt opt-size"
+    JVM_FEATURES_VARIANT_FILTER="compiler2 jbooster jvmci link-time-opt opt-size"
   elif test "x$variant" = "xminimal"; then
-    JVM_FEATURES_VARIANT_FILTER="cds compiler2 dtrace epsilongc g1gc \
+    JVM_FEATURES_VARIANT_FILTER="cds compiler2 dtrace epsilongc g1gc jbooster \
         jfr jni-check jvmci jvmti management nmt parallelgc services \
         shenandoahgc vm-structs zgc"
     if test "x$OPENJDK_TARGET_CPU" = xarm ; then
@@ -458,12 +476,12 @@ AC_DEFUN([JVM_FEATURES_PREPARE_VARIANT],
           link-time-opt"
     fi
   elif test "x$variant" = "xcore"; then
-    JVM_FEATURES_VARIANT_FILTER="compiler1 compiler2 jvmci \
+    JVM_FEATURES_VARIANT_FILTER="compiler1 compiler2 jbooster jvmci \
         link-time-opt opt-size"
   elif test "x$variant" = "xzero"; then
-    JVM_FEATURES_VARIANT_FILTER="jfr link-time-opt opt-size"
+    JVM_FEATURES_VARIANT_FILTER="jbooster jfr link-time-opt opt-size"
   else
-    JVM_FEATURES_VARIANT_FILTER="link-time-opt opt-size"
+    JVM_FEATURES_VARIANT_FILTER="jbooster link-time-opt opt-size"
   fi
 ])
 
@@ -558,6 +576,9 @@ AC_DEFUN([JVM_FEATURES_VERIFY],
   if JVM_FEATURES_IS_ACTIVE(compiler2); then
     INCLUDE_COMPILER2="true"
   fi
+  if JVM_FEATURES_IS_ACTIVE(jbooster); then
+    INCLUDE_JBOOSTER="true"
+  fi
 
   # Verify that we have at least one gc selected (i.e., feature named "*gc").
   if ! JVM_FEATURES_IS_ACTIVE(.*gc); then
@@ -582,6 +603,7 @@ AC_DEFUN_ONCE([JVM_FEATURES_SETUP],
   ENABLE_CDS="true"
   INCLUDE_JVMCI="true"
   INCLUDE_COMPILER2="false"
+  INCLUDE_JBOOSTER="false"
 
   for variant in $JVM_VARIANTS; do
     # Figure out if any features are unavailable, or should be filtered out
@@ -619,5 +641,6 @@ AC_DEFUN_ONCE([JVM_FEATURES_SETUP],
 
   AC_SUBST(INCLUDE_JVMCI)
   AC_SUBST(INCLUDE_COMPILER2)
+  AC_SUBST(INCLUDE_JBOOSTER)
 
 ])

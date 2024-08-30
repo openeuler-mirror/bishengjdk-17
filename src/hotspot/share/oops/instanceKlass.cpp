@@ -4244,6 +4244,18 @@ void InstanceKlass::log_to_classlist() const {
 #endif // INCLUDE_CDS
 }
 
+#if INCLUDE_JBOOSTER
+static Klass* _proxy_klass = nullptr;
+bool InstanceKlass::is_dynamic_proxy() const {
+  if (_proxy_klass == nullptr) {
+    TempNewSymbol sym = SymbolTable::new_symbol("java/lang/reflect/Proxy", 23);
+    _proxy_klass = SystemDictionary::find_instance_klass(sym, Handle(), Handle());
+  }
+  if (_proxy_klass == nullptr) return false;
+  return is_subclass_of(_proxy_klass);
+}
+#endif // INCLUDE_JBOOSTER
+
 // Make a step iterating over the class hierarchy under the root class.
 // Skips subclasses if requested.
 void ClassHierarchyIterator::next() {

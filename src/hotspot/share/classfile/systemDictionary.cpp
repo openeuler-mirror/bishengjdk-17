@@ -86,6 +86,9 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#if INCLUDE_JBOOSTER
+#include "jbooster/client/clientStartupSignal.hpp"
+#endif // INCLUDE_JBOOSTER
 
 ResolutionErrorTable*  SystemDictionary::_resolution_errors   = NULL;
 SymbolPropertyTable*   SystemDictionary::_invoke_method_table = NULL;
@@ -899,6 +902,19 @@ InstanceKlass* SystemDictionary::resolve_class_from_stream(
   // already be present in the SystemDictionary, otherwise we would not
   // throw potential ClassFormatErrors.
  InstanceKlass* k = NULL;
+
+#if INCLUDE_JBOOSTER
+  if (UseJBooster && JBoosterStartupSignal != nullptr) {
+    if (ClientStartupSignal::is_target_klass(class_name)) {
+      unsigned char* ptr = const_cast<unsigned char*>(st->buffer());
+      int len = st->length();
+      bool success = ClientStartupSignal::try_inject_startup_callback(&ptr, &len, THREAD);
+      if (success) {
+        st = new ClassFileStream(ptr, len, st->source(), st->need_verify());
+      }
+    }
+  }
+#endif // INCLUDE_JBOOSTER
 
 #if INCLUDE_CDS
   if (!DumpSharedSpaces) {

@@ -93,6 +93,9 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#if INCLUDE_JBOOSTER
+#include "jbooster/client/clientMessageHandler.hpp"
+#endif // INCLUDE_JBOOSTER
 
 GrowableArray<Method*>* collected_profiled_methods;
 
@@ -510,7 +513,7 @@ void before_exit(JavaThread* thread, bool halt) {
   os::terminate_signal_thread();
 
 #if INCLUDE_CDS
-  if (DynamicDumpSharedSpaces) {
+  if (DynamicDumpSharedSpaces JBOOSTER_ONLY(&& !UseJBooster)) {
     ExceptionMark em(thread);
     DynamicArchive::dump();
     if (thread->has_pending_exception()) {
@@ -522,6 +525,14 @@ void before_exit(JavaThread* thread, bool halt) {
     }
   }
 #endif
+
+#if INCLUDE_JBOOSTER
+  if (UseJBooster) {
+    ThreadToNativeFromVM ttn(thread);
+    bool should_compile = JBoosterStartupSignal == nullptr;
+    ClientMessageHandler::trigger_cache_generation_tasks(ClientMessageHandler::TriggerTaskPhase::ON_SHUTDOWN, thread);
+  }
+#endif // INCLUDE_JBOOSTER
 
   print_statistics();
   Universe::heap()->print_tracing_info();

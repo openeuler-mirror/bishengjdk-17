@@ -1274,6 +1274,16 @@ public:
   void print_class_load_logging(ClassLoaderData* loader_data,
                                 const ModuleEntry* module_entry,
                                 const ClassFileStream* cfs) const;
+
+#if INCLUDE_JBOOSTER
+  bool is_dynamic_proxy() const;
+
+  // [JBOOSTER TODO] aot
+  bool should_store_fingerprint() const { return true; }
+  bool has_stored_fingerprint() const { return true; }
+  uint64_t get_stored_fingerprint() const { return 0u; }
+  void store_fingerprint(uint64_t fingerprint) {}
+#endif // INCLUDE_JBOOSTER
 };
 
 // for adding methods

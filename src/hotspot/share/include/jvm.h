@@ -1096,6 +1096,36 @@ JVM_GetTemporaryDirectory(JNIEnv *env);
 JNIEXPORT jobjectArray JNICALL
 JVM_GetEnclosingMethodInfo(JNIEnv* env, jclass ofClass);
 
+
+/*************************************************************************
+ JBooster Support
+ ************************************************************************/
+
+/**
+ * Init the JBooster server in Hotspot.
+ */
+JNIEXPORT void JNICALL
+JVM_JBoosterInitVM(JNIEnv *env, jint server_port, jint connection_timeout, jint cleanup_timeout, jstring cache_path);
+
+/**
+ * Handle a TCP connection.
+ */
+JNIEXPORT void JNICALL
+JVM_JBoosterHandleConnection(JNIEnv *env, jint connection_fd);
+
+/**
+ * Print data in ServerDataManager.
+ */
+JNIEXPORT void JNICALL
+JVM_JBoosterPrintStoredClientData(JNIEnv *env, jboolean print_all);
+
+/**
+ * Callback of startup signal.
+ */
+JNIEXPORT void JNICALL
+JVM_JBoosterStartupNativeCallback(JNIEnv *env);
+
+
 /*
  * This structure is used by the launcher to get the default thread
  * stack size from the VM using JNI_GetDefaultJavaVMInitArgs() with a

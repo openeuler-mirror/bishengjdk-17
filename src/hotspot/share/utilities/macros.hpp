@@ -119,6 +119,16 @@
 #define NOT_CDS_RETURN_(code) { return code; }
 #endif // INCLUDE_CDS
 
+#ifndef INCLUDE_JBOOSTER
+#define INCLUDE_JBOOSTER 1
+#endif
+
+#if INCLUDE_JBOOSTER
+#define JBOOSTER_ONLY(x) x
+#else
+#define JBOOSTER_ONLY(x)
+#endif // INCLUDE_JBOOSTER
+
 #ifndef INCLUDE_MANAGEMENT
 #define INCLUDE_MANAGEMENT 1
 #endif // INCLUDE_MANAGEMENT

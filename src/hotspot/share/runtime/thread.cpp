@@ -149,6 +149,9 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#if INCLUDE_JBOOSTER
+#include "jbooster/jBoosterManager.hpp"
+#endif // INCLUDE_JBOOSTER
 
 // Initialization after module runtime initialization
 void universe_post_module_init();  // must happen after call_initPhase2
@@ -3149,6 +3152,12 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
     MetaspaceShared::preload_and_dump();
     ShouldNotReachHere();
   }
+
+#if INCLUDE_JBOOSTER
+  if (UseJBooster || AsJBooster) {
+    JBoosterManager::init_phase2(CHECK_JNI_ERR);
+  }
+#endif // INCLUDE_JBOOSTER
 
   return JNI_OK;
 }

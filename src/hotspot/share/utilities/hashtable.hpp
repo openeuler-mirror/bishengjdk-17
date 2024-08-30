@@ -228,6 +228,7 @@ template<
     bool     (*EQUALS)(K const&, K const&) = primitive_equals<K>
     >
 class KVHashtable : public BasicHashtable<F> {
+protected:
   class KVHashtableEntry : public BasicHashtableEntry<F> {
   public:
     K _key;
@@ -237,7 +238,6 @@ class KVHashtable : public BasicHashtable<F> {
     }
   };
 
-protected:
   KVHashtableEntry* bucket(int i) const {
     return (KVHashtableEntry*)BasicHashtable<F>::bucket(i);
   }

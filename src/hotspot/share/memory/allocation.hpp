@@ -146,6 +146,7 @@ class AllocatedObj {
   f(mtMetaspace,      "Metaspace")                                                   \
   f(mtStringDedup,    "String Deduplication")                                        \
   f(mtObjectMonitor,  "Object Monitors")                                             \
+  JBOOSTER_ONLY(f(mtJBooster,       "JBooster"))                                     \
   f(mtNone,           "Unknown")                                                     \
   //end
 

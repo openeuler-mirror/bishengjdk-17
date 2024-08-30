@@ -104,6 +104,12 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#if INCLUDE_JBOOSTER
+#include "jbooster/client/clientDataManager.hpp"
+#include "jbooster/client/clientMessageHandler.hpp"
+#include "jbooster/net/serverListeningThread.hpp"
+#include "jbooster/server/serverDataManager.hpp"
+#endif // INCLUDE_JBOOSTER
 
 #include <errno.h>
 
@@ -3849,4 +3855,40 @@ JVM_END
 
 JVM_ENTRY_NO_ENV(jint, JVM_FindSignal(const char *name))
   return os::get_signal_number(name);
+JVM_END
+
+// JBooster ////////////////////////////////////////////////////////////////////////
+
+JVM_ENTRY(void, JVM_JBoosterInitVM(JNIEnv *env, jint server_port, jint connection_timeout, jint cleanup_timeout, jstring cache_path))
+#if INCLUDE_JBOOSTER
+  ResourceMark rm(THREAD);
+  const char* cache_path_c = NULL;
+  if (cache_path != NULL) {
+    cache_path_c = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(cache_path));
+  }
+  ServerDataManager::init_phase3(server_port, connection_timeout, cleanup_timeout, cache_path_c, THREAD);
+#endif // INCLUDE_JBOOSTER
+JVM_END
+
+JVM_ENTRY(void, JVM_JBoosterHandleConnection(JNIEnv *env, jint connection_fd))
+#if INCLUDE_JBOOSTER
+  ServerDataManager::get().listening_thread()->handle_connection(connection_fd);
+#endif // INCLUDE_JBOOSTER
+JVM_END
+
+JVM_ENTRY(void, JVM_JBoosterPrintStoredClientData(JNIEnv *env, jboolean print_all))
+#if INCLUDE_JBOOSTER
+  ServerDataManager::get().log_all_state(print_all);
+#endif // INCLUDE_JBOOSTER
+JVM_END
+
+JVM_ENTRY(void, JVM_JBoosterStartupNativeCallback(JNIEnv *env))
+#if INCLUDE_JBOOSTER
+  if (!UseJBooster) return;
+  ThreadToNativeFromVM ttn(THREAD->as_Java_thread());
+  log_debug(jbooster, start)("Reached the startup signal point of this program.");
+  ClientDataManager::get().set_startup_end();
+  ClientMessageHandler::trigger_cache_generation_tasks(ClientMessageHandler::TriggerTaskPhase::ON_STARTUP, THREAD);
+  log_debug(jbooster, start)("End of the startup callback.");
+#endif // INCLUDE_JBOOSTER
 JVM_END
