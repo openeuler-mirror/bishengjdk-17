@@ -376,6 +376,23 @@ private:
 public:
   static void update_archived_mirror_native_pointers() NOT_CDS_RETURN;
 #endif
+
+#if INCLUDE_AGGRESSIVE_CDS
+  static bool is_jar_file(char* url_string);
+  static bool is_regular_file(char* url_string);
+  static char* get_filedir(char* url_string);
+  static int64_t get_timestamp(char* dir, Symbol* class_name);
+  static ClassFileStream* get_shared_class_file_stream(InstanceKlass* k);
+  static ClassFileStream* get_byte_code_from_cache(Symbol* class_name, Handle class_loader, TRAPS);
+  static void set_shared_class_file(InstanceKlass* k, ClassFileStream* cfs);
+  static Handle get_protection_domain(InstanceKlass* k, Handle class_loader, TRAPS);
+  static void set_url_string(InstanceKlass* k, char* string_value);
+  static void save_timestamp(InstanceKlass* k, char* string_value);
+  static void set_classfile_timestamp(InstanceKlass* k, int64_t classfile_timestamp);
+  static int64_t get_classfile_timestamp(InstanceKlass* k);
+
+  static InstanceKlass* lookup_trusted_share_class(Symbol* class_name, Handle class_loader, TRAPS);
+#endif // INCLUDE_AGGRESSIVE_CDS
 };
 
 #endif // SHARE_CLASSFILE_SYSTEMDICTIONARYSHARED_HPP

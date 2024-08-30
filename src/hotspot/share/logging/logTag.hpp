@@ -34,6 +34,7 @@
 #define LOG_TAG_LIST \
   LOG_TAG(add) \
   LOG_TAG(age) \
+  AGGRESSIVE_CDS_ONLY(LOG_TAG(aggressive)) \
   LOG_TAG(alloc) \
   LOG_TAG(annotation) \
   AOT_ONLY(LOG_TAG(aot)) \

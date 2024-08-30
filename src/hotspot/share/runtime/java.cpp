@@ -94,6 +94,7 @@
 #include "jfr/jfr.hpp"
 #endif
 #if INCLUDE_JBOOSTER
+#include "jbooster/client/clientDataManager.hpp"
 #include "jbooster/client/clientMessageHandler.hpp"
 #endif // INCLUDE_JBOOSTER
 #if INCLUDE_AOT
@@ -522,7 +523,7 @@ void before_exit(JavaThread* thread, bool halt) {
   os::terminate_signal_thread();
 
 #if INCLUDE_CDS
-  if (DynamicDumpSharedSpaces JBOOSTER_ONLY(&& !UseJBooster)) {
+  if (DynamicDumpSharedSpaces JBOOSTER_ONLY(&& !(UseJBooster && ClientDataManager::get().is_cds_allowed()))) {
     ExceptionMark em(thread);
     DynamicArchive::dump();
     if (thread->has_pending_exception()) {

@@ -3901,3 +3901,24 @@ JVM_ENTRY(void, JVM_JBoosterStartupNativeCallback(JNIEnv *env))
   log_debug(jbooster, start)("End of the startup callback.");
 #endif // INCLUDE_JBOOSTER
 JVM_END
+
+JVM_ENTRY(jclass, JVM_DefineTrustedSharedClass(JNIEnv *env, const char *name, jobject loader))
+#if INCLUDE_AGGRESSIVE_CDS
+  assert(UseAggressiveCDS, "sanity");
+  TempNewSymbol class_name = name == NULL ? NULL :
+      SystemDictionary::class_name_symbol(name,
+                                          vmSymbols::java_lang_NoClassDefFoundError(),
+                                          CHECK_NULL);
+  Handle class_loader (THREAD, JNIHandles::resolve(loader));
+  InstanceKlass* k = SystemDictionaryShared::lookup_trusted_share_class(class_name,
+                                                                        class_loader,
+                                                                        CHECK_NULL);
+  if (k == NULL) {
+    return NULL;
+  }
+
+  return (jclass) JNIHandles::make_local(THREAD, k->java_mirror());
+#else
+  return NULL;
+#endif // INCLUDE_AGGRESSIVE_CDS
+JVM_END

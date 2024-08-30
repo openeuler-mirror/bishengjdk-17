@@ -647,6 +647,10 @@ class Arguments : AllStatic {
                                                       const char* method_signature);
 #endif // INCLUDE_JBOOSTER
 
+#if INCLUDE_AGGRESSIVE_CDS
+  static jint init_aggressive_cds_properties();
+#endif // INCLUDE_AGGRESSIVE_CDS
+
   DEBUG_ONLY(static bool verify_special_jvm_flags(bool check_globals);)
 };
 

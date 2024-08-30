@@ -67,6 +67,10 @@
 #include "gc/g1/g1CollectedHeap.hpp"
 #include "gc/g1/heapRegion.hpp"
 #endif
+#if INCLUDE_AGGRESSIVE_CDS
+#include "jbooster/client/clientDataManager.hpp"
+#include "jbooster/jbooster_globals.hpp"
+#endif // INCLUDE_AGGRESSIVE_CDS
 
 # include <sys/stat.h>
 # include <errno.h>
@@ -209,7 +213,14 @@ void FileMapInfo::populate_header(size_t core_region_alignment) {
 
 void FileMapHeader::populate(FileMapInfo* mapinfo, size_t core_region_alignment) {
   if (DynamicDumpSharedSpaces) {
-    _magic = CDS_DYNAMIC_ARCHIVE_MAGIC;
+#if INCLUDE_AGGRESSIVE_CDS
+    if (UseAggressiveCDS) {
+      _magic = CDS_AGGRESSIVE_ARCHIVE_MAGIC;
+    } else
+#endif // INCLUDE_AGGRESSIVE_CDS
+    {
+      _magic = CDS_DYNAMIC_ARCHIVE_MAGIC;
+    }
   } else {
     _magic = CDS_ARCHIVE_MAGIC;
   }
@@ -396,14 +407,16 @@ bool SharedClassPathEntry::validate(bool is_class_path) const {
   bool ok = true;
   log_info(class, path)("checking shared classpath entry: %s", name);
   if (os::stat(name, &st) != 0 && is_class_path) {
-    // If the archived module path entry does not exist at runtime, it is not fatal
-    // (no need to invalid the shared archive) because the shared runtime visibility check
-    // filters out any archived module classes that do not have a matching runtime
-    // module path location.
-    FileMapInfo::fail_continue("Required classpath entry does not exist: %s", name);
+    if (!SkipSharedClassPathCheck || !is_dir()) {
+      // If the archived module path entry does not exist at runtime, it is not fatal
+      // (no need to invalid the shared archive) because the shared runtime visibility check
+      // filters out any archived module classes that do not have a matching runtime
+      // module path location.
+      FileMapInfo::fail_continue("Required classpath entry does not exist: %s", name);
+    }
     ok = false;
   } else if (is_dir()) {
-    if (!os::dir_is_empty(name)) {
+    if (!SkipSharedClassPathCheck && !os::dir_is_empty(name)) {
       FileMapInfo::fail_continue("directory is not empty: %s", name);
       ok = false;
     }
@@ -533,6 +546,10 @@ int FileMapInfo::add_shared_classpaths(int i, const char* which, ClassPathEntry 
 }
 
 void FileMapInfo::check_nonempty_dir_in_shared_path_table() {
+  if (SkipSharedClassPathCheck) {
+    return;
+  }
+
   Arguments::assert_is_dumping_archive();
 
   bool has_nonempty_dir = false;
@@ -597,7 +614,7 @@ int FileMapInfo::get_module_shared_path_index(Symbol* location) {
   const char* file = ClassLoader::skip_uri_protocol(location->as_C_string());
   for (int i = ClassLoaderExt::app_module_paths_start_index(); i < get_number_of_shared_paths(); i++) {
     SharedClassPathEntry* ent = shared_path(i);
-    assert(ent->in_named_module(), "must be");
+    assert(ent->in_named_module() || SkipSharedClassPathCheck, "must be");
     bool cond = strcmp(file, ent->name()) == 0;
     log_debug(class, path)("get_module_shared_path_index (%d) %s : %s = %s", i,
                            location->as_C_string(), ent->name(), cond ? "same" : "different");
@@ -798,6 +815,9 @@ bool FileMapInfo::validate_boot_class_paths() {
 }
 
 bool FileMapInfo::validate_app_class_paths(int shared_app_paths_len) {
+  if (SkipSharedClassPathCheck) {
+    return true;
+  }
   const char *appcp = Arguments::get_appclasspath();
   assert(appcp != NULL, "NULL app classpath");
   int rp_len = num_paths(appcp);
@@ -988,7 +1008,8 @@ bool FileMapInfo::check_archive(const char* archive_name, bool is_static) {
     }
   } else {
     DynamicArchiveHeader* dynamic_header = (DynamicArchiveHeader*)header;
-    if (dynamic_header->magic() != CDS_DYNAMIC_ARCHIVE_MAGIC) {
+    if (dynamic_header->magic() != CDS_DYNAMIC_ARCHIVE_MAGIC
+        AGGRESSIVE_CDS_ONLY(&& dynamic_header->magic() != CDS_AGGRESSIVE_ARCHIVE_MAGIC)) {
       os::free(header);
       os::close(fd);
       vm_exit_during_initialization("Not a top shared archive", archive_name);
@@ -1018,7 +1039,8 @@ bool FileMapInfo::get_base_archive_name_from_header(const char* archive_name,
     os::close(fd);
     return false;
   }
-  if (dynamic_header->magic() != CDS_DYNAMIC_ARCHIVE_MAGIC) {
+  if (dynamic_header->magic() != CDS_DYNAMIC_ARCHIVE_MAGIC
+      AGGRESSIVE_CDS_ONLY(&& dynamic_header->magic() != CDS_AGGRESSIVE_ARCHIVE_MAGIC)) {
     // Not a dynamic header, no need to proceed further.
     *size = 0;
     os::free(dynamic_header);
@@ -1068,6 +1090,13 @@ bool FileMapInfo::init_from_file(int fd) {
   }
 
   unsigned int expected_magic = is_static() ? CDS_ARCHIVE_MAGIC : CDS_DYNAMIC_ARCHIVE_MAGIC;
+
+#if INCLUDE_AGGRESSIVE_CDS
+  if (UseAggressiveCDS && !is_static()) {
+    expected_magic = CDS_AGGRESSIVE_ARCHIVE_MAGIC;
+  }
+#endif // INCLUDE_AGGRESSIVE_CDS
+
   if (header()->magic() != expected_magic) {
     log_info(cds)("_magic expected: 0x%08x", expected_magic);
     log_info(cds)("         actual: 0x%08x", header()->magic());
@@ -1186,10 +1215,21 @@ void FileMapInfo::open_for_write(const char* path) {
     chmod(_full_path, _S_IREAD | _S_IWRITE);
 #endif
 
-  // Use remove() to delete the existing file because, on Unix, this will
-  // allow processes that have it open continued access to the file.
-  remove(_full_path);
-  int fd = os::open(_full_path, O_RDWR | O_CREAT | O_TRUNC | O_BINARY, 0444);
+  int fd;
+#if INCLUDE_JBOOSTER
+  if (UseJBooster && ClientDataManager::get().is_cds_allowed()) {
+    // The _full_path points to the tmp file in the JBooster environment.
+    // The tmp file should have been created before (see dump_cds() in
+    // clientMessageHandler.cpp). So do not remove it or try to create it.
+    fd = os::open(_full_path, O_RDWR | O_TRUNC | O_BINARY, 0);
+  } else
+#endif // INCLUDE_JBOOSTER
+  {
+    // Use remove() to delete the existing file because, on Unix, this will
+    // allow processes that have it open continued access to the file.
+    remove(_full_path);
+    fd = os::open(_full_path, O_RDWR | O_CREAT | O_TRUNC | O_BINARY, 0444);
+  }
   if (fd < 0) {
     fail_stop("Unable to create shared archive file %s: (%s).", _full_path,
               os::strerror(errno));
@@ -1200,7 +1240,8 @@ void FileMapInfo::open_for_write(const char* path) {
   // Seek past the header. We will write the header after all regions are written
   // and their CRCs computed.
   size_t header_bytes = header()->header_size();
-  if (header()->magic() == CDS_DYNAMIC_ARCHIVE_MAGIC) {
+  if (header()->magic() == CDS_DYNAMIC_ARCHIVE_MAGIC
+      AGGRESSIVE_CDS_ONLY(|| header()->magic() == CDS_AGGRESSIVE_ARCHIVE_MAGIC)) {
     header_bytes += strlen(Arguments::GetSharedArchivePath()) + 1;
   }
 
@@ -1218,7 +1259,8 @@ void FileMapInfo::write_header() {
   assert(is_file_position_aligned(), "must be");
   write_bytes(header(), header()->header_size());
 
-  if (header()->magic() == CDS_DYNAMIC_ARCHIVE_MAGIC) {
+  if (header()->magic() == CDS_DYNAMIC_ARCHIVE_MAGIC
+      AGGRESSIVE_CDS_ONLY(|| header()->magic() == CDS_AGGRESSIVE_ARCHIVE_MAGIC)) {
     char* base_archive_name = (char*)Arguments::GetSharedArchivePath();
     if (base_archive_name != NULL) {
       write_bytes(base_archive_name, header()->base_archive_name_size());
@@ -2328,7 +2370,7 @@ ClassPathEntry* FileMapInfo::get_classpath_entry_for_jvmti(int i, TRAPS) {
   ClassPathEntry* ent = _classpath_entries_for_jvmti[i];
   if (ent == NULL) {
     SharedClassPathEntry* scpe = shared_path(i);
-    assert(scpe->is_jar(), "must be"); // other types of scpe will not produce archived classes
+    assert(scpe->is_jar() || SkipSharedClassPathCheck, "must be"); // other types of scpe will not produce archived classes
 
     const char* path = scpe->name();
     struct stat st;

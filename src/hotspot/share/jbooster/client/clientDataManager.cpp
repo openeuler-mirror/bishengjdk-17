@@ -140,6 +140,42 @@ jint ClientDataManager::init_clr_options() {
 
 jint ClientDataManager::init_cds_options() {
   if (!is_cds_allowed()) return JNI_OK;
+
+  if (FLAG_IS_CMDLINE(SharedArchiveFile) || FLAG_IS_CMDLINE(ArchiveClassesAtExit)) {
+    vm_exit_during_initialization("Do not set CDS manually whe using JBooster.");
+  }
+
+  if (is_cds_being_used()) {
+    if (FLAG_SET_CMDLINE(SharedArchiveFile, cache_cds_path()) != JVMFlag::SUCCESS) {
+      return JNI_EINVAL;
+    }
+
+    if (FLAG_SET_CMDLINE(RequireSharedSpaces, JBoosterExitIfUnsupported) != JVMFlag::SUCCESS) {
+      return JNI_EINVAL;
+    }
+  } else if (is_server_available()) {
+    // Dump data to the tmp file to prevent other processes from reading the
+    // cache file that is not completely written.
+    const char* cds_tmp_path = JBoosterManager::calc_tmp_cache_path(cache_cds_path());
+    if (FLAG_SET_CMDLINE(ArchiveClassesAtExit, cds_tmp_path) != JVMFlag::SUCCESS) {
+      return JNI_EINVAL;
+    }
+  }
+
+  // It's OK to Use traditional Dynamic CDS if the user manually
+  // set UseAggressiveCDS to false.
+  if (FLAG_IS_DEFAULT(UseAggressiveCDS)) {
+    if (FLAG_SET_CMDLINE(UseAggressiveCDS, true) != JVMFlag::SUCCESS) {
+      return JNI_EINVAL;
+    }
+  }
+
+  if (Arguments::init_agents_at_startup()) {
+    if (FLAG_SET_CMDLINE(AllowArchivingWithJavaAgent, true) != JVMFlag::SUCCESS) {
+      return JNI_EINVAL;
+    }
+  }
+
   return JNI_OK;
 }
 

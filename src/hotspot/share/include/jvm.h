@@ -1131,6 +1131,11 @@ JVM_JBoosterGetMetaspaceMethodData(JNIEnv *env, jint session_id, jlong metaspace
 JNIEXPORT void JNICALL
 JVM_JBoosterStartupNativeCallback(JNIEnv *env);
 
+/**
+ * Define the trusted shared class.
+ */
+JNIEXPORT jclass JNICALL
+JVM_DefineTrustedSharedClass(JNIEnv *env, const char *name, jobject loader);
 
 /*
  * This structure is used by the launcher to get the default thread

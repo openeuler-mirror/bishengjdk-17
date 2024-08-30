@@ -1315,7 +1315,7 @@ void ClassLoader::record_result(JavaThread* current, InstanceKlass* ik, const Cl
                 (i < ClassLoaderExt::app_class_paths_start_index())) {
               // The class must be from boot loader append path which consists of
               // -Xbootclasspath/a and jvmti appended entries.
-              assert(loader == NULL, "sanity");
+              assert(loader == NULL || SkipSharedClassPathCheck, "sanity");
               classpath_index = i;
               break;
             }

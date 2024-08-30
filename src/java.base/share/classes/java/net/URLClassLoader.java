@@ -38,6 +38,7 @@ import java.security.Permission;
 import java.security.PermissionCollection;
 import java.security.PrivilegedAction;
 import java.security.PrivilegedExceptionAction;
+import java.security.ProtectionDomain;
 import java.security.SecureClassLoader;
 import java.util.Enumeration;
 import java.util.List;
@@ -420,6 +421,17 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
             result = AccessController.doPrivileged(
                 new PrivilegedExceptionAction<>() {
                     public Class<?> run() throws ClassNotFoundException {
+                        if (AggressiveCDSPlugin.isEnabled()) {
+                            try {
+                                Class<?> trustedClass = AggressiveCDSPlugin
+                                        .defineTrustedSharedClass(URLClassLoader.this, name);
+                                if (trustedClass != null) {
+                                    ProtectionDomain pd = trustedClass.getProtectionDomain();
+                                    defineClassProtectionDomain(name, trustedClass, pd);
+                                    return trustedClass;
+                                }
+                            } catch (Throwable ignored) {}
+                        }
                         String path = name.replace('.', '/').concat(".class");
                         Resource res = ucp.getResource(path, false);
                         if (res != null) {
@@ -445,6 +457,24 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
             throw new ClassNotFoundException(name);
         }
         return result;
+    }
+
+    /**
+     * get ProtectionDomain By URL String.
+     * This method is invoked only in C++ for AggressiveCDS.
+     *
+     * @param urlNoFragString the URL String.
+     *
+     * @return ProtectionDomain create from URL.
+     */
+    private ProtectionDomain getProtectionDomainByURLString(String urlNoFragString) {
+        if (AggressiveCDSPlugin.isEnabled()) {
+            URL url = AggressiveCDSPlugin.getURLFromURLClassPath(ucp, urlNoFragString);
+            if (url != null) {
+                return getProtectionDomainFromURL(url);
+            }
+        }
+        return null;
     }
 
     /*

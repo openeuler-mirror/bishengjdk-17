@@ -213,3 +213,4 @@ JVM_JBoosterHandleConnection
 JVM_JBoosterPrintStoredClientData
 JVM_JBoosterGetMetaspaceMethodData
 JVM_JBoosterStartupNativeCallback
+JVM_DefineTrustedSharedClass
