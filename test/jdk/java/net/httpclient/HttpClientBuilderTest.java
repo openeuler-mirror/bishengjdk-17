@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2018, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2017, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -55,6 +55,7 @@ import static org.testng.Assert.*;
 
 /*
  * @test
+ * @bug 8326233
  * @summary HttpClient[.Builder] API and behaviour checks
  * @library /test/lib
  * @build jdk.test.lib.net.SimpleSSLContext
@@ -205,6 +206,22 @@ public class HttpClientBuilderTest {
         builder.sslParameters(c);
         c.setProtocols(new String[] { "D" });
         assertTrue(builder.build().sslParameters().getProtocols()[0].equals("C"));
+        // test defaults for needClientAuth and wantClientAuth
+        builder.sslParameters(new SSLParameters());
+        assertFalse(builder.build().sslParameters().getNeedClientAuth(),"needClientAuth() was expected to be false");
+        assertFalse(builder.build().sslParameters().getWantClientAuth(),"wantClientAuth() was expected to be false");
+        // needClientAuth = true and thus wantClientAuth = false
+        SSLParameters needClientAuthParams = new SSLParameters();
+        needClientAuthParams.setNeedClientAuth(true);
+        builder.sslParameters(needClientAuthParams);
+        assertTrue(builder.build().sslParameters().getNeedClientAuth(),"needClientAuth() was expected to be true");
+        assertFalse(builder.build().sslParameters().getWantClientAuth(),"wantClientAuth() was expected to be false");
+        // wantClientAuth = true and thus needClientAuth = false
+        SSLParameters wantClientAuthParams = new SSLParameters();
+        wantClientAuthParams.setWantClientAuth(true);
+        builder.sslParameters(wantClientAuthParams);
+        assertTrue(builder.build().sslParameters().getWantClientAuth(),"wantClientAuth() was expected to be true");
+        assertFalse(builder.build().sslParameters().getNeedClientAuth(),"needClientAuth() was expected to be false");
     }
 
     @Test
