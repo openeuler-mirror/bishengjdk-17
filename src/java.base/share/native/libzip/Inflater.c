@@ -44,6 +44,7 @@
 
 static jfieldID inputConsumedID;
 static jfieldID outputConsumedID;
+static jint inflaterFlushType = Z_PARTIAL_FLUSH;
 
 JNIEXPORT void JNICALL
 Java_java_util_zip_Inflater_initIDs(JNIEnv *env, jclass cls)
@@ -65,6 +66,40 @@ Java_java_util_zip_Inflater_init(JNIEnv *env, jclass cls, jboolean nowrap)
     } else {
         const char *msg;
         int ret = inflateInit2(strm, nowrap ? -MAX_WBITS : MAX_WBITS);
+        switch (ret) {
+          case Z_OK:
+            return ptr_to_jlong(strm);
+          case Z_MEM_ERROR:
+            free(strm);
+            JNU_ThrowOutOfMemoryError(env, 0);
+            return jlong_zero;
+          default:
+            msg = ((strm->msg != NULL) ? strm->msg :
+                   (ret == Z_VERSION_ERROR) ?
+                   "zlib returned Z_VERSION_ERROR: "
+                   "compile time and runtime zlib implementations differ" :
+                   (ret == Z_STREAM_ERROR) ?
+                   "inflateInit2 returned Z_STREAM_ERROR" :
+                   "unknown error initializing zlib library");
+            free(strm);
+            JNU_ThrowInternalError(env, msg);
+            return jlong_zero;
+        }
+    }
+}
+
+JNIEXPORT jlong JNICALL
+Java_java_util_zip_Inflater_initKAE(JNIEnv *env, jclass cls, jint windowBits, jint flushKAE)
+{
+    z_stream *strm = calloc(1, sizeof(z_stream));
+    inflaterFlushType = flushKAE;
+
+    if (strm == NULL) {
+        JNU_ThrowOutOfMemoryError(env, 0);
+        return jlong_zero;
+    } else {
+        const char *msg;
+        int ret = inflateInit2(strm, windowBits);
         switch (ret) {
           case Z_OK:
             return ptr_to_jlong(strm);
@@ -137,7 +172,7 @@ static jint doInflate(jlong addr,
     strm->avail_in  = inputLen;
     strm->avail_out = outputLen;
 
-    ret = inflate(strm, Z_PARTIAL_FLUSH);
+    ret = inflate(strm, inflaterFlushType);
     return ret;
 }
 

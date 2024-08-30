@@ -76,6 +76,44 @@ Java_java_util_zip_Deflater_init(JNIEnv *env, jclass cls, jint level,
     }
 }
 
+JNIEXPORT jlong JNICALL
+Java_java_util_zip_Deflater_initKAE(JNIEnv *env, jclass cls, jint level,
+                                 jint strategy, jint windowBits)
+{
+    z_stream *strm = calloc(1, sizeof(z_stream));
+
+    if (strm == 0) {
+        JNU_ThrowOutOfMemoryError(env, 0);
+        return jlong_zero;
+    } else {
+        const char *msg;
+        int ret = deflateInit2(strm, level, Z_DEFLATED,
+                               windowBits,
+                               DEF_MEM_LEVEL, strategy);
+        switch (ret) {
+          case Z_OK:
+            return ptr_to_jlong(strm);
+          case Z_MEM_ERROR:
+            free(strm);
+            JNU_ThrowOutOfMemoryError(env, 0);
+            return jlong_zero;
+          case Z_STREAM_ERROR:
+            free(strm);
+            JNU_ThrowIllegalArgumentException(env, 0);
+            return jlong_zero;
+          default:
+            msg = ((strm->msg != NULL) ? strm->msg :
+                   (ret == Z_VERSION_ERROR) ?
+                   "zlib returned Z_VERSION_ERROR: "
+                   "compile time and runtime zlib implementations differ" :
+                   "unknown error initializing zlib library");
+            free(strm);
+            JNU_ThrowInternalError(env, msg);
+            return jlong_zero;
+        }
+    }
+}
+
 static void throwInternalErrorHelper(JNIEnv *env, z_stream *strm, const char *fixmsg) {
     const char *msg = NULL;
     msg = (strm->msg != NULL) ? strm->msg : fixmsg;

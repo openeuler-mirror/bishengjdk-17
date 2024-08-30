@@ -198,4 +198,8 @@ AC_DEFUN_ONCE([LIB_SETUP_MISC_LIBS],
   # Control if libzip can use mmap. Available for purposes of overriding.
   LIBZIP_CAN_USE_MMAP=true
   AC_SUBST(LIBZIP_CAN_USE_MMAP)
+
+  # Control if libz can use mmap. Available for purposes of overriding.
+  LIBZ_CAN_USE_MMAP=true
+  AC_SUBST(LIBZ_CAN_USE_MMAP)
 ])
