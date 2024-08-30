@@ -127,6 +127,26 @@ public final class HotSpotGraalManagement implements HotSpotGraalManagementRegis
             deferred = null;
         }
 
+        /**
+         * check and clear dead beans.
+         */
+        private void checkAlive() {
+            // last alive bean
+            HotSpotGraalManagement before = null;
+            for (HotSpotGraalManagement m = deferred; m != null; m = m.nextDeferred) {
+                HotSpotGraalRuntime runtime = m.bean.getRuntime();
+                if (!runtime.isAlive()) {
+                    if (before == null) {
+                        deferred = m.nextDeferred;
+                    } else {
+                        before.nextDeferred = m.nextDeferred;
+                    }
+                } else {
+                    before = m;
+                }
+            }
+        }
+
         @Override
         public void run() {
             while (true) {
@@ -150,6 +170,7 @@ public final class HotSpotGraalManagement implements HotSpotGraalManagementRegis
          * Checks for active MBean server and if available, processes deferred registrations.
          */
         synchronized void poll() {
+            checkAlive();
             if (platformMBeanServer == null) {
                 try {
                     ArrayList<MBeanServer> servers = MBeanServerFactory.findMBeanServer(null);

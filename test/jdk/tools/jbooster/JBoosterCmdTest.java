@@ -42,7 +42,7 @@ public class JBoosterCmdTest extends JBoosterTestBase {
     private static void testServerPort1(TestContext ctx) throws Exception {
         Process p = jbooster(ctx, List.of(), List.of());
         p.waitFor(WAIT_SHORT_TIME, TimeUnit.SECONDS);
-        assertEquals(p.exitValue(), 1, "port not set");
+        assertEquals(p.exitValue(), 0, "port not set");
     }
 
     private static void testServerPort2(TestContext ctx) throws Exception {
@@ -56,19 +56,19 @@ public class JBoosterCmdTest extends JBoosterTestBase {
     private static void testServerPort3(TestContext ctx) throws Exception {
         Process p = jbooster(ctx, List.of(), List.of("-p", "1"));
         p.waitFor(WAIT_SHORT_TIME, TimeUnit.SECONDS);
-        assertEquals(p.exitValue(), 1, "port < 1024");
+        assertEquals(p.exitValue(), 0, "port < 1024");
     }
 
     private static void testServerPort4(TestContext ctx) throws Exception {
         Process p = jbooster(ctx, List.of(), List.of("-p", "456716"));
         p.waitFor(WAIT_SHORT_TIME, TimeUnit.SECONDS);
-        assertEquals(p.exitValue(), 1, "port > 65535");
+        assertEquals(p.exitValue(), 0, "port > 65535");
     }
 
     private static void testServerArgFormat1(TestContext ctx) throws Exception {
         Process p = jbooster(ctx, List.of(), List.of("-p", SERVER_PORT_STR, "-t"));
         p.waitFor(WAIT_SHORT_TIME, TimeUnit.SECONDS);
-        assertEquals(p.exitValue(), 1, "no arg for -t");
+        assertEquals(p.exitValue(), 0, "no arg for -t");
     }
 
     private static void testServerArgFormat2(TestContext ctx) throws Exception {
@@ -98,13 +98,13 @@ public class JBoosterCmdTest extends JBoosterTestBase {
     private static void testServerArgFormat6(TestContext ctx) throws Exception {
         Process p = jbooster(ctx, List.of(), List.of("-p", "-t", "12345"));
         p.waitFor(WAIT_SHORT_TIME, TimeUnit.SECONDS);
-        assertEquals(p.exitValue(), 1, "no arg for -p");
+        assertEquals(p.exitValue(), 0, "no arg for -p");
     }
 
     private static void testServerArgFormat7(TestContext ctx) throws Exception {
         Process p = jbooster(ctx, List.of(), List.of("--help=123"));
         p.waitFor(WAIT_SHORT_TIME, TimeUnit.SECONDS);
-        assertEquals(p.exitValue(), 1, "--help do not need arg");
+        assertEquals(p.exitValue(), 0, "--help do not need arg");
     }
 
     private static void testClientArg1(TestContext ctx) throws Exception {

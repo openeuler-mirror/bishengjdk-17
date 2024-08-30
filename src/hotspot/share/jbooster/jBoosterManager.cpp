@@ -152,3 +152,30 @@ void JBoosterManager::init_phase2(TRAPS) {
     ServerDataManager::init_phase2(CHECK);
   }
 }
+
+void JBoosterManager::check_argument(JVMFlagsEnum flag) {
+  if (JVMFlag::is_cmdline(flag)) {
+    vm_exit_during_initialization(err_msg("Do not set VM option "
+    "%s without UseJBooster enabled.", JVMFlag::flag_from_enum(flag)->name()));
+  }
+}
+
+void JBoosterManager::check_arguments() {
+  if (UseJBooster) return;
+
+  check_argument(FLAG_MEMBER_ENUM(JBoosterAddress));
+  check_argument(FLAG_MEMBER_ENUM(JBoosterPort));
+  check_argument(FLAG_MEMBER_ENUM(JBoosterTimeout));
+  check_argument(FLAG_MEMBER_ENUM(JBoosterExitIfUnsupported));
+  check_argument(FLAG_MEMBER_ENUM(JBoosterCrashIfNoServer));
+  check_argument(FLAG_MEMBER_ENUM(JBoosterProgramName));
+  check_argument(FLAG_MEMBER_ENUM(JBoosterCachePath));
+  check_argument(FLAG_MEMBER_ENUM(JBoosterLocalMode));
+  check_argument(FLAG_MEMBER_ENUM(JBoosterStartupSignal));
+  check_argument(FLAG_MEMBER_ENUM(JBoosterStartupMaxTime));
+  check_argument(FLAG_MEMBER_ENUM(BoostStopAtLevel));
+  check_argument(FLAG_MEMBER_ENUM(UseBoostPackages));
+  check_argument(FLAG_MEMBER_ENUM(JBoosterClientStrictMatch));
+  check_argument(FLAG_MEMBER_ENUM(PrintAllClassInfo));
+  check_argument(FLAG_MEMBER_ENUM(CheckClassFileTimeStamp));
+}

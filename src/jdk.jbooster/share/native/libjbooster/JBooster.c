@@ -49,3 +49,9 @@ Java_jdk_jbooster_JBoosterCompilationContextImpl_getMetaspaceMethodData(JNIEnv *
 {
   return JVM_JBoosterGetMetaspaceMethodData(env, session_id, metaspace_method);
 }
+
+JNIEXPORT void JNICALL
+Java_jdk_jbooster_JBoosterCompilationContextImpl_freeUnusedCodeBlobs(JNIEnv * env, jclass unused, jobject blobs)
+{
+  return JVM_JBoosterFreeUnusedCodeBlobs(env, blobs);
+}

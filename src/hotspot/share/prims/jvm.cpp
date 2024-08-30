@@ -109,6 +109,7 @@
 #include "jbooster/client/clientMessageHandler.hpp"
 #include "jbooster/net/serverListeningThread.hpp"
 #include "jbooster/server/serverDataManager.hpp"
+#include "services/memoryService.hpp"
 #endif // INCLUDE_JBOOSTER
 
 #include <errno.h>
@@ -3888,6 +3889,26 @@ JVM_ENTRY(jlong, JVM_JBoosterGetMetaspaceMethodData(JNIEnv *env, jint session_id
   return (jlong) session_data->method_data_address((address) metaspace_method, THREAD);
 #else
   return 0;
+#endif // INCLUDE_JBOOSTER
+JVM_END
+
+JVM_ENTRY(void, JVM_JBoosterFreeUnusedCodeBlobs(JNIEnv *env, jobject blobs))
+#if INCLUDE_JBOOSTER
+  typeArrayOop address_array = typeArrayOop(JNIHandles::resolve(blobs));
+  int length = address_array->length();
+  {
+    MutexLocker mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
+    for (int index = 0; index < length; index++) {
+      jlong adr = address_array->long_at(index);
+      RuntimeBlob* rb = (RuntimeBlob*)(address)adr;
+      assert(rb != nullptr && rb->is_runtime_stub(), "sanity");
+      rb->flush();
+      log_trace(codecache, jbooster)("free %s", rb->name());
+      CodeCache::free(rb);
+    }
+  }
+  // Track memory usage statistic after releasing CodeCache_lock
+  MemoryService::track_code_cache_memory_usage();
 #endif // INCLUDE_JBOOSTER
 JVM_END
 

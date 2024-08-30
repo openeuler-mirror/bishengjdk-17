@@ -4025,6 +4025,7 @@ jint Arguments::apply_ergo() {
   // So the time for sending client VM flags to the server should be later
   // than most VM flags are initialized, but earlier than the time for CDS
   // initialization.
+  JBoosterManager::check_arguments();
   if (UseJBooster || AsJBooster) {
     result = JBoosterManager::init_phase1();
     if (result != JNI_OK) return result;

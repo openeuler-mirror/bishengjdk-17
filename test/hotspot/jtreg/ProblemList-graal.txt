@@ -242,3 +242,7 @@ org.graalvm.compiler.core.test.deopt.CompiledMethodTest          8202955
 
 org.graalvm.compiler.hotspot.test.ReservedStackAccessTest        8213567   windows-all
 
+# Obsoleted in JDK17
+compiler/graalunit/CoreJdk9Test.java                             8218074
+compiler/graalunit/HotspotJdk9Test.java                          8218074
+compiler/graalunit/Replacements9Test.java                        8218074

@@ -70,6 +70,7 @@ import org.graalvm.compiler.phases.common.inlining.policy.InliningPolicy;
 import org.graalvm.compiler.phases.tiers.HighTierContext;
 
 import jdk.vm.ci.code.BailoutException;
+import jdk.vm.ci.hotspot.HotSpotResolvedObjectType;
 import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.meta.Assumptions.AssumptionResult;
 import jdk.vm.ci.meta.JavaTypeProfile;
@@ -319,6 +320,13 @@ public class InliningData {
             ArrayList<ResolvedJavaMethod> concreteMethods = new ArrayList<>();
             ArrayList<Double> concreteMethodsProbabilities = new ArrayList<>();
             for (int i = 0; i < ptypes.length; i++) {
+                if (ctx != null && ctx.usePGO() && (contextType instanceof HotSpotResolvedObjectType) && (ptypes[i].getType() instanceof HotSpotResolvedObjectType)) {
+                    HotSpotResolvedObjectType target = (HotSpotResolvedObjectType) (ptypes[i].getType());
+                    if (!target.canClassInitBarrierWorkIn((HotSpotResolvedObjectType) contextType)) {
+                        // conflict with classInitBarrier, ignore it
+                        continue;
+                    }
+                }
                 ResolvedJavaMethod concrete = ptypes[i].getType().resolveConcreteMethod(targetMethod, contextType);
                 if (concrete == null) {
                     InliningUtil.traceNotInlinedMethod(invoke, inliningDepth(), targetMethod, "could not resolve method");

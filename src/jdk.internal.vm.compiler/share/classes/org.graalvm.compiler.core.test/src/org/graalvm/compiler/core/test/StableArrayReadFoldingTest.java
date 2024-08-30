@@ -99,7 +99,8 @@ public class StableArrayReadFoldingTest extends GraalCompilerTest {
         return beforeKill == afterKill;
     }
 
-    @Test
+    // obsoleted in JDK17: unaligned access is illegal in CompilerToVM.readFieldValue
+    // @Test
     public void testKillWithSameTypeUnaligned() {
         Assume.assumeTrue("Only test unaligned access on AMD64", getTarget().arch instanceof AMD64);
         ResolvedJavaMethod method = getResolvedJavaMethod("killWithSameTypeUnaligned");
@@ -115,7 +116,8 @@ public class StableArrayReadFoldingTest extends GraalCompilerTest {
         return beforeKill == afterKill;
     }
 
-    @Test
+    // obsoleted in JDK17: unaligned access is illegal in CompilerToVM.readFieldValue
+    // @Test
     public void testKillWithDifferentTypeUnaligned() {
         Assume.assumeTrue("Only test unaligned access on AMD64", getTarget().arch instanceof AMD64);
         ResolvedJavaMethod method = getResolvedJavaMethod("killWithDifferentTypeUnaligned");

@@ -2549,7 +2549,7 @@ public:
 private:
   MethodData(const methodHandle& method, const bool* ignored);
 public:
-  static MethodData* create_instance_for_jbooster(Method* method, int size, char* mem, TRAPS);
+  static MethodData* create_instance_for_jbooster(Method* method, int byte_size, char* mem, TRAPS);
 #endif // INCLUDE_JBOOSTER
 };
 

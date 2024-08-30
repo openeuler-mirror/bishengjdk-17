@@ -27,6 +27,7 @@
 #include "jbooster/jbooster_globals.hpp"
 #include "memory/allocation.hpp"
 #include "runtime/globals.hpp"
+#include "runtime/globals_extension.hpp"
 #include "utilities/exceptions.hpp"
 
 /**
@@ -45,6 +46,9 @@ public:
   // Invoked in Threads::create_vm().
   static jint init_phase1();
   static void init_phase2(TRAPS);
+
+  static void check_arguments();
+  static void check_argument(JVMFlagsEnum flag);
 
   static void client_only() NOT_DEBUG_RETURN;
   static void server_only() NOT_DEBUG_RETURN;

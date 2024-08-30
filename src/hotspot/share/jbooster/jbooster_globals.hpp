@@ -41,43 +41,43 @@
           "Play the role of the JBooster server. "                          \
           "This flag is automatically set in VM.")                          \
                                                                             \
-  product(ccstr, JBoosterAddress, "127.0.0.1",                              \
+  product(ccstr, JBoosterAddress, "127.0.0.1", EXPERIMENTAL,                \
           "Address of the JBooster server. Default: '127.0.0.1'.")          \
                                                                             \
-  product(ccstr, JBoosterPort, NULL,                                        \
+  product(ccstr, JBoosterPort, NULL, EXPERIMENTAL,                          \
           "Port of the JBooster server.")                                   \
                                                                             \
-  product(uint, JBoosterTimeout, 4'000,                                     \
+  product(uint, JBoosterTimeout, 4'000, EXPERIMENTAL,                       \
           "Timeout of the JBooster connection. Default: 4,000 ms.")         \
                                                                             \
-  product(bool, JBoosterExitIfUnsupported, true,                            \
+  product(bool, JBoosterExitIfUnsupported, true, EXPERIMENTAL,              \
           "Exit the VM if the client uses features "                        \
           "that are not supported by the server.")                          \
                                                                             \
   product(bool, JBoosterCrashIfNoServer, false, DIAGNOSTIC,                 \
           "Exit the VM if the server is not available.")                    \
                                                                             \
-  product(ccstr, JBoosterProgramName, NULL,                                 \
+  product(ccstr, JBoosterProgramName, NULL, EXPERIMENTAL,                   \
           "Unique name of current app.")                                    \
                                                                             \
-  product(ccstr, JBoosterCachePath, NULL,                                   \
+  product(ccstr, JBoosterCachePath, NULL, EXPERIMENTAL,                     \
           "The directory path for JBooster caches "                         \
           "(default: $HOME/.jbooster/client).")                             \
                                                                             \
-  product(bool, JBoosterLocalMode, false,                                   \
+  product(bool, JBoosterLocalMode, false, EXPERIMENTAL,                     \
           "No connection to the server and uses only the local cache.")     \
                                                                             \
-  product(ccstr, JBoosterStartupSignal, NULL,                               \
+  product(ccstr, JBoosterStartupSignal, NULL, EXPERIMENTAL,                 \
           "The first invocation of the signal method means the end of "     \
           "the client start-up phase. "                                     \
           "The relevant logic is executed at exit if it's not set.")        \
                                                                             \
-  product(int, JBoosterStartupMaxTime, 600,                                 \
+  product(int, JBoosterStartupMaxTime, 600, EXPERIMENTAL,                   \
           "Max seconds required for the start-up phase (0 means off). "     \
           "A plan B when JBoosterStartupSignal fails.")                     \
           range(0, max_jint)                                                \
                                                                             \
-  product(int, BoostStopAtLevel, 3,                                         \
+  product(int, BoostStopAtLevel, 3, EXPERIMENTAL,                           \
           "0 for no optimization; 1 with class loader resource cache; "     \
           "2 with aggressive CDS; 3 with lazy AOT; 4 with PGO.")            \
           range(0, 4)                                                       \
@@ -104,13 +104,13 @@
           "Cache and share the name-url pairs in "                          \
           "java.net.URLClassLoader#findResource.")                          \
                                                                             \
-  product(ccstr, DumpClassLoaderResourceCacheFile, NULL,                    \
+  product(ccstr, DumpClassLoaderResourceCacheFile, NULL, EXPERIMENTAL,      \
           "The file path to dump class loader resource cache.")             \
                                                                             \
-  product(ccstr, LoadClassLoaderResourceCacheFile, NULL,                    \
+  product(ccstr, LoadClassLoaderResourceCacheFile, NULL, EXPERIMENTAL,      \
           "The file path to laod class loader resource cache.")             \
                                                                             \
-  product(uint, ClassLoaderResourceCacheSizeEachLoader, 2000,               \
+  product(uint, ClassLoaderResourceCacheSizeEachLoader, 2000, EXPERIMENTAL, \
           "Max number of entries that can be cached in each "               \
           "class loader (delete old values based on LRU).")                 \
                                                                             \

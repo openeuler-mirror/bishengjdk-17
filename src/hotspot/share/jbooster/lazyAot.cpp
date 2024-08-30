@@ -321,19 +321,23 @@ class KlassGetAllInstanceKlassesClosure: public KlassClosure {
   GrowableArray<InstanceKlass*>* _klasses;
   GrowableArray<Method*>* _methods_to_compile;
   GrowableArray<Method*>* _methods_not_compile;
+  ScalarHashSet<Symbol*>* _visited;
 
 public:
   KlassGetAllInstanceKlassesClosure(GrowableArray<InstanceKlass*>* klasses,
                                     GrowableArray<Method*>* methods_to_compile,
-                                    GrowableArray<Method*>* methods_not_compile):
+                                    GrowableArray<Method*>* methods_not_compile,
+                                    ScalarHashSet<Symbol*>* visited):
                                     _klasses(klasses),
                                     _methods_to_compile(methods_to_compile),
-                                    _methods_not_compile(methods_not_compile) {}
+                                    _methods_not_compile(methods_not_compile),
+                                    _visited(visited) {}
 
   void do_klass(Klass* k) override {
     if (!k->is_instance_klass()) return;
     InstanceKlass* ik = InstanceKlass::cast(k);
     if (!ik->is_loaded()) return;
+    if (!_visited->add(ik->name())) return; // skip dup klass
 
     if (PrintAllClassInfo) {
       ResourceMark rm;
@@ -375,6 +379,7 @@ class CLDGetAllInstanceKlassesClosure: public CLDClosure {
   GrowableArray<InstanceKlass*>* _klasses;
   GrowableArray<Method*>* _methods_to_compile;
   GrowableArray<Method*>* _methods_not_compile;
+  ScalarHashSet<Symbol*> _visited;
 
 private:
   void for_each(ClassLoaderData* cld) {
@@ -394,7 +399,7 @@ private:
     }
     if (!cld->has_class_mirror_holder() && LazyAOT::can_be_compiled(cld)) {
       if (_loaders != nullptr) _loaders->append(cld);
-      KlassGetAllInstanceKlassesClosure cl(_klasses, _methods_to_compile, _methods_not_compile);
+      KlassGetAllInstanceKlassesClosure cl(_klasses, _methods_to_compile, _methods_not_compile, &_visited);
       cld->classes_do(&cl);
     }
   }
@@ -408,7 +413,8 @@ public:
                                   _loaders(all_loaders),
                                   _klasses(klasses_to_compile),
                                   _methods_to_compile(methods_to_compile),
-                                  _methods_not_compile(methods_not_compile) {}
+                                  _methods_not_compile(methods_not_compile),
+                                  _visited() {}
 
   void do_cld(ClassLoaderData* cld) override { for_each(cld); }
 };

@@ -68,6 +68,7 @@ import jdk.vm.ci.code.site.DataPatch;
 import jdk.vm.ci.code.site.Infopoint;
 import jdk.vm.ci.hotspot.HotSpotCompiledCode;
 import jdk.vm.ci.hotspot.HotSpotMetaspaceConstant;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
 import jdk.vm.ci.meta.ResolvedJavaMethod;
 import jdk.vm.ci.meta.TriState;
@@ -202,6 +203,13 @@ public abstract class Stub {
                         // code if we don't have a corresponding VM global symbol.
                         HotSpotCompiledCode compiledCode = HotSpotCompiledCodeBuilder.createCompiledCode(codeCache, null, null, compResult, options);
                         code = codeCache.installCode(null, compiledCode, null, null, false);
+
+                        JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+                        if (ctx != null) {
+                            // record installedcode for jbooster.
+                            // clean it later in JBoosterCompilationContext.clear().
+                            ctx.recordJBoosterInstalledCodeBlobs(code.getAddress());
+                        }
                     } catch (Throwable e) {
                         throw debug.handle(e);
                     }

@@ -130,7 +130,7 @@ public class HelpFlagsTest extends TestHelper {
         new ToolHelpSpec("javadoc",     1,   1,   1,   0,         1,    1,     1),     // -?, -h, --help -help, Documents -help
         new ToolHelpSpec("javap",       1,   1,   1,   0,         1,    1,     2),     // -?, -h, --help -help, Documents -help
         new ToolHelpSpec("javaw",       1,   1,   1,   0,         1,    1,     1),     // -?, -h, --help -help, Documents -help, win only
-        new ToolHelpSpec("jbooster",    1,   1,   1,   0,         1,    1,     1),     // -?, -h, --help -help, Documents -help
+        new ToolHelpSpec("jbooster",    1,   1,   1,   0,         1,    1,     0),     // -?, -h, --help -help, Documents -help
         new ToolHelpSpec("jcmd",        1,   1,   1,   0,         1,    0,     1),     // -?, -h, --help, -help accepted but not documented.
         new ToolHelpSpec("jdb",         1,   1,   1,   0,         1,    1,     0),     // -?, -h, --help -help, Documents -help
         new ToolHelpSpec("jdeprscan",   1,   1,   1,   0,         0,    0,     1),     // -?, -h, --help

@@ -167,6 +167,18 @@ public interface JBoosterCompilationContext {
     AtomicInteger getCompileQueueFailedMethodCount();
 
     /**
+     * Record JBooster Installed CodeBlobs, only save address.
+     * (To support multiple compilations in single process with graal compiler)
+     */
+    void recordJBoosterInstalledCodeBlobs(long address);
+
+    /**
+     * Do some cleanup after the current compilation is complete.
+     * (To support multiple compilations in single process with graal compiler)
+     */
+    void clear();
+
+    /**
      * Should the method be excluded for inline.
      * (To support PGO)
      *

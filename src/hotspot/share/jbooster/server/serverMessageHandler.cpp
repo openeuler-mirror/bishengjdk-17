@@ -348,11 +348,10 @@ int ServerMessageHandler::handle_lazy_aot_compilation_task(TRAPS) {
       log_info(jbooster, compilation)("Skippd as this program has been compiled. session_id=%u.",
                                       ss().session_id());
     } else {
-      log_error(jbooster, compilation)("Unknown compile state. session_id=%u.",
-                                       ss().session_id());
+      log_info(jbooster, compilation)("Aot cache no generated. session_id=%u.",
+                                      ss().session_id());
     }
   }
-  guarantee(!(compile_in_current_thread && aot_cache_state.is_being_generated()), "some logic missing?");
   return 0;
 }
 
@@ -364,9 +363,10 @@ int ServerMessageHandler::try_to_compile_lazy_aot(GrowableArray<InstanceKlass*>*
   JClientProgramData* pd = ss().session_data()->program_data();
   JClientCacheState& aot_cache_state = pd->aot_cache_state();
   if (klasses_to_compile->is_empty()) {
+    // the expected path without plugin
     aot_cache_state.set_not_generated();
-    log_error(jbooster, compilation)("Failed to compile as the compilation list is empty. session_id=%u.",
-                                      ss().session_id());
+    log_info(jbooster, compilation)("Stop compilation as the compilation list is empty. session_id=%u.",
+                                    ss().session_id());
     return 0;
   }
 

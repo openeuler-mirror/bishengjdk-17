@@ -1066,4 +1066,40 @@ final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType implem
         return UNSAFE.getInt(getMetaspaceKlass() + config().instanceKlassMiscFlagsOffset);
     }
 
+    private boolean isAncestor(ClassLoader target, ClassLoader context) {
+        ClassLoader acl = context;
+        do {
+            acl = acl.getParent();
+            if (target == acl) {
+                return true;
+            }
+        } while (acl != null);
+        return false;
+    }
+
+    public boolean canClassInitBarrierWorkIn(HotSpotResolvedObjectType otherType) {
+        if (!(this.mirror instanceof DirectHotSpotObjectConstantImpl)) return false;
+        DirectHotSpotObjectConstantImpl targetObj = (DirectHotSpotObjectConstantImpl) this.mirror;
+        if (!(targetObj.object instanceof Class)) return false;
+        ClassLoader targetClassLoader = ((Class) targetObj.object).getClassLoader();
+        if (targetClassLoader == null) {
+            // Class will be loaded by bootclassloader, no need to care classloader
+            return true;
+        }
+
+        if (!(otherType instanceof HotSpotResolvedObjectTypeImpl)) return false;
+        if (!(((HotSpotResolvedObjectTypeImpl)otherType).mirror instanceof DirectHotSpotObjectConstantImpl)) return false;
+        DirectHotSpotObjectConstantImpl contextObj = (DirectHotSpotObjectConstantImpl) ((HotSpotResolvedObjectTypeImpl)otherType).mirror;
+        if (!(contextObj.object instanceof Class)) return false;
+        ClassLoader contextClassLoader = ((Class) contextObj.object).getClassLoader();
+
+        if (targetClassLoader == contextClassLoader) {
+            return true;
+        }
+
+        if (contextClassLoader == null) {
+            return false;
+        }
+        return isAncestor(targetClassLoader, contextClassLoader);
+    }
 }

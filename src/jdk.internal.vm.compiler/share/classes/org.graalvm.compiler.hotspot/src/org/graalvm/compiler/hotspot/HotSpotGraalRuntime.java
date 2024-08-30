@@ -571,6 +571,17 @@ public final class HotSpotGraalRuntime implements HotSpotGraalRuntimeProvider {
         return compilationProblemsPerAction;
     }
 
+    // support server mode
+    private boolean alive = true;
+
+    public boolean isAlive() {
+        return alive;
+    }
+
+    public void kill() {
+        alive = false;
+    }
+
     // ------- Management interface ---------
 
     private HotSpotGraalManagementRegistration management;

@@ -21,6 +21,8 @@
  * questions.
  */
 
+#include "classfile/systemDictionary.hpp"
+#include "classfile/vmSymbols.hpp"
 #include "jbooster/client/clientDaemonThread.hpp"
 #include "jbooster/client/clientDataManager.hpp"
 #include "jbooster/client/clientStartupSignal.hpp"
@@ -325,6 +327,11 @@ void ClientDataManager::init_phase2(TRAPS) {
     ClientStartupSignal::init_phase2();
   }
   ClientDaemonThread::start_thread(CHECK);
+
+  if (_singleton->is_clr_allowed()) {
+    Klass* klass = SystemDictionary::resolve_or_fail(vmSymbols::java_net_ClassLoaderResourceCache(), true, CHECK);
+    InstanceKlass::cast(klass)->initialize(CHECK);
+  }
 }
 
 jint ClientDataManager::escape() {

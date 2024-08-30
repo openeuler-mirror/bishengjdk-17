@@ -165,6 +165,7 @@ public final class Main {
             e.printStackTrace();
         } finally {
             log.flush();
+            jboosterContext.clear();
             JBoosterCompilationContext.set(null);
 
             // Make sure the static fields are not used.
@@ -239,6 +240,7 @@ public final class Main {
     @SuppressWarnings("try")
     private boolean run() throws Exception {
         LogPrinter.openLog();
+        HotSpotGraalRuntime runtime = null;
 
         try {
 
@@ -249,7 +251,12 @@ public final class Main {
 
             try (Timer t = new Timer(this, "")) {
                 classesToCompile = collector.collectClassesToCompile();
-                printer.printInfo(classesToCompile.size() + " classes found");
+                if (classesToCompile == null) {
+                    printer.printInfo("no class found, stop compilation");
+                    return false;
+                } else {
+                    printer.printInfo(classesToCompile.size() + " classes found");
+                }
             }
 
             OptionValues graalOptions = HotSpotGraalOptionValues.defaultOptions();
@@ -259,7 +266,7 @@ public final class Main {
             }
             graalOptions = new OptionValues(graalOptions, GeneratePIC, true, ImmutableCode, true);
             GraalJVMCICompiler graalCompiler = HotSpotGraalCompilerFactory.createCompiler("JAOTC", JVMCI.getRuntime(), graalOptions, CompilerConfigurationFactory.selectFactory(null, graalOptions));
-            HotSpotGraalRuntime runtime = (HotSpotGraalRuntime) graalCompiler.getGraalRuntime();
+            runtime = (HotSpotGraalRuntime) graalCompiler.getGraalRuntime();
             GraalHotSpotVMConfig graalHotSpotVMConfig = runtime.getVMConfig();
 
             if (graalHotSpotVMConfig.verifyOops) {
@@ -387,6 +394,9 @@ public final class Main {
             printer.printlnVerbose("");
 
         } finally {
+            if (runtime != null && options.isAsJBooster()) {
+                runtime.kill();
+            }
             LogPrinter.closeLog();
         }
         return true;

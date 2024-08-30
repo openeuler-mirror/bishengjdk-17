@@ -1126,6 +1126,12 @@ JNIEXPORT long JNICALL
 JVM_JBoosterGetMetaspaceMethodData(JNIEnv *env, jint session_id, jlong metaspace_method);
 
 /**
+ * Free unused codeBlobs.
+ */
+JNIEXPORT void JNICALL
+JVM_JBoosterFreeUnusedCodeBlobs(JNIEnv *env, jobject blobs);
+
+/**
  * Callback of startup signal.
  */
 JNIEXPORT void JNICALL

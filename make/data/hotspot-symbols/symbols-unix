@@ -212,5 +212,6 @@ JVM_JBoosterInitVM
 JVM_JBoosterHandleConnection
 JVM_JBoosterPrintStoredClientData
 JVM_JBoosterGetMetaspaceMethodData
+JVM_JBoosterFreeUnusedCodeBlobs
 JVM_JBoosterStartupNativeCallback
 JVM_DefineTrustedSharedClass

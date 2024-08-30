@@ -29,5 +29,6 @@
   template(codesource_signature,                          "Ljava/security/CodeSource;")                            \
   template(getProtectionDomainByURLString_name,           "getProtectionDomainByURLString")                        \
   template(getProtectionDomainByURLString_signature,      "(Ljava/lang/String;)Ljava/security/ProtectionDomain;")  \
+  template(java_net_ClassLoaderResourceCache,             "java/net/ClassLoaderResourceCache")                     \
 
 #endif // SHARE_JBOOSTER_JBOOSTERSYMBOLS_HPP

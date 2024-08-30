@@ -1963,9 +1963,10 @@ MethodData::MethodData(const methodHandle& method, const bool* ignored)
   _data[0] = 0;
 }
 
-MethodData* MethodData::create_instance_for_jbooster(Method* method, int size, char* mem, TRAPS) {
+MethodData* MethodData::create_instance_for_jbooster(Method* method, int byte_size, char* mem, TRAPS) {
+  int word_size = align_metadata_size(align_up(byte_size, BytesPerWord)/BytesPerWord);
   ClassLoaderData* loader_data = method->method_holder()->class_loader_data();
-  MethodData* res = new (loader_data, size, MetaspaceObj::MethodDataType, THREAD)
+  MethodData* res = new (loader_data, word_size, MetaspaceObj::MethodDataType, THREAD)
                     MethodData(methodHandle(THREAD, method), (const bool*) nullptr);
 
   // backup
@@ -1975,12 +1976,12 @@ MethodData* MethodData::create_instance_for_jbooster(Method* method, int size, c
 
   // memcpy
   int start = in_bytes(byte_offset_of(MethodData, _method)) + sizeof(res->_method);
-  memcpy((void*) (((char*) res) + start), mem + start, size - start);
+  memcpy((void*) (((char*) res) + start), mem + start, byte_size - start);
 
   // restore
   memcpy((void*) &res->_extra_data_lock, lock_bak, sizeof(res->_extra_data_lock));
   res->_failed_speculations = fs_bak;
-  res->set_size(size);
+  res->set_size(byte_size);
 
   return res;
 }

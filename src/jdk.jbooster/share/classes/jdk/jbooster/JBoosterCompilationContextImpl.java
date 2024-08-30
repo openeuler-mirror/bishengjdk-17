@@ -23,7 +23,9 @@
 
 package jdk.jbooster;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,6 +53,7 @@ public class JBoosterCompilationContextImpl implements JBoosterCompilationContex
     private final AtomicInteger elfSectionShStrTabNrOfBytes = new AtomicInteger(0);
     private final AtomicInteger compileQueueSuccessfulMethodCount = new AtomicInteger(0);
     private final AtomicInteger compileQueueFailedMethodCount = new AtomicInteger(0);
+    private final Set<Long> installedCodeBlobs = Collections.synchronizedSet(new HashSet<>());;
 
     private CountDownLatch aotCompilerRemainingTaskCount = null;
 
@@ -164,5 +167,22 @@ public class JBoosterCompilationContextImpl implements JBoosterCompilationContex
         return getMetaspaceMethodData(sessionId, metaspaceMethod);
     }
 
+    @Override
+    public void recordJBoosterInstalledCodeBlobs(long address) {
+        installedCodeBlobs.add(address);
+    }
+
+    @Override
+    public void clear() {
+        long[] blobs = new long[installedCodeBlobs.size()];
+        int index = 0;
+        for (long blob : installedCodeBlobs) {
+            blobs[index++] = blob;
+        }
+        freeUnusedCodeBlobs(blobs);
+    }
+
     private static native long getMetaspaceMethodData(int sessionId, long metaspaceMethod);
+
+    private static native long freeUnusedCodeBlobs(long[] blobs);
 }

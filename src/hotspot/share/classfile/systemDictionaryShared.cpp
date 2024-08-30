@@ -445,6 +445,7 @@ public:
   }
 
   InstanceKlass* caller_ik() const { return _caller_ik; }
+  Method* member_method() const { return _member_method; }
 };
 
 
@@ -1798,7 +1799,8 @@ public:
 
   bool do_entry(LambdaProxyClassKey& key, DumpTimeLambdaProxyClassInfo& info) {
     assert_lock_strong(DumpTimeTable_lock);
-    if (key.caller_ik()->is_loader_alive()) {
+    // ignore obsolete lambda
+    if (key.caller_ik()->is_loader_alive() && !key.member_method()->is_obsolete()) {
       info.metaspace_pointers_do(_it);
       key.metaspace_pointers_do(_it);
     }

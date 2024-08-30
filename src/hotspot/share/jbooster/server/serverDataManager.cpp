@@ -33,6 +33,7 @@
 #include "jbooster/utilities/concurrentHashMap.inline.hpp"
 #include "jbooster/utilities/fileUtils.hpp"
 #include "logging/log.hpp"
+#include "memory/metadataFactory.hpp"
 #include "oops/instanceKlass.inline.hpp"
 #include "oops/methodData.hpp"
 #include "oops/symbol.hpp"
@@ -363,12 +364,26 @@ JClientSessionData::JClientSessionData(uint32_t session_id,
         _cl_s2c(),
         _cl_c2s(),
         _k_c2s(),
-        _m2md(),
+        _m2md(Mutex::nonleaf),
         _ref_cnt(1) {}
 
 JClientSessionData::~JClientSessionData() {
   guarantee(ref_cnt().get() == 0, "sanity");
   _program_data->ref_cnt().dec_and_update_time();
+  if (_m2md.size() > 0) {
+    JavaThread* THREAD = JavaThread::current();
+    auto clear_func = [] (JClientSessionData::AddressMap::KVNode* kv_node) -> bool {
+      assert(kv_node->key() != nullptr && kv_node->value() != nullptr, "sanity");
+      Method* m = (Method*)kv_node->key();
+      MethodData* md = (MethodData*)kv_node->value();
+      assert(*md->get_failed_speculations_address() == NULL, "must be");
+      md->~MethodData();
+      ClassLoaderData* loader_data = m->method_holder()->class_loader_data();
+      MetadataFactory::free_metadata(loader_data, md);
+      return true;
+    };
+    _m2md.for_each(clear_func, THREAD);
+  }
 }
 
 address JClientSessionData::get_address(AddressMap& table, address key, Thread* thread) {
