@@ -4029,6 +4029,8 @@ jint Arguments::apply_ergo() {
     result = JBoosterManager::init_phase1();
     if (result != JNI_OK) return result;
   }
+
+  init_class_loader_resource_cache_properties();
 #endif // INCLUDE_JBOOSTER
 
   result = set_shared_spaces_flags_and_archive_paths();
@@ -4358,6 +4360,56 @@ bool Arguments::copy_expand_pid(const char* src, size_t srclen,
 }
 
 #if INCLUDE_JBOOSTER
+
+jint Arguments::init_class_loader_resource_cache_properties() {
+  if (UseClassLoaderResourceCache == false) {
+    if (LoadClassLoaderResourceCacheFile != NULL || DumpClassLoaderResourceCacheFile != NULL) {
+      vm_exit_during_initialization("Set -XX:+UseClassLoaderResourceCache first");
+    }
+    return JNI_OK;
+  }
+
+  if (!add_property("jdk.jbooster.clrcache.enable=true", UnwriteableProperty, InternalProperty)) {
+    return JNI_ENOMEM;
+  }
+
+  const int buf_len = 4096;
+  char buffer[buf_len];
+
+  if (LoadClassLoaderResourceCacheFile != NULL) {
+    if (jio_snprintf(buffer, buf_len, "jdk.jbooster.clrcache.load=%s", LoadClassLoaderResourceCacheFile) < 0) {
+      return JNI_ENOMEM;
+    }
+    if (!add_property(buffer, UnwriteableProperty, InternalProperty)) {
+      return JNI_ENOMEM;
+    }
+  }
+
+  if (DumpClassLoaderResourceCacheFile != NULL) {
+    if (jio_snprintf(buffer, buf_len, "jdk.jbooster.clrcache.dump=%s", DumpClassLoaderResourceCacheFile) < 0) {
+      return JNI_ENOMEM;
+    }
+    if (!add_property(buffer, UnwriteableProperty, InternalProperty)) {
+      return JNI_ENOMEM;
+    }
+  }
+
+  if (jio_snprintf(buffer, buf_len, "jdk.jbooster.clrcache.size=%u", ClassLoaderResourceCacheSizeEachLoader) < 0) {
+    return JNI_ENOMEM;
+  }
+  if (!add_property(buffer, UnwriteableProperty, InternalProperty)) {
+    return JNI_ENOMEM;
+  }
+
+  if (ClassLoaderResourceCacheVerboseMode) {
+    if (!add_property("jdk.jbooster.clrcache.verbose=true", UnwriteableProperty, InternalProperty)) {
+      return JNI_ENOMEM;
+    }
+  }
+
+  return JNI_OK;
+}
+
 jint Arguments::init_jbooster_startup_signal_properties(const char* klass_name,
                                                         const char* method_name,
                                                         const char* method_signature) {

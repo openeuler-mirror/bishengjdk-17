@@ -88,6 +88,8 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
     @SuppressWarnings("removal")
     private final AccessControlContext acc;
 
+    private final ClassLoaderResourceCache loaderCache;
+
     /**
      * Constructs a new URLClassLoader for the given URLs. The URLs will be
      * searched in the order specified for classes and resources after first
@@ -115,6 +117,7 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
         super(parent);
         this.acc = AccessController.getContext();
         this.ucp = new URLClassPath(urls, acc);
+        this.loaderCache = ClassLoaderResourceCache.createIfEnabled(this, urls);
     }
 
     URLClassLoader(String name, URL[] urls, ClassLoader parent,
@@ -122,6 +125,7 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
         super(name, parent);
         this.acc = acc;
         this.ucp = new URLClassPath(urls, acc);
+        this.loaderCache = ClassLoaderResourceCache.createIfEnabled(this, urls);
     }
 
     /**
@@ -151,12 +155,14 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
         super();
         this.acc = AccessController.getContext();
         this.ucp = new URLClassPath(urls, acc);
+        this.loaderCache = ClassLoaderResourceCache.createIfEnabled(this, urls);
     }
 
     URLClassLoader(URL[] urls, @SuppressWarnings("removal") AccessControlContext acc) {
         super();
         this.acc = acc;
         this.ucp = new URLClassPath(urls, acc);
+        this.loaderCache = ClassLoaderResourceCache.createIfEnabled(this, urls);
     }
 
     /**
@@ -187,6 +193,7 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
         super(parent);
         this.acc = AccessController.getContext();
         this.ucp = new URLClassPath(urls, factory, acc);
+        this.loaderCache = ClassLoaderResourceCache.createIfEnabled(this, urls);
     }
 
 
@@ -219,6 +226,7 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
         super(name, parent);
         this.acc = AccessController.getContext();
         this.ucp = new URLClassPath(urls, acc);
+        this.loaderCache = ClassLoaderResourceCache.createIfEnabled(this, urls);
     }
 
     /**
@@ -249,6 +257,7 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
         super(name, parent);
         this.acc = AccessController.getContext();
         this.ucp = new URLClassPath(urls, factory, acc);
+        this.loaderCache = ClassLoaderResourceCache.createIfEnabled(this, urls);
     }
 
     /* A map (used as a set) to keep track of closeable local resources
@@ -399,6 +408,25 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
      */
     public URL[] getURLs() {
         return ucp.getURLs();
+    }
+
+    /**
+     * This method is overrided by ClassLoaderResourceCache to quickly throw
+     * the ClassNotFoundException if it is cached.
+     */
+    protected Class<?> loadClass(String name, boolean resolve)
+        throws ClassNotFoundException
+    {
+        if (ClassLoaderResourceCache.isEnabled()) {
+            loaderCache.fastClassNotFoundException(name);
+            try {
+                return super.loadClass(name, resolve);
+            } catch (ClassNotFoundException ex) {
+                loaderCache.cacheClassNotFoundException(name, ex);
+                throw ex;
+            }
+        }
+        return super.loadClass(name, resolve);
     }
 
     /**
@@ -649,6 +677,36 @@ public class URLClassLoader extends SecureClassLoader implements Closeable {
      * if the resource could not be found, or if the loader is closed.
      */
     public URL findResource(final String name) {
+        if (ClassLoaderResourceCache.isEnabled()) {
+            ClassLoaderResourceCache.ResourceCacheEntry entry = loaderCache.getResourceCache(name);
+            if (entry != null) {
+                return entry.getURL();
+            }
+            ClassLoaderResourceCache.LoadedResourceCacheEntry loadedEntry
+                    = loaderCache.getLoadedResourceCache(name);
+            int[] urlIndex = {-1};
+            @SuppressWarnings("removal")
+            URL url = AccessController.doPrivileged(
+                new PrivilegedAction<>() {
+                    public URL run() {
+                        if (loadedEntry == null) {
+                            return ClassLoaderResourceCache.findResource(ucp, name, true, urlIndex);
+                        } else if (loadedEntry.getIndex() == ClassLoaderResourceCache.NO_IDX) {
+                            return null;
+                        } else {
+                            return ClassLoaderResourceCache.findResource(ucp, name, true,
+                                    loadedEntry.getURLString(), loadedEntry.getIndex(), urlIndex);
+                        }
+                    }
+                }, acc);
+
+            if (url != null) {
+                url =  URLClassPath.checkURL(url);
+            }
+            loaderCache.cacheResourceUrl(name, url, urlIndex[0]);
+            return url;
+        }
+
         /*
          * The same restriction to finding classes applies to resources
          */

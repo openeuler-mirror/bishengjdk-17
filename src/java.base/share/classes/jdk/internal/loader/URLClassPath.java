@@ -1294,4 +1294,62 @@ public class URLClassPath {
             return null;
         }
     }
+
+    /**
+     * This method is only for java.net.ClassLoaderResourceCache!
+     *
+     * Finds the resource (and its index in url array) with the
+     * specified name on the URL search path or null if not found
+     * or security check fails.
+     * Search the specific index first.
+     *
+     * @param name              the name of the resource
+     * @param check             whether to perform a security check
+     * @param cachedURLString   the url of cachedIndex
+     * @param cachedIndex       the index of cachedURLString
+     * @param resIndex          the index of URL in loaders
+     * @return a {@code URL} for the resource, or {@code null}
+     * if the resource could not be found.
+     * @see java.net.URLClassPathUtil
+     */
+    private URL findResourceWithIndex(String name, boolean check,
+                                      String cachedURLString, int cachedIndex,
+                                      int[] resIndex) {
+        Loader loader = getLoader(cachedIndex);
+        if (loader != null) {
+            URL url = loader.findResource(name, check);
+            if (url != null && (cachedURLString == null || cachedURLString.equals(url.toExternalForm()))) {
+                resIndex[0] = cachedIndex;
+                return url;
+            }
+        }
+        return findResourceWithIndex(name, check, resIndex);
+    }
+
+    /**
+     * This method is only for java.net.ClassLoaderResourceCache!
+     *
+     * Finds the resource (and its index in url array) with the
+     * specified name on the URL search path or null if not found
+     * or security check fails.
+     *
+     * @param name      the name of the resource
+     * @param check     whether to perform a security check
+     * @param resIndex  the index of URL in loaders
+     * @return a {@code URL} for the resource, or {@code null}
+     * if the resource could not be found.
+     * @see java.net.URLClassPathUtil
+     */
+    private URL findResourceWithIndex(String name, boolean check, int[] resIndex) {
+        Loader loader;
+        for (int i = 0; (loader = getLoader(i)) != null; i++) {
+            URL url = loader.findResource(name, check);
+            if (url != null) {
+                resIndex[0] = i;
+                return url;
+            }
+        }
+        resIndex[0] = -1;
+        return null;
+    }
 }

@@ -135,6 +135,21 @@ void ClientDataManager::init_client_duty_under_local_mode() {
 
 jint ClientDataManager::init_clr_options() {
   if (!is_clr_allowed()) return JNI_OK;
+
+  if (FLAG_SET_CMDLINE(UseClassLoaderResourceCache, true) != JVMFlag::SUCCESS) {
+    return JNI_EINVAL;
+  }
+
+  if (is_clr_being_used()) {
+    if (FLAG_SET_CMDLINE(LoadClassLoaderResourceCacheFile, cache_clr_path()) != JVMFlag::SUCCESS) {
+      return JNI_EINVAL;
+    }
+  } else if (is_server_available()) {
+    if (FLAG_SET_CMDLINE(DumpClassLoaderResourceCacheFile, cache_clr_path()) != JVMFlag::SUCCESS) {
+      return JNI_EINVAL;
+    }
+  }
+
   return JNI_OK;
 }
 

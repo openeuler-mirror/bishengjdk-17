@@ -642,6 +642,7 @@ class Arguments : AllStatic {
   }
 
 #if INCLUDE_JBOOSTER
+  static jint init_class_loader_resource_cache_properties();
   static jint init_jbooster_startup_signal_properties(const char* klass_name,
                                                       const char* method_name,
                                                       const char* method_signature);
