@@ -202,6 +202,20 @@ public class Deflater {
     }
 
     /**
+     * Creates a new compressor using the specified compression level
+     * and windowBits.
+     * This method is mainly used to support the KAE-zip feature.
+     * @param level the compression level (0-9)
+     * @param windowBits compression format (-15~31)
+     */
+    public Deflater(int level, int windowBits) {
+        this.level = level;
+        this.strategy = DEFAULT_STRATEGY;
+        this.zsRef = new DeflaterZStreamRef(this,
+                initKAE(level, DEFAULT_STRATEGY, windowBits));
+    }
+
+    /**
      * Creates a new compressor using the specified compression level.
      * Compressed data will be generated in ZLIB format.
      * @param level the compression level (0-9)
@@ -879,6 +893,18 @@ public class Deflater {
     }
 
     /**
+     * Resets deflater so that a new set of input data can be processed.
+     * Java fields are not initialized.
+     * This method is mainly used to support the KAE-zip feature.
+     */
+    public void resetKAE() {
+        synchronized (zsRef) {
+            ensureOpen();
+            reset(zsRef.address());
+        }
+    }
+
+    /**
      * Closes the compressor and discards any unprocessed input.
      *
      * This method should be called when the compressor is no longer
@@ -909,6 +935,7 @@ public class Deflater {
     }
 
     private static native long init(int level, int strategy, boolean nowrap);
+    private static native long initKAE(int level, int strategy, int windowBits);
     private static native void setDictionary(long addr, byte[] b, int off,
                                              int len);
     private static native void setDictionaryBuffer(long addr, long bufAddress, int len);

@@ -1,5 +1,5 @@
 #
-# Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2013, 2023, Oracle and/or its affiliates. All rights reserved.
 # DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
 #
 # This code is free software; you can redistribute it and/or modify it
@@ -129,6 +129,14 @@ ifneq ($(call check-jvm-feature, nmt), true)
       memTracker.cpp nmtDCmd.cpp mallocSiteTable.cpp threadStackTracker.cpp
 endif
 
+ifneq ($(call check-jvm-feature, aot), true)
+  JVM_CFLAGS_FEATURES += -DINCLUDE_AOT=0
+  JVM_EXCLUDE_FILES += \
+      compiledIC_aot_x86_64.cpp compiledIC_aot_aarch64.cpp      \
+      compilerRuntime.cpp aotCodeHeap.cpp aotCompiledMethod.cpp \
+      aotLoader.cpp compiledIC_aot.cpp
+endif
+
 ifneq ($(call check-jvm-feature, g1gc), true)
   JVM_CFLAGS_FEATURES += -DINCLUDE_G1GC=0
   JVM_EXCLUDE_PATTERNS += gc/g1
@@ -163,6 +171,11 @@ ifneq ($(call check-jvm-feature, jfr), true)
   JVM_CFLAGS_FEATURES += -DINCLUDE_JFR=0
   JVM_EXCLUDE_PATTERNS += jfr
   JVM_EXCLUDE_FILES += compilerEvent.cpp
+endif
+
+ifneq ($(call check-jvm-feature, jbooster), true)
+  JVM_CFLAGS_FEATURES += -DINCLUDE_JBOOSTER=0
+  JVM_EXCLUDE_PATTERNS += jbooster
 endif
 
 ################################################################################

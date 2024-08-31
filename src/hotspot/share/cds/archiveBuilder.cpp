@@ -1093,7 +1093,8 @@ void ArchiveBuilder::write_archive(FileMapInfo* mapinfo,
   print_region_stats(mapinfo, closed_heap_regions, open_heap_regions);
 
   mapinfo->set_requested_base((char*)MetaspaceShared::requested_base_address());
-  if (mapinfo->header()->magic() == CDS_DYNAMIC_ARCHIVE_MAGIC) {
+  if (mapinfo->header()->magic() == CDS_DYNAMIC_ARCHIVE_MAGIC
+      AGGRESSIVE_CDS_ONLY(|| mapinfo->header()->magic() == CDS_AGGRESSIVE_ARCHIVE_MAGIC)) {
     mapinfo->set_header_base_archive_name_size(strlen(Arguments::GetSharedArchivePath()) + 1);
     mapinfo->set_header_base_archive_is_default(FLAG_IS_DEFAULT(SharedArchiveFile));
   }

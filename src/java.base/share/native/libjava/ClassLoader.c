@@ -316,3 +316,29 @@ Java_java_lang_ClassLoader_findLoadedClass0(JNIEnv *env, jobject loader,
         return JVM_FindLoadedClass(env, loader, name);
     }
 }
+
+JNIEXPORT jclass JNICALL
+Java_java_lang_ClassLoader_defineClass3(JNIEnv *env,
+                                               jclass cls,
+                                               jobject loader,
+                                               jstring name)
+{
+    jclass result = 0;
+    char *utfName;
+    char buf[128];
+
+    if (name != NULL) {
+        utfName = getUTF(env, name, buf, sizeof(buf));
+        if (utfName == NULL) {
+            JNU_ThrowOutOfMemoryError(env, NULL);
+            return result;
+        }
+        fixClassname(utfName);
+    } else {
+        utfName = NULL;
+    }
+
+    result = JVM_DefineTrustedSharedClass(env, utfName, loader);
+
+    return result;
+}

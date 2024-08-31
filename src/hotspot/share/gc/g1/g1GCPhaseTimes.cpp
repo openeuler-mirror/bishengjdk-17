@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -56,6 +56,7 @@ G1GCPhaseTimes::G1GCPhaseTimes(STWGCTimer* gc_timer, uint max_gc_threads) :
   // Root scanning phases
   _gc_par_phases[ThreadRoots] = new WorkerDataArray<double>("ThreadRoots", "Thread Roots (ms):", max_gc_threads);
   _gc_par_phases[CLDGRoots] = new WorkerDataArray<double>("CLDGRoots", "CLDG Roots (ms):", max_gc_threads);
+  AOT_ONLY(_gc_par_phases[AOTCodeRoots] = new WorkerDataArray<double>("AOTCodeRoots", "AOT Root Scan (ms):", max_gc_threads);)
   _gc_par_phases[CMRefRoots] = new WorkerDataArray<double>("CMRefRoots", "CM RefProcessor Roots (ms):", max_gc_threads);
 
   for (auto id : EnumRange<OopStorageSet::StrongId>()) {

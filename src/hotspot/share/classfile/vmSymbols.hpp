@@ -31,6 +31,9 @@
 #include "oops/symbol.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/enumIterator.hpp"
+#if INCLUDE_JBOOSTER
+#include "jbooster/jBoosterSymbols.hpp"
+#endif // INCLUDE_JBOOSTER
 
 // The class vmSymbols is a name space for fast lookup of
 // symbols commonly used in the VM.
@@ -707,6 +710,9 @@
   template(toFileURL_name,                                  "toFileURL")                                          \
   template(toFileURL_signature,                             "(Ljava/lang/String;)Ljava/net/URL;")                 \
   template(url_void_signature,                              "(Ljava/net/URL;)V")                                  \
+                                                                                                                  \
+  /* JBooster */                                                                                                  \
+  JBOOSTER_ONLY(JBOOSTER_TEMPLATES(template))                                                                     \
                                                                                                                   \
   /*end*/
 

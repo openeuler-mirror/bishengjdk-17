@@ -45,9 +45,25 @@ final class DirectHotSpotObjectConstantImpl extends HotSpotObjectConstantImpl {
         super(compressed);
         assert object != null;
         this.object = object;
+        this.holderType = null;
+        this.cpi = -1;
+    }
+
+    static JavaConstant forObject(HotSpotResolvedObjectType type, int cpi, JavaConstant object) {
+        return new DirectHotSpotObjectConstantImpl(type, cpi, object);
+    }
+
+    private DirectHotSpotObjectConstantImpl(HotSpotResolvedObjectType type, int cpi, JavaConstant constant) {
+        super(((DirectHotSpotObjectConstantImpl) constant).compressed);
+        this.object = ((DirectHotSpotObjectConstantImpl) constant).object;
+        this.holderType = type;
+        this.cpi = cpi;
     }
 
     final Object object;
+
+    private final HotSpotResolvedObjectType holderType;
+    private final int cpi;
 
     @Override
     public JavaConstant compress() {

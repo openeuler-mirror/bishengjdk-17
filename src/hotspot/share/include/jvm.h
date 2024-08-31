@@ -1096,6 +1096,53 @@ JVM_GetTemporaryDirectory(JNIEnv *env);
 JNIEXPORT jobjectArray JNICALL
 JVM_GetEnclosingMethodInfo(JNIEnv* env, jclass ofClass);
 
+
+/*************************************************************************
+ JBooster Support
+ ************************************************************************/
+
+/**
+ * Init the JBooster server in Hotspot.
+ */
+JNIEXPORT void JNICALL
+JVM_JBoosterInitVM(JNIEnv *env, jint server_port, jint connection_timeout, jint cleanup_timeout, jstring cache_path);
+
+/**
+ * Handle a TCP connection.
+ */
+JNIEXPORT void JNICALL
+JVM_JBoosterHandleConnection(JNIEnv *env, jint connection_fd);
+
+/**
+ * Print data in ServerDataManager.
+ */
+JNIEXPORT void JNICALL
+JVM_JBoosterPrintStoredClientData(JNIEnv *env, jboolean print_all);
+
+/**
+ * Get metaspaceMethodData.
+ */
+JNIEXPORT long JNICALL
+JVM_JBoosterGetMetaspaceMethodData(JNIEnv *env, jint session_id, jlong metaspace_method);
+
+/**
+ * Free unused codeBlobs.
+ */
+JNIEXPORT void JNICALL
+JVM_JBoosterFreeUnusedCodeBlobs(JNIEnv *env, jobject blobs);
+
+/**
+ * Callback of startup signal.
+ */
+JNIEXPORT void JNICALL
+JVM_JBoosterStartupNativeCallback(JNIEnv *env);
+
+/**
+ * Define the trusted shared class.
+ */
+JNIEXPORT jclass JNICALL
+JVM_DefineTrustedSharedClass(JNIEnv *env, const char *name, jobject loader);
+
 /*
  * This structure is used by the launcher to get the default thread
  * stack size from the VM using JNI_GetDefaultJavaVMInitArgs() with a

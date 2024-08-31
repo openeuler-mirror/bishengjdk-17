@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -32,7 +32,8 @@ module jdk.internal.vm.ci {
         jdk.internal.vm.compiler.management;
     exports jdk.vm.ci.meta to jdk.internal.vm.compiler;
     exports jdk.vm.ci.code to jdk.internal.vm.compiler;
-    exports jdk.vm.ci.hotspot to jdk.internal.vm.compiler;
+    exports jdk.vm.ci.hotspot to jdk.internal.vm.compiler, jdk.jbooster;
+    exports jdk.vm.ci.jbooster to jdk.aot, jdk.jbooster, jdk.internal.vm.compiler;
 
     uses jdk.vm.ci.services.JVMCIServiceLocator;
     uses jdk.vm.ci.hotspot.HotSpotJVMCIBackendFactory;

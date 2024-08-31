@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -61,6 +61,35 @@ inline InstanceKlass* volatile* InstanceKlass::adr_implementor() const {
     return NULL;
   }
 }
+
+#if INCLUDE_AOT
+inline address InstanceKlass::adr_fingerprint() const {
+  if (has_stored_fingerprint()) {
+    InstanceKlass* volatile* adr_impl = adr_implementor();
+    if (adr_impl != NULL) {
+      return (address)(adr_impl + 1);
+    } else {
+      return (address)end_of_nonstatic_oop_maps();
+    }
+  } else {
+    return NULL;
+  }
+}
+
+inline u1* InstanceKlass::adr_aot_flags() const {
+  address fingerprint = adr_fingerprint();
+  if (fingerprint != NULL) {
+    return (u1*)(fingerprint + sizeof(uint64_t));
+  }
+
+  InstanceKlass* volatile* adr_impl = adr_implementor();
+  if (adr_impl != NULL) {
+    return (u1*)(adr_impl + 1);
+  } else {
+    return (u1*)end_of_nonstatic_oop_maps();
+  }
+}
+#endif
 
 inline ObjArrayKlass* InstanceKlass::array_klasses_acquire() const {
   return Atomic::load_acquire(&_array_klasses);

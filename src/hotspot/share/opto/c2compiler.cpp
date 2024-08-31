@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1999, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1999, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -79,7 +79,7 @@ bool C2Compiler::init_c2_runtime() {
 }
 
 void C2Compiler::initialize() {
-  assert(!CompilerConfig::is_c1_or_interpreter_only_no_jvmci(), "C2 compiler is launched, it's not c1/interpreter only mode");
+  assert(!CompilerConfig::is_c1_or_interpreter_only_no_aot_or_jvmci(), "C2 compiler is launched, it's not c1/interpreter only mode");
   // The first compiler thread that gets here will initialize the
   // small amount of global state (and runtime stubs) that C2 needs.
 
@@ -103,6 +103,7 @@ void C2Compiler::compile_method(ciEnv* env, ciMethod* target, int entry_bci, boo
   bool do_locks_coarsening = EliminateLocks;
 
   while (!env->failing()) {
+    ResourceMark rm;
     // Attempt to compile while subsuming loads into machine instructions.
     Compile C(env, target, entry_bci, subsume_loads, do_escape_analysis, eliminate_boxing, do_locks_coarsening, install_code, directive);
 

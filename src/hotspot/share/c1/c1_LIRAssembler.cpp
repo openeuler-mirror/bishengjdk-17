@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -483,7 +483,7 @@ void LIR_Assembler::emit_call(LIR_OpJavaCall* op) {
 
 #if defined(IA32) && defined(COMPILER2)
   // C2 leave fpu stack dirty clean it
-  if (UseSSE < 2 && !CompilerConfig::is_c1_only_no_jvmci()) {
+  if (UseSSE < 2 && !CompilerConfig::is_c1_only_no_aot_or_jvmci()) {
     int i;
     for ( i = 1; i <= 7 ; i++ ) {
       ffree(i);

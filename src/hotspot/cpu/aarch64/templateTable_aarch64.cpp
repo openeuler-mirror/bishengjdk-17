@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2003, 2021, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, Red Hat Inc. All rights reserved.
+ * Copyright (c) 2003, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2023, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -2413,7 +2413,7 @@ void TemplateTable::getfield_or_static(int byte_no, bool is_static, RewriteContr
   // membar it's possible for a simple Dekker test to fail if loads
   // use LDR;DMB but stores use STLR.  This can happen if C2 compiles
   // the stores in one method and we interpret the loads in another.
-  if (!CompilerConfig::is_c1_or_interpreter_only_no_jvmci()){
+  if (!CompilerConfig::is_c1_or_interpreter_only_no_aot_or_jvmci()){
     Label notVolatile;
     __ tbz(raw_flags, ConstantPoolCacheEntry::is_volatile_shift, notVolatile);
     __ membar(MacroAssembler::AnyAny);
@@ -3016,7 +3016,7 @@ void TemplateTable::fast_accessfield(TosState state)
   // membar it's possible for a simple Dekker test to fail if loads
   // use LDR;DMB but stores use STLR.  This can happen if C2 compiles
   // the stores in one method and we interpret the loads in another.
-  if (!CompilerConfig::is_c1_or_interpreter_only_no_jvmci()) {
+  if (!CompilerConfig::is_c1_or_interpreter_only_no_aot_or_jvmci()) {
     Label notVolatile;
     __ tbz(r3, ConstantPoolCacheEntry::is_volatile_shift, notVolatile);
     __ membar(MacroAssembler::AnyAny);
@@ -3078,7 +3078,7 @@ void TemplateTable::fast_xaccess(TosState state)
   // membar it's possible for a simple Dekker test to fail if loads
   // use LDR;DMB but stores use STLR.  This can happen if C2 compiles
   // the stores in one method and we interpret the loads in another.
-  if (!CompilerConfig::is_c1_or_interpreter_only_no_jvmci()) {
+  if (!CompilerConfig::is_c1_or_interpreter_only_no_aot_or_jvmci()) {
     Label notVolatile;
     __ ldrw(r3, Address(r2, in_bytes(ConstantPoolCache::base_offset() +
                                      ConstantPoolCacheEntry::flags_offset())));

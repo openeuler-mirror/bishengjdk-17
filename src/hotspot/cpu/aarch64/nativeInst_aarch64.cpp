@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, 2020, Red Hat Inc. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2023, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -496,9 +496,16 @@ bool NativeInstruction::is_stop() {
 void NativeJump::patch_verified_entry(address entry, address verified_entry, address dest) {
 
   assert(dest == SharedRuntime::get_handle_wrong_method_stub(), "expected fixed destination of patch");
-  assert(nativeInstruction_at(verified_entry)->is_jump_or_nop()
-         || nativeInstruction_at(verified_entry)->is_sigill_zombie_not_entrant(),
-         "Aarch64 cannot replace non-jump with jump");
+
+#ifdef ASSERT
+  // This may be the temporary nmethod generated while we're AOT
+  // compiling.  Such an nmethod doesn't begin with a NOP but with an ADRP.
+  if (! (CalculateClassFingerprint && UseAOT && is_adrp_at(verified_entry))) {
+    assert(nativeInstruction_at(verified_entry)->is_jump_or_nop()
+           || nativeInstruction_at(verified_entry)->is_sigill_zombie_not_entrant(),
+           "Aarch64 cannot replace non-jump with jump");
+  }
+#endif
 
   // Patch this nmethod atomically.
   if (Assembler::reachable_from_branch_at(verified_entry, dest)) {

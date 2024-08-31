@@ -115,4 +115,6 @@ public interface HotSpotResolvedObjectType extends ResolvedJavaType {
      *         does not support fingerprints)
      */
     long getFingerprint();
+
+    boolean canClassInitBarrierWorkIn(HotSpotResolvedObjectType otherType);
 }

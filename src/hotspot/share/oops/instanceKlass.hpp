@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -50,6 +50,8 @@ class RecordComponent;
 //      The embedded nonstatic oop-map blocks are short pairs (offset, length)
 //      indicating where oops are located in instances of this klass.
 //    [EMBEDDED implementor of the interface] only exist for interface
+//    [EMBEDDED fingerprint] only if should_store_fingerprint() == true
+//    [EMBEDDED aot_flags  ] only if INCLUDE_AOT == true
 
 
 // forward declaration for class -- see below for definition
@@ -328,6 +330,13 @@ class InstanceKlass: public Klass {
   friend class SystemDictionary;
 
   static bool _disable_method_binary_search;
+
+#if INCLUDE_AOT
+  enum {
+    _aot_has_passed_fingerprint_check = 1 << 0  // when this class was loaded, the fingerprint computed from its
+                                                // code source was found to be matching the value recorded by AOT.
+  };
+#endif
 
  public:
   // The three BUILTIN class loader types
@@ -775,6 +784,30 @@ public:
     _misc_flags |= _misc_has_been_redefined;
   }
 
+#if INCLUDE_AOT
+  bool has_passed_fingerprint_check() const {
+    return (get_aot_flags() & _aot_has_passed_fingerprint_check) != 0;
+  }
+  void set_has_passed_fingerprint_check(bool b) {
+    u1 aot_flags = get_aot_flags();
+    if (b) {
+      aot_flags |= _aot_has_passed_fingerprint_check;
+    } else {
+      aot_flags &= ~_aot_has_passed_fingerprint_check;
+    }
+    set_aot_flags(aot_flags);
+  }
+  bool supers_have_passed_fingerprint_checks();
+  u1 get_aot_flags() const;
+  void set_aot_flags(u1 aot_flags);
+
+  static bool should_store_fingerprint(bool is_hidden);
+  bool should_store_fingerprint() const { return should_store_fingerprint(is_hidden()); }
+  bool has_stored_fingerprint() const;
+  uint64_t get_stored_fingerprint() const;
+  void store_fingerprint(uint64_t fingerprint);
+#endif
+
   bool is_scratch_class() const {
     return (_misc_flags & _misc_is_scratch_class) != 0;
   }
@@ -1032,18 +1065,21 @@ public:
 
   static int size(int vtable_length, int itable_length,
                   int nonstatic_oop_map_size,
-                  bool is_interface) {
+                  bool is_interface, bool has_stored_fingerprint) {
     return align_metadata_size(header_size() +
            vtable_length +
            itable_length +
            nonstatic_oop_map_size +
-           (is_interface ? (int)sizeof(Klass*)/wordSize : 0));
+           (is_interface ? (int)sizeof(Klass*)/wordSize : 0) +
+           (has_stored_fingerprint ? (int)sizeof(uint64_t*)/wordSize : 0) +
+           AOT_ONLY((int)align_up(sizeof(u1),wordSize)/wordSize) NOT_AOT(0));
   }
 
   int size() const                    { return size(vtable_length(),
                                                itable_length(),
                                                nonstatic_oop_map_size(),
-                                               is_interface());
+                                               is_interface(),
+                                               AOT_ONLY(has_stored_fingerprint()) NOT_AOT(false));
   }
 
 
@@ -1056,6 +1092,10 @@ public:
   inline Klass** end_of_nonstatic_oop_maps() const;
 
   inline InstanceKlass* volatile* adr_implementor() const;
+#if INCLUDE_AOT
+  inline address adr_fingerprint() const;
+  inline address adr_aot_flags() const ;
+#endif
 
   // Use this to return the size of an instance in heap words:
   int size_helper() const {
@@ -1274,6 +1314,10 @@ public:
   void print_class_load_logging(ClassLoaderData* loader_data,
                                 const ModuleEntry* module_entry,
                                 const ClassFileStream* cfs) const;
+
+#if INCLUDE_JBOOSTER
+  bool is_dynamic_proxy() const;
+#endif // INCLUDE_JBOOSTER
 };
 
 // for adding methods

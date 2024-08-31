@@ -48,7 +48,6 @@
 #include "utilities/align.hpp"
 #include "utilities/bitMap.inline.hpp"
 
-
 class DynamicArchiveBuilder : public ArchiveBuilder {
 public:
   void mark_pointer(address* ptr_loc) {

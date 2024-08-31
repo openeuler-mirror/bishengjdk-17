@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -85,6 +85,12 @@
 #endif
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
+#endif
+#if INCLUDE_JBOOSTER
+#include "jbooster/client/clientStartupSignal.hpp"
+#endif // INCLUDE_JBOOSTER
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
 #endif
 
 ResolutionErrorTable*  SystemDictionary::_resolution_errors   = NULL;
@@ -900,6 +906,19 @@ InstanceKlass* SystemDictionary::resolve_class_from_stream(
   // throw potential ClassFormatErrors.
  InstanceKlass* k = NULL;
 
+#if INCLUDE_JBOOSTER
+  if (UseJBooster && JBoosterStartupSignal != nullptr) {
+    if (ClientStartupSignal::is_target_klass(class_name)) {
+      unsigned char* ptr = const_cast<unsigned char*>(st->buffer());
+      int len = st->length();
+      bool success = ClientStartupSignal::try_inject_startup_callback(&ptr, &len, THREAD);
+      if (success) {
+        st = new ClassFileStream(ptr, len, st->source(), st->need_verify());
+      }
+    }
+  }
+#endif // INCLUDE_JBOOSTER
+
 #if INCLUDE_CDS
   if (!DumpSharedSpaces) {
     k = SystemDictionaryShared::lookup_from_stream(class_name,
@@ -1199,6 +1218,23 @@ void SystemDictionary::load_shared_class_misc(InstanceKlass* ik, ClassLoaderData
 
   // notify a class loaded from shared object
   ClassLoadingService::notify_class_loaded(ik, true /* shared class */);
+
+#if INCLUDE_AOT
+  ik->set_has_passed_fingerprint_check(false);
+  if (UseAOT && ik->supers_have_passed_fingerprint_checks()) {
+    uint64_t aot_fp = AOTLoader::get_saved_fingerprint(ik);
+    uint64_t cds_fp = ik->get_stored_fingerprint();
+    if (aot_fp != 0 && aot_fp == cds_fp) {
+      // This class matches with a class saved in an AOT library
+      ik->set_has_passed_fingerprint_check(true);
+    } else {
+      if (log_is_enabled(Info, class, fingerprint)) {
+        ResourceMark rm;
+        log_info(class, fingerprint)("%s :  expected = " PTR64_FORMAT " actual = " PTR64_FORMAT, ik->external_name(), aot_fp, cds_fp);
+      }
+    }
+  }
+#endif
 }
 
 #endif // INCLUDE_CDS

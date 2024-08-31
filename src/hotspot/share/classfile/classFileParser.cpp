@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -89,6 +89,9 @@
 #endif
 #if INCLUDE_JFR
 #include "jfr/support/jfrTraceIdExtension.hpp"
+#endif
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
 #endif
 
 // We generally try to create the oops directly when parsing, rather than
@@ -5236,6 +5239,26 @@ InstanceKlass* ClassFileParser::create_instance_klass(bool changed_by_loadhook,
   fill_instance_klass(ik, changed_by_loadhook, cl_inst_info, CHECK_NULL);
 
   assert(_klass == ik, "invariant");
+
+#if INCLUDE_AOT
+  if (ik->should_store_fingerprint()) {
+    ik->store_fingerprint(_stream->compute_fingerprint());
+  }
+
+  ik->set_has_passed_fingerprint_check(false);
+  if (UseAOT && ik->supers_have_passed_fingerprint_checks()) {
+    uint64_t aot_fp = AOTLoader::get_saved_fingerprint(ik);
+    uint64_t fp = ik->has_stored_fingerprint() ? ik->get_stored_fingerprint() : _stream->compute_fingerprint();
+    if (aot_fp != 0 && aot_fp == fp) {
+      // This class matches with a class saved in an AOT library
+      ik->set_has_passed_fingerprint_check(true);
+    } else {
+      ResourceMark rm;
+      log_info(class, fingerprint)("%s :  expected = " PTR64_FORMAT " actual = " PTR64_FORMAT,
+                                 ik->external_name(), aot_fp, _stream->compute_fingerprint());
+    }
+  }
+#endif
 
   return ik;
 }

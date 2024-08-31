@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2022, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, 2023, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -157,6 +157,14 @@ void ShenandoahArguments::initialize() {
   // If class unloading is disabled, no unloading for concurrent cycles as well.
   if (!ClassUnloading) {
     FLAG_SET_DEFAULT(ClassUnloadingWithConcurrentMark, false);
+  }
+
+  // AOT is not supported yet
+  if (UseAOT) {
+    if (!FLAG_IS_DEFAULT(UseAOT)) {
+      warning("Shenandoah does not support AOT at this moment, disabling UseAOT");
+    }
+    FLAG_SET_DEFAULT(UseAOT, false);
   }
 
   // TLAB sizing policy makes resizing decisions before each GC cycle. It averages

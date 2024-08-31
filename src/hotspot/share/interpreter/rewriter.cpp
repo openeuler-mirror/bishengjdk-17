@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1998, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1998, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -168,14 +168,14 @@ void Rewriter::rewrite_Object_init(const methodHandle& method, TRAPS) {
 
 
 // Rewrite a classfile-order CP index into a native-order CPC index.
-void Rewriter::rewrite_member_reference(address bcp, int offset, bool reverse) {
+void Rewriter::rewrite_member_reference(address bcp, int offset, bool reverse, Method* current_method) {
   address p = bcp + offset;
   if (!reverse) {
     int  cp_index    = Bytes::get_Java_u2(p);
     int  cache_index = cp_entry_to_cp_cache(cp_index);
     Bytes::put_native_u2(p, cache_index);
     if (!_method_handle_invokers.is_empty())
-      maybe_rewrite_invokehandle(p - 1, cp_index, cache_index, reverse);
+      maybe_rewrite_invokehandle(p - 1, cp_index, cache_index, reverse, current_method);
   } else {
     int cache_index = Bytes::get_native_u2(p);
     int pool_index = cp_cache_entry_pool_index(cache_index);
@@ -209,7 +209,7 @@ void Rewriter::rewrite_invokespecial(address bcp, int offset, bool reverse, bool
 
 
 // Adjust the invocation bytecode for a signature-polymorphic method (MethodHandle.invoke, etc.)
-void Rewriter::maybe_rewrite_invokehandle(address opc, int cp_index, int cache_index, bool reverse) {
+void Rewriter::maybe_rewrite_invokehandle(address opc, int cp_index, int cache_index, bool reverse, Method* current_method) {
   if (!reverse) {
     if ((*opc) == (u1)Bytecodes::_invokevirtual ||
         // allow invokespecial as an alias, although it would be very odd:
@@ -242,6 +242,11 @@ void Rewriter::maybe_rewrite_invokehandle(address opc, int cp_index, int cache_i
       // to transmit the call site's intended call type.
       if (status > 0) {
         (*opc) = (u1)Bytecodes::_invokehandle;
+#if INCLUDE_JBOOSTER
+        if (!_klass->is_hidden() && current_method != nullptr) {
+          current_method->set_rewrite_invokehandle(true);
+        }
+#endif // INCLUDE_JBOOSTER
       }
     }
   } else {
@@ -472,7 +477,7 @@ void Rewriter::scan_method(Thread* thread, Method* method, bool reverse, bool* i
       case Bytecodes::_invokestatic   :
       case Bytecodes::_invokeinterface:
       case Bytecodes::_invokehandle   : // if reverse=true
-        rewrite_member_reference(bcp, prefix_length+1, reverse);
+        rewrite_member_reference(bcp, prefix_length+1, reverse, method);
         break;
       case Bytecodes::_invokedynamic:
         rewrite_invokedynamic(bcp, prefix_length+1, reverse);

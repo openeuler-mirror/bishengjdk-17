@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -78,6 +78,9 @@
 #include "utilities/xmlstream.hpp"
 #ifdef COMPILER1
 #include "c1/c1_Runtime1.hpp"
+#endif
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
 #endif
 
 // Shared stub locations
@@ -1327,8 +1330,8 @@ bool SharedRuntime::resolve_sub_helper_internal(methodHandle callee_method, cons
         if (VM_Version::supports_fast_class_init_checks() &&
             invoke_code == Bytecodes::_invokestatic &&
             callee_method->needs_clinit_barrier() &&
-            callee != NULL && callee->is_compiled_by_jvmci()) {
-          return true; // skip patching for JVMCI
+            callee != NULL && (callee->is_compiled_by_jvmci() || callee->is_aot())) {
+          return true; // skip patching for JVMCI or AOT code
         }
         CompiledStaticCall* ssc = caller_nm->compiledStaticCall_before(caller_frame.pc());
         if (ssc->is_clean()) ssc->set(static_call_info);

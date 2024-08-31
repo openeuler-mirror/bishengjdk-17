@@ -35,6 +35,10 @@
 #include "utilities/align.hpp"
 #include "utilities/copy.hpp"
 
+#if INCLUDE_JBOOSTER
+class JClientSessionData;
+#endif // INCLUDE_JBOOSTER
+
 class BytecodeStream;
 
 // The MethodData object collects counts and other profile information
@@ -476,6 +480,11 @@ public:
 
   void print_shared(outputStream* st, const char* name, const char* extra) const;
   void tab(outputStream* st, bool first = false) const;
+
+#if INCLUDE_JBOOSTER
+  virtual void klass_pointer_map_to_server(JClientSessionData* session_data, Thread* thread) {}
+  virtual void collect_klass(GrowableArray<InstanceKlass*>* ik_array, GrowableArray<ArrayKlass*>* ak_array) {}
+#endif // INCLUDE_JBOOSTER
 };
 
 // BitData
@@ -750,6 +759,15 @@ public:
   void set_profile_data(ProfileData* pd) {
     _pd = pd;
   }
+
+#if INCLUDE_JBOOSTER
+  virtual void klass_pointer_map_to_server(JClientSessionData* session_data, Thread* thread) {
+    assert(false, "override it");
+  }
+  virtual void collect_klass(GrowableArray<InstanceKlass*>* ik_array, GrowableArray<ArrayKlass*>* ak_array) {
+    assert(false, "override it");
+  }
+#endif // INCLUDE_JBOOSTER
 };
 
 // Type entries used for arguments passed at a call and parameters on
@@ -839,6 +857,12 @@ public:
   void clean_weak_klass_links(bool always_clean);
 
   void print_data_on(outputStream* st) const;
+
+#if INCLUDE_JBOOSTER
+  void clean_untrusted_entries();
+  void klass_pointer_map_to_server(JClientSessionData* session_data, Thread* thread) override;
+  void collect_klass(GrowableArray<InstanceKlass*>* ik_array, GrowableArray<ArrayKlass*>* ak_array) override;
+#endif // INCLUDE_JBOOSTER
 };
 
 // Type entry used for return from a call. A single cell to record the
@@ -882,6 +906,11 @@ public:
   void clean_weak_klass_links(bool always_clean);
 
   void print_data_on(outputStream* st) const;
+
+#if INCLUDE_JBOOSTER
+  void klass_pointer_map_to_server(JClientSessionData* session_data, Thread* thread) override;
+  void collect_klass(GrowableArray<InstanceKlass*>* ik_array, GrowableArray<ArrayKlass*>* ak_array) override;
+#endif // INCLUDE_JBOOSTER
 };
 
 // Entries to collect type information at a call: contains arguments
@@ -1073,6 +1102,25 @@ public:
   }
 
   virtual void print_data_on(outputStream* st, const char* extra = NULL) const;
+
+#if INCLUDE_JBOOSTER
+  void klass_pointer_map_to_server(JClientSessionData* session_data, Thread* thread) override {
+    if (has_arguments()) {
+      _args.klass_pointer_map_to_server(session_data, thread);
+    }
+    if (has_return()) {
+      _ret.klass_pointer_map_to_server(session_data, thread);
+    }
+  }
+  void collect_klass(GrowableArray<InstanceKlass*>* ik_array, GrowableArray<ArrayKlass*>* ak_array) override {
+    if (has_arguments()) {
+      _args.collect_klass(ik_array, ak_array);
+    }
+    if (has_return()) {
+      _ret.collect_klass(ik_array, ak_array);
+    }
+  }
+#endif // INCLUDE_JBOOSTER
 };
 
 // ReceiverTypeData
@@ -1213,6 +1261,17 @@ public:
 
   void print_receiver_data_on(outputStream* st) const;
   void print_data_on(outputStream* st, const char* extra = NULL) const;
+
+#if INCLUDE_JBOOSTER
+  Klass* receiver_no_check(uint row) const {
+    assert(row < row_limit(), "oob");
+    Klass* recv = (Klass*)intptr_at(receiver_cell_index(row));
+    return recv;
+  }
+  void clean_untrusted_entries();
+  void klass_pointer_map_to_server(JClientSessionData* session_data, Thread* thread) override;
+  void collect_klass(GrowableArray<InstanceKlass*>* ik_array, GrowableArray<ArrayKlass*>* ak_array) override;
+#endif // INCLUDE_JBOOSTER
 };
 
 // VirtualCallData
@@ -1784,6 +1843,15 @@ public:
   static ByteSize type_offset(int i) {
     return cell_offset(type_local_offset(i));
   }
+
+#if INCLUDE_JBOOSTER
+  void klass_pointer_map_to_server(JClientSessionData* session_data, Thread* thread) override {
+    _parameters.klass_pointer_map_to_server(session_data, thread);
+  }
+  void collect_klass(GrowableArray<InstanceKlass*>* ik_array, GrowableArray<ArrayKlass*>* ak_array) override {
+    _parameters.collect_klass(ik_array, ak_array);
+  }
+#endif // INCLUDE_JBOOSTER
 };
 
 // SpeculativeTrapData
@@ -2476,6 +2544,13 @@ public:
   void clean_method_data(bool always_clean);
   void clean_weak_method_links();
   Mutex* extra_data_lock() { return &_extra_data_lock; }
+
+#if INCLUDE_JBOOSTER
+private:
+  MethodData(const methodHandle& method, const bool* ignored);
+public:
+  static MethodData* create_instance_for_jbooster(Method* method, int byte_size, char* mem, TRAPS);
+#endif // INCLUDE_JBOOSTER
 };
 
 #endif // SHARE_OOPS_METHODDATA_HPP

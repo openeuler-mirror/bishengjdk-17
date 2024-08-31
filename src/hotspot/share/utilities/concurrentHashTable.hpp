@@ -40,6 +40,10 @@ class Mutex;
 
 template <typename CONFIG, MEMFLAGS F>
 class ConcurrentHashTable : public CHeapObj<F> {
+#if INCLUDE_JBOOSTER
+  template <typename KK, typename VV, MEMFLAGS FF, typename EE> friend class ConcurrentHashMap;
+#endif // INCLUDE_JBOOSTER
+
   typedef typename CONFIG::Value VALUE;
  private:
   // This is the internal node structure.

@@ -44,6 +44,7 @@ class Dictionary : public Hashtable<InstanceKlass*, mtClass> {
   static bool _some_dictionary_needs_resizing;
   bool _resizable;
   bool _needs_resizing;
+
   void check_if_needs_resize();
 
   ClassLoaderData* _loader_data;  // backpointer to owning loader

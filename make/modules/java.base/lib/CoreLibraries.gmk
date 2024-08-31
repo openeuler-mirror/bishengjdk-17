@@ -119,9 +119,39 @@ $(BUILD_LIBJAVA): $(BUILD_LIBFDLIBM)
 
 ##########################################################################################
 
-BUILD_LIBZIP_EXCLUDES :=
-ifeq ($(USE_EXTERNAL_LIBZ), true)
-  LIBZIP_EXCLUDES += zlib
+ifeq ($(USE_EXTERNAL_LIBZ), false)
+  ifeq ($(OPENJDK_TARGET_OS), linux)
+    ifeq ($(LIBZ_CAN_USE_MMAP), true)
+      BUILD_LIBZ_MMAP := -DUSE_MMAP
+    endif
+
+    $(eval $(call SetupJdkLibrary, BUILD_LIBZ, \
+      NAME := z, \
+      SRC := $(TOPDIR)/src/java.base/share/native/libzip/zlib, \
+      OPTIMIZATION := LOW, \
+      CFLAGS := $(filter-out -fvisibility=hidden,$(CFLAGS_JDKLIB) $(LIBZ_CFLAGS)), \
+      CFLAGS_unix := $(BUILD_LIBZ_MMAP) -UDEBUG, \
+      DISABLED_WARNINGS_gcc := unused-function implicit-fallthrough, \
+      DISABLED_WARNINGS_gcc_gzlib.c := implicit-function-declaration, \
+      DISABLED_WARNINGS_gcc_gzwrite.c := implicit-function-declaration, \
+      DISABLED_WARNINGS_gcc_gzread.c := implicit-function-declaration, \
+      DISABLED_WARNINGS_clang := format-nonliteral, \
+      LDFLAGS := $(LDFLAGS_JDKLIB) \
+          $(call SET_SHARED_LIBRARY_ORIGIN), \
+      LIBS_unix := , \
+      LIBS_windows := jvm.lib $(WIN_JAVA_LIB), \
+    ))
+
+    $(BUILD_LIBZ): $(BUILD_LIBJAVA)
+
+    TARGETS += $(BUILD_LIBZ)
+  endif
+endif
+
+##########################################################################################
+
+ifeq ($(OPENJDK_TARGET_OS), linux)
+  LIBZIP_EXCLUDES := zlib
 endif
 
 ifeq ($(LIBZIP_CAN_USE_MMAP), true)
@@ -139,10 +169,11 @@ $(eval $(call SetupJdkLibrary, BUILD_LIBZIP, \
     DISABLED_WARNINGS_clang := format-nonliteral, \
     LDFLAGS := $(LDFLAGS_JDKLIB) \
         $(call SET_SHARED_LIBRARY_ORIGIN), \
-    LIBS_unix := -ljvm -ljava $(LIBZ_LIBS), \
+    LIBS_unix := -ljvm -ljava -lz, \
     LIBS_windows := jvm.lib $(WIN_JAVA_LIB), \
 ))
 
+$(BUILD_LIBZIP): $(BUILD_LIBZ)
 $(BUILD_LIBZIP): $(BUILD_LIBJAVA)
 
 TARGETS += $(BUILD_LIBZIP)

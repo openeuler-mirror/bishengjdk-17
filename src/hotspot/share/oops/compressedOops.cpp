@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2019, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,6 +33,9 @@
 #include "gc/shared/collectedHeap.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/globals.hpp"
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
+#endif
 
 // For UseCompressedOops.
 NarrowPtrStruct CompressedOops::_narrow_oop = { NULL, 0, true };
@@ -63,6 +66,10 @@ void CompressedOops::initialize(const ReservedHeapSpace& heap_space) {
   } else {
     set_base((address)heap_space.compressed_oop_base());
   }
+
+#if INCLUDE_AOT
+  AOTLoader::set_narrow_oop_shift();
+#endif
 
   _heap_address_range = heap_space.region();
 
@@ -236,30 +243,50 @@ void CompressedKlassPointers::initialize(address addr, size_t len) {
     range = 4 * G;
 
   } else {
+#if defined(AARCH64) && INCLUDE_AOT
+    if (UseAOT && AOTLoader::libraries_count() > 0) {
+      constexpr uint64_t unscaled_max = nth_bit(32);
+      assert(len <= unscaled_max, "Klass range larger than 32 bits?");
 
-    // Otherwise we attempt to use a zero base if the range fits in lower 32G.
-    if (end <= (address)KlassEncodingMetaspaceMax) {
-      base = 0;
-    } else {
-      base = addr;
-    }
-
-    // Highest offset a Klass* can ever have in relation to base.
-    range = end - base;
-
-    // We may not even need a shift if the range fits into 32bit:
-    const uint64_t UnscaledClassSpaceMax = (uint64_t(max_juint) + 1);
-    if (range < UnscaledClassSpaceMax) {
+      // Shift is always 0 on aarch64(AOT enabled).
       shift = 0;
-    } else {
-      shift = LogKlassAlignmentInBytes;
-    }
 
+      // On aarch64(AOT enabled), we don't bother with zero-based encoding (base=0 shift>0).
+      base = (end <= (address)unscaled_max) ? nullptr : addr;
+
+      range = end - base;
+    } else
+#endif // defined(AARCH64) && INCLUDE_AOT
+    {
+      // Otherwise we attempt to use a zero base if the range fits in lower 32G.
+      if (end <= (address)KlassEncodingMetaspaceMax) {
+        base = 0;
+      } else {
+        base = addr;
+      }
+
+      // Highest offset a Klass* can ever have in relation to base.
+      range = end - base;
+
+      // We may not even need a shift if the range fits into 32bit:
+      const uint64_t UnscaledClassSpaceMax = (uint64_t(max_juint) + 1);
+      if (range < UnscaledClassSpaceMax) {
+        shift = 0;
+      } else {
+        shift = LogKlassAlignmentInBytes;
+      }
+    }
   }
 
   set_base(base);
   set_shift(shift);
   set_range(range);
+
+#if INCLUDE_AOT
+  // Note: this may modify our shift.
+  AOTLoader::set_narrow_klass_shift();
+#endif // INCLUDE_AOT
+
 #else
   fatal("64bit only.");
 #endif

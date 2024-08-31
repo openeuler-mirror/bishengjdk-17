@@ -43,6 +43,9 @@
 #include "runtime/signature.hpp"
 #include "utilities/align.hpp"
 #include "utilities/copy.hpp"
+#if INCLUDE_JBOOSTER
+#include "jbooster/server/serverDataManager.hpp"
+#endif // INCLUDE_JBOOSTER
 
 // ==================================================================
 // DataLayout
@@ -366,6 +369,46 @@ void ReturnTypeEntry::print_data_on(outputStream* st) const {
   st->cr();
 }
 
+#if INCLUDE_JBOOSTER
+
+static void collect_a_klass(GrowableArray<InstanceKlass*>* ik_array,
+                            GrowableArray<ArrayKlass*>* ak_array,
+                            Klass* k) {
+  if (k != NULL) {
+    if (k->is_array_klass()) {
+      ArrayKlass* ak = ArrayKlass::cast(k);
+      ak_array->append(ak);
+      return;
+    }
+    guarantee(k->is_instance_klass(), "sanity");
+    InstanceKlass* ik = InstanceKlass::cast(k);
+    if (ik->is_hidden() || ik->is_dynamic_proxy()) return;
+    Klass* loader_klass = ik->class_loader_data()->class_loader_klass();
+    if (loader_klass != NULL &&
+        loader_klass->is_subtype_of(vmClasses::reflect_DelegatingClassLoader_klass())) {
+      return;
+    }
+    ik_array->append(ik);
+  }
+}
+
+void ReturnTypeEntry::klass_pointer_map_to_server(JClientSessionData* session_data, Thread* thread) {
+  intptr_t p = type();
+  Klass* client_klass = (Klass*)klass_part(p);
+  if (client_klass != NULL) {
+    Klass* server_klass = session_data->server_klass_address((address)client_klass, thread);
+    set_type(with_status(server_klass, p));
+  }
+}
+
+void ReturnTypeEntry::collect_klass(GrowableArray<InstanceKlass*>* ik_array, GrowableArray<ArrayKlass*>* ak_array) {
+  intptr_t p = type();
+  Klass* k = (Klass*)klass_part(p);
+  collect_a_klass(ik_array, ak_array, k);
+}
+
+#endif // INCLUDE_JBOOSTER
+
 void CallTypeData::print_data_on(outputStream* st, const char* extra) const {
   CounterData::print_data_on(st, extra);
   if (has_arguments()) {
@@ -440,6 +483,38 @@ void ReceiverTypeData::print_data_on(outputStream* st, const char* extra) const 
   print_shared(st, "ReceiverTypeData", extra);
   print_receiver_data_on(st);
 }
+
+#if INCLUDE_JBOOSTER
+
+void ReceiverTypeData::clean_untrusted_entries() {
+  for (uint row = 0; row < row_limit(); row++) {
+    set_receiver(row, (Klass*)NULL);
+  }
+}
+
+void ReceiverTypeData::klass_pointer_map_to_server(JClientSessionData* session_data, Thread* thread) {
+  uint row = 0;
+  for (row = 0; row < row_limit(); row++) {
+    Klass* client_klass = receiver_no_check(row);
+    if (client_klass != NULL) {
+      Klass* server_klass = session_data->server_klass_address((address)client_klass, thread);
+      if (server_klass == nullptr) break;
+      set_receiver(row, server_klass);
+    }
+  }
+  if (row != row_limit()) {
+    clean_untrusted_entries();
+  }
+}
+
+void ReceiverTypeData::collect_klass(GrowableArray<InstanceKlass*>* ik_array, GrowableArray<ArrayKlass*>* ak_array) {
+  for (uint row = 0; row < row_limit(); row++) {
+    Klass* k = receiver_no_check(row);
+    collect_a_klass(ik_array, ak_array, k);
+  }
+}
+
+#endif // INCLUDE_JBOOSTER
 
 void VirtualCallData::print_data_on(outputStream* st, const char* extra) const {
   print_shared(st, "VirtualCallData", extra);
@@ -627,6 +702,41 @@ int ParametersTypeData::compute_cell_count(Method* m) {
   }
   return 0;
 }
+
+#if INCLUDE_JBOOSTER
+
+void TypeStackSlotEntries::clean_untrusted_entries() {
+  for (int i = 0; i < _number_of_entries; i++) {
+    intptr_t p = type(i);
+    set_type(i, with_status((Klass*)NULL, p));
+  }
+}
+
+void TypeStackSlotEntries::klass_pointer_map_to_server(JClientSessionData* session_data, Thread* thread) {
+  int index = 0;
+  for (int index = 0; index < _number_of_entries; index++) {
+    intptr_t p = type(index);
+    Klass* client_klass = (Klass*)klass_part(p);
+    if (client_klass != NULL) {
+      Klass* server_klass = session_data->server_klass_address((address)client_klass, thread);
+      if (server_klass == nullptr) break;
+      set_type(index, with_status(server_klass, p));
+    }
+  }
+  if (index != _number_of_entries) {
+    clean_untrusted_entries();
+  }
+}
+
+void TypeStackSlotEntries::collect_klass(GrowableArray<InstanceKlass*>* ik_array, GrowableArray<ArrayKlass*>* ak_array) {
+  for (int i = 0; i < _number_of_entries; i++) {
+    intptr_t p = type(i);
+    Klass* k = (Klass*)klass_part(p);
+    collect_a_klass(ik_array, ak_array, k);
+  }
+}
+
+#endif // INCLUDE_JBOOSTER
 
 void ParametersTypeData::post_initialize(BytecodeStream* stream, MethodData* mdo) {
   _parameters.post_initialize(mdo->method()->signature(), !mdo->method()->is_static(), true);
@@ -1749,7 +1859,7 @@ void MethodData::clean_extra_data(CleanExtraDataClosure* cl) {
       SpeculativeTrapData* data = new SpeculativeTrapData(dp);
       Method* m = data->method();
       assert(m != NULL, "should have a method");
-      if (!cl->is_live(m)) {
+      if (!cl->is_live(m) JBOOSTER_ONLY(|| AsJBooster)) {
         // "shift" accumulates the number of cells for dead
         // SpeculativeTrapData entries that have been seen so
         // far. Following entries must be shifted left by that many
@@ -1832,3 +1942,47 @@ void MethodData::clean_weak_method_links() {
   clean_extra_data(&cl);
   verify_extra_data_clean(&cl);
 }
+
+#if INCLUDE_JBOOSTER
+/**
+ * The "bool* ignored" is just to distinguish it from another constructor.
+ */
+MethodData::MethodData(const methodHandle& method, const bool* ignored)
+  : _method(method()),
+    _extra_data_lock(Mutex::leaf, "MDO extra data lock"),
+    _compiler_counters(),
+    _parameters_type_data_di(parameters_uninitialized) {
+  // part of initialize()
+  Thread* thread = Thread::current();
+  NoSafepointVerifier no_safepoint;
+  ResourceMark rm(thread);
+  init();
+  set_creation_mileage(mileage_of(method()));
+  int data_size = 0;
+  int empty_bc_count = 0;
+  _data[0] = 0;
+}
+
+MethodData* MethodData::create_instance_for_jbooster(Method* method, int byte_size, char* mem, TRAPS) {
+  int word_size = align_metadata_size(align_up(byte_size, BytesPerWord)/BytesPerWord);
+  ClassLoaderData* loader_data = method->method_holder()->class_loader_data();
+  MethodData* res = new (loader_data, word_size, MetaspaceObj::MethodDataType, THREAD)
+                    MethodData(methodHandle(THREAD, method), (const bool*) nullptr);
+
+  // backup
+  char lock_bak[sizeof(res->_extra_data_lock)];
+  memcpy((void*) lock_bak, &res->_extra_data_lock, sizeof(res->_extra_data_lock));
+  FailedSpeculation* fs_bak = res->_failed_speculations;
+
+  // memcpy
+  int start = in_bytes(byte_offset_of(MethodData, _method)) + sizeof(res->_method);
+  memcpy((void*) (((char*) res) + start), mem + start, byte_size - start);
+
+  // restore
+  memcpy((void*) &res->_extra_data_lock, lock_bak, sizeof(res->_extra_data_lock));
+  res->_failed_speculations = fs_bak;
+  res->set_size(byte_size);
+
+  return res;
+}
+#endif // INCLUDE_JBOOSTER

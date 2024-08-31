@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2021, Red Hat, Inc. All rights reserved.
+ * Copyright (c) 2018, 2023, Red Hat, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -51,7 +51,7 @@ void LIR_OpShenandoahCompareAndSwap::emit_code(LIR_Assembler* masm) {
 
   ShenandoahBarrierSet::assembler()->cmpxchg_oop(masm->masm(), addr, cmpval, newval, /*acquire*/ true, /*release*/ true, /*is_cae*/ false, result);
 
-  if (CompilerConfig::is_c1_only_no_jvmci()) {
+  if (CompilerConfig::is_c1_only_no_aot_or_jvmci()) {
     // The membar here is necessary to prevent reordering between the
     // release store in the CAS above and a subsequent volatile load.
     // However for tiered compilation C1 inserts a full barrier before

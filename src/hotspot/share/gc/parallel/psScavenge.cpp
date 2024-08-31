@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2002, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2002, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -69,6 +69,9 @@
 #include "runtime/vmOperations.hpp"
 #include "services/memoryService.hpp"
 #include "utilities/stack.inline.hpp"
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
+#endif
 
 HeapWord*                     PSScavenge::_to_space_top_before_gc = NULL;
 int                           PSScavenge::_consecutive_skipped_scavenges = 0;
@@ -88,6 +91,7 @@ static void scavenge_roots_work(ParallelRootType::Value root_type, uint worker_i
   assert(ParallelScavengeHeap::heap()->is_gc_active(), "called outside gc");
 
   PSPromotionManager* pm = PSPromotionManager::gc_thread_promotion_manager(worker_id);
+  PSScavengeRootsClosure roots_closure(pm);
   PSPromoteRootsClosure  roots_to_old_closure(pm);
 
   switch (root_type) {
@@ -102,6 +106,9 @@ static void scavenge_roots_work(ParallelRootType::Value root_type, uint worker_i
       {
         MarkingCodeBlobClosure code_closure(&roots_to_old_closure, CodeBlobToOopClosure::FixRelocations);
         ScavengableNMethods::nmethods_do(&code_closure);
+#if INCLUDE_AOT
+        AOTLoader::oops_do(&roots_closure);
+#endif
       }
       break;
 
@@ -743,12 +750,14 @@ bool PSScavenge::should_attempt_scavenge() {
   // changed, decide if that test should also be changed.
   size_t avg_promoted = (size_t) policy->padded_average_promoted_in_bytes();
   size_t promotion_estimate = MIN2(avg_promoted, young_gen->used_in_bytes());
-  bool result = promotion_estimate < old_gen->free_in_bytes();
+  // Total free size after possible old gen expansion
+  size_t free_in_old_gen = old_gen->max_gen_size() - old_gen->used_in_bytes();
+  bool result = promotion_estimate < free_in_old_gen;
 
   log_trace(ergo)("%s scavenge: average_promoted " SIZE_FORMAT " padded_average_promoted " SIZE_FORMAT " free in old gen " SIZE_FORMAT,
                 result ? "Do" : "Skip", (size_t) policy->average_promoted_in_bytes(),
                 (size_t) policy->padded_average_promoted_in_bytes(),
-                old_gen->free_in_bytes());
+                free_in_old_gen);
   if (young_gen->used_in_bytes() < (size_t) policy->padded_average_promoted_in_bytes()) {
     log_trace(ergo)(" padded_promoted_average is greater than maximum promotion = " SIZE_FORMAT, young_gen->used_in_bytes());
   }

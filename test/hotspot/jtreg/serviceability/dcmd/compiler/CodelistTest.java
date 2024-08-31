@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -120,7 +120,7 @@ public class CodelistTest {
                 Assert.assertTrue(compileID > 0, "CompileID must be positive");
 
                 int compileLevel = Integer.parseInt(parts[1]);
-                Assert.assertTrue(compileLevel >= -1, "CompileLevel must be at least -1 (Any)");
+                Assert.assertTrue(compileLevel >= -1, "CompileLevel must be at least -1 (AOT)");
                 Assert.assertTrue(compileLevel <= 4,  "CompileLevel must be at most 4 (C2)");
 
                 int codeState = Integer.parseInt(parts[2]);

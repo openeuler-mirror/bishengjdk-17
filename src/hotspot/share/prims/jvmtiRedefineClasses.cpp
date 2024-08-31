@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2003, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2003, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -63,6 +63,9 @@
 #include "runtime/safepointVerifiers.hpp"
 #include "utilities/bitMap.inline.hpp"
 #include "utilities/events.hpp"
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
+#endif
 
 Array<Method*>* VM_RedefineClasses::_old_methods = NULL;
 Array<Method*>* VM_RedefineClasses::_new_methods = NULL;
@@ -4420,6 +4423,18 @@ void VM_RedefineClasses::redefine_single_class(Thread* current, jclass the_jclas
 
   // Scratch class is unloaded but still needs cleaning, and skipping for CDS.
   scratch_class->set_is_scratch_class();
+
+#if INCLUDE_AOT
+  // Replace fingerprint data
+  the_class->set_has_passed_fingerprint_check(scratch_class->has_passed_fingerprint_check());
+  the_class->store_fingerprint(scratch_class->get_stored_fingerprint());
+
+  if (!the_class->should_be_initialized()) {
+    // Class was already initialized, so AOT has only seen the original version.
+    // We need to let AOT look at it again.
+    AOTLoader::load_for_klass(the_class, current);
+  }
+#endif
 
   // keep track of previous versions of this class
   the_class->add_previous_version(scratch_class, emcp_method_count);

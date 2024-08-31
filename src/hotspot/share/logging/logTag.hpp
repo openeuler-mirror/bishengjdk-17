@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -34,8 +34,10 @@
 #define LOG_TAG_LIST \
   LOG_TAG(add) \
   LOG_TAG(age) \
+  AGGRESSIVE_CDS_ONLY(LOG_TAG(aggressive)) \
   LOG_TAG(alloc) \
   LOG_TAG(annotation) \
+  AOT_ONLY(LOG_TAG(aot)) \
   LOG_TAG(arguments) \
   LOG_TAG(attach) \
   LOG_TAG(barrier) \
@@ -44,7 +46,7 @@
   LOG_TAG(bot) \
   LOG_TAG(breakpoint) \
   LOG_TAG(bytecode) \
-  LOG_TAG(cds) \
+  CDS_ONLY(LOG_TAG(cds)) \
   LOG_TAG(census) \
   LOG_TAG(class) \
   LOG_TAG(classhisto) \
@@ -91,6 +93,7 @@
   LOG_TAG(install) \
   LOG_TAG(interpreter) \
   LOG_TAG(itables) \
+  JBOOSTER_ONLY(LOG_TAG(jbooster)) \
   LOG_TAG(jfr) \
   LOG_TAG(jit) \
   LOG_TAG(jni) \
@@ -154,10 +157,12 @@
   LOG_TAG(reloc) \
   LOG_TAG(remset) \
   LOG_TAG(resolve) \
+  JBOOSTER_ONLY(LOG_TAG(rpc)) \
   LOG_TAG(safepoint) \
   LOG_TAG(sampling) \
   LOG_TAG(scavenge) \
   LOG_TAG(sealed) \
+  JBOOSTER_ONLY(LOG_TAG(serialization)) \
   LOG_TAG(setting) \
   LOG_TAG(smr) \
   LOG_TAG(stackbarrier) \

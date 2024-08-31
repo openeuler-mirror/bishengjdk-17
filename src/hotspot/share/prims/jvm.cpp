@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -104,6 +104,13 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#if INCLUDE_JBOOSTER
+#include "jbooster/client/clientDataManager.hpp"
+#include "jbooster/client/clientMessageHandler.hpp"
+#include "jbooster/net/serverListeningThread.hpp"
+#include "jbooster/server/serverDataManager.hpp"
+#include "services/memoryService.hpp"
+#endif // INCLUDE_JBOOSTER
 
 #include <errno.h>
 
@@ -3849,4 +3856,90 @@ JVM_END
 
 JVM_ENTRY_NO_ENV(jint, JVM_FindSignal(const char *name))
   return os::get_signal_number(name);
+JVM_END
+
+// JBooster ////////////////////////////////////////////////////////////////////////
+
+JVM_ENTRY(void, JVM_JBoosterInitVM(JNIEnv *env, jint server_port, jint connection_timeout, jint cleanup_timeout, jstring cache_path))
+#if INCLUDE_JBOOSTER
+  ResourceMark rm(THREAD);
+  const char* cache_path_c = NULL;
+  if (cache_path != NULL) {
+    cache_path_c = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(cache_path));
+  }
+  ServerDataManager::init_phase3(server_port, connection_timeout, cleanup_timeout, cache_path_c, THREAD);
+#endif // INCLUDE_JBOOSTER
+JVM_END
+
+JVM_ENTRY(void, JVM_JBoosterHandleConnection(JNIEnv *env, jint connection_fd))
+#if INCLUDE_JBOOSTER
+  ServerDataManager::get().listening_thread()->handle_connection(connection_fd);
+#endif // INCLUDE_JBOOSTER
+JVM_END
+
+JVM_ENTRY(void, JVM_JBoosterPrintStoredClientData(JNIEnv *env, jboolean print_all))
+#if INCLUDE_JBOOSTER
+  ServerDataManager::get().log_all_state(print_all);
+#endif // INCLUDE_JBOOSTER
+JVM_END
+
+JVM_ENTRY(jlong, JVM_JBoosterGetMetaspaceMethodData(JNIEnv *env, jint session_id, jlong metaspace_method))
+#if INCLUDE_JBOOSTER
+  TempJClientSessionData session_data = ServerDataManager::get().get_session(session_id, THREAD);
+  return (jlong) session_data->method_data_address((address) metaspace_method, THREAD);
+#else
+  return 0;
+#endif // INCLUDE_JBOOSTER
+JVM_END
+
+JVM_ENTRY(void, JVM_JBoosterFreeUnusedCodeBlobs(JNIEnv *env, jobject blobs))
+#if INCLUDE_JBOOSTER
+  typeArrayOop address_array = typeArrayOop(JNIHandles::resolve(blobs));
+  int length = address_array->length();
+  {
+    MutexLocker mu(CodeCache_lock, Mutex::_no_safepoint_check_flag);
+    for (int index = 0; index < length; index++) {
+      jlong adr = address_array->long_at(index);
+      RuntimeBlob* rb = (RuntimeBlob*)(address)adr;
+      assert(rb != nullptr && rb->is_runtime_stub(), "sanity");
+      rb->flush();
+      log_trace(codecache, jbooster)("free %s", rb->name());
+      CodeCache::free(rb);
+    }
+  }
+  // Track memory usage statistic after releasing CodeCache_lock
+  MemoryService::track_code_cache_memory_usage();
+#endif // INCLUDE_JBOOSTER
+JVM_END
+
+JVM_ENTRY(void, JVM_JBoosterStartupNativeCallback(JNIEnv *env))
+#if INCLUDE_JBOOSTER
+  if (!UseJBooster) return;
+  ThreadToNativeFromVM ttn(THREAD->as_Java_thread());
+  log_debug(jbooster, start)("Reached the startup signal point of this program.");
+  ClientDataManager::get().set_startup_end();
+  ClientMessageHandler::trigger_cache_generation_tasks(ClientMessageHandler::TriggerTaskPhase::ON_STARTUP, THREAD);
+  log_debug(jbooster, start)("End of the startup callback.");
+#endif // INCLUDE_JBOOSTER
+JVM_END
+
+JVM_ENTRY(jclass, JVM_DefineTrustedSharedClass(JNIEnv *env, const char *name, jobject loader))
+#if INCLUDE_AGGRESSIVE_CDS
+  assert(UseAggressiveCDS, "sanity");
+  TempNewSymbol class_name = name == NULL ? NULL :
+      SystemDictionary::class_name_symbol(name,
+                                          vmSymbols::java_lang_NoClassDefFoundError(),
+                                          CHECK_NULL);
+  Handle class_loader (THREAD, JNIHandles::resolve(loader));
+  InstanceKlass* k = SystemDictionaryShared::lookup_trusted_share_class(class_name,
+                                                                        class_loader,
+                                                                        CHECK_NULL);
+  if (k == NULL) {
+    return NULL;
+  }
+
+  return (jclass) JNIHandles::make_local(THREAD, k->java_mirror());
+#else
+  return NULL;
+#endif // INCLUDE_AGGRESSIVE_CDS
 JVM_END

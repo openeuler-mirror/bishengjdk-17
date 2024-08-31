@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -74,4 +74,13 @@ const ClassFileStream* ClassFileStream::clone() const {
                              clone_source(),
                              need_verify(),
                              from_boot_loader_modules_image());
+}
+
+uint64_t ClassFileStream::compute_fingerprint() const {
+  int classfile_size = length();
+  int classfile_crc = ClassLoader::crc32(0, (const char*)buffer(), length());
+  uint64_t fingerprint = (uint64_t(classfile_size) << 32) | uint64_t(uint32_t(classfile_crc));
+  assert(fingerprint != 0, "must not be zero");
+
+  return fingerprint;
 }

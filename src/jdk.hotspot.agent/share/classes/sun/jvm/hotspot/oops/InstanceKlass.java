@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2000, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -89,6 +89,7 @@ public class InstanceKlass extends Klass {
     transitiveInterfaces = type.getAddressField("_transitive_interfaces");
     fields               = type.getAddressField("_fields");
     javaFieldsCount      = new CIntField(type.getCIntegerField("_java_fields_count"), 0);
+    annotate             = type.getAddressField("_annotations");
     constants            = new MetadataField(type.getAddressField("_constants"), 0);
     sourceDebugExtension = type.getAddressField("_source_debug_extension");
     innerClasses         = type.getAddressField("_inner_classes");
@@ -168,6 +169,7 @@ public class InstanceKlass extends Klass {
   private static AddressField  transitiveInterfaces;
   private static AddressField fields;
   private static CIntField javaFieldsCount;
+  private static AddressField annotate;
   private static MetadataField constants;
   private static AddressField  sourceDebugExtension;
   private static AddressField  innerClasses;
@@ -281,11 +283,43 @@ public class InstanceKlass extends Klass {
     if (isInterface()) {
       size += wordLength;
     }
+
+    if (hasStoredFingerprint()) {
+      size += 8; // uint64_t
+    }
+
+    if (VM.getVM().hasAOT()) {
+      size += 1; // u1 aot_flags
+    }
+
     return alignSize(size);
   }
 
   private int getMiscFlags() {
     return (int) miscFlags.getValue(this);
+  }
+
+  public static boolean shouldStoreFingerprint() {
+    VM vm = VM.getVM();
+    if (vm.getCommandLineBooleanFlag("EnableJVMCI") && !vm.getCommandLineBooleanFlag("UseJVMCICompiler")) {
+      return true;
+    }
+    if (vm.getCommandLineBooleanFlag("DumpSharedSpaces")) {
+      return true;
+    }
+    if (vm.getCommandLineBooleanFlag("CalculateClassFingerprint")) {
+      return true;
+    }
+    return false;
+  }
+
+  public boolean hasStoredFingerprint() {
+    // has_stored_fingerprint() @ instanceKlass.cpp can return true only if INCLUDE_AOT is
+    // set during compilation.
+    if (!VM.getVM().hasAOT()) {
+      return false;
+    }
+    return shouldStoreFingerprint() || isShared();
   }
 
   public static long getHeaderSize() { return headerSize; }
@@ -884,6 +918,11 @@ public class InstanceKlass extends Klass {
   public IntArray  getMethodOrdering() {
     Address addr = getAddress().getAddressAt(methodOrdering.getOffset());
     return (IntArray) VMObjectFactory.newObject(IntArray.class, addr);
+  }
+
+  public Annotation getAnnotation() {
+      Address addr = getAddress().getAddressAt(annotate.getOffset());
+      return VMObjectFactory.newObject(Annotation.class, addr);
   }
 
   public U2Array getFields() {

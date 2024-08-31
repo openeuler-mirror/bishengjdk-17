@@ -549,6 +549,24 @@ const intx ObjectAlignmentInBytes = 8;
           "compression. Otherwise the level must be between 1 and 9.")      \
           range(0, 9)                                                       \
                                                                             \
+  product(ccstr, HeapDumpRedact, NULL, MANAGEABLE,                          \
+          "Redact the heapdump information to remove sensitive data")       \
+                                                                            \
+  product(ccstr, RedactMap, NULL, MANAGEABLE,                               \
+          "Redact the class and field names to other strings")              \
+                                                                            \
+  product(ccstr, RedactMapFile, NULL, MANAGEABLE,                           \
+          "File path of the Redact Map")                                    \
+                                                                            \
+  product(ccstr, RedactClassPath, NULL, MANAGEABLE,                         \
+          "full path of the Redact Annotation")                             \
+                                                                            \
+  product(bool, VerifyRedactPassword, false,                                \
+         "verify authority for operating heapDump redact feature")          \
+                                                                            \
+  product(ccstr, RedactPassword, NULL,                                      \
+         "authority for operating heapDump redact feature")                 \
+                                                                            \
   product(ccstr, NativeMemoryTracking, DEBUG_ONLY("summary") NOT_DEBUG("off"), \
           "Native memory tracking options")                                 \
                                                                             \
@@ -1652,6 +1670,25 @@ const intx ObjectAlignmentInBytes = 8;
           "Non-segmented code cache: X[%] of the total code cache")         \
           range(0, 100)                                                     \
                                                                             \
+  /* AOT parameters */                                                      \
+  product(bool, UseAOT, false, EXPERIMENTAL,                                \
+          "Use AOT compiled files")                                         \
+                                                                            \
+  product(ccstrlist, AOTLibrary, NULL, EXPERIMENTAL,                        \
+          "AOT library")                                                    \
+                                                                            \
+  product(bool, PrintAOT, false, EXPERIMENTAL,                              \
+          "Print used AOT klasses and methods")                             \
+                                                                            \
+  notproduct(bool, PrintAOTStatistics, false,                               \
+          "Print AOT statistics")                                           \
+                                                                            \
+  product(bool, UseAOTStrictLoading, false, DIAGNOSTIC,                     \
+          "Exit the VM if any of the AOT libraries has invalid config")     \
+                                                                            \
+  product(bool, CalculateClassFingerprint, false,                           \
+          "Calculate class fingerprint")                                    \
+                                                                            \
   /* interpreter debugging */                                               \
   develop(intx, BinarySwitchThreshold, 5,                                   \
           "Minimal number of lookupswitch entries for rewriting to binary " \
@@ -2007,6 +2044,11 @@ const intx ObjectAlignmentInBytes = 8;
                                                                             \
   product(ccstr, ArchiveClassesAtExit, NULL,                                \
           "The path and name of the dynamic archive file")                  \
+                                                                            \
+  product(bool, SkipSharedClassPathCheck, false, DIAGNOSTIC,                \
+          "Skips SharedClassPath check in DynamicCDS, which allows"         \
+          "non-empty directories to exist in classpath when DynamicDS"      \
+          "is used")                                                        \
                                                                             \
   product(ccstr, ExtraSharedClassListFile, NULL,                            \
           "Extra classlist for building the CDS archive file")              \

@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2014, 2021, Red Hat Inc. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2014, 2023, Red Hat Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -1083,7 +1083,7 @@ public:
   address trampoline_call(Address entry, CodeBuffer* cbuf = NULL);
 
   static bool far_branches() {
-    return ReservedCodeCacheSize > branch_range;
+    return ReservedCodeCacheSize > branch_range || UseAOT;
   }
 
   // Jumps that can reach anywhere in the code cache.

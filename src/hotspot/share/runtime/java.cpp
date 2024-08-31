@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -92,6 +92,13 @@
 #endif
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
+#endif
+#if INCLUDE_JBOOSTER
+#include "jbooster/client/clientDataManager.hpp"
+#include "jbooster/client/clientMessageHandler.hpp"
+#endif // INCLUDE_JBOOSTER
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
 #endif
 
 GrowableArray<Method*>* collected_profiled_methods;
@@ -266,6 +273,12 @@ void print_statistics() {
 #endif // COMPILER1
 #endif // INCLUDE_JVMCI
 #endif // COMPILER2
+
+#if INCLUDE_AOT
+  if (PrintAOTStatistics) {
+    AOTLoader::print_statistics();
+  }
+#endif
 
   if (PrintNMethodStatistics) {
     nmethod::print_statistics();
@@ -510,7 +523,7 @@ void before_exit(JavaThread* thread, bool halt) {
   os::terminate_signal_thread();
 
 #if INCLUDE_CDS
-  if (DynamicDumpSharedSpaces) {
+  if (DynamicDumpSharedSpaces JBOOSTER_ONLY(&& !(UseJBooster && ClientDataManager::get().is_cds_allowed()))) {
     ExceptionMark em(thread);
     DynamicArchive::dump();
     if (thread->has_pending_exception()) {
@@ -522,6 +535,14 @@ void before_exit(JavaThread* thread, bool halt) {
     }
   }
 #endif
+
+#if INCLUDE_JBOOSTER
+  if (UseJBooster) {
+    ThreadToNativeFromVM ttn(thread);
+    bool should_compile = JBoosterStartupSignal == nullptr;
+    ClientMessageHandler::trigger_cache_generation_tasks(ClientMessageHandler::TriggerTaskPhase::ON_SHUTDOWN, thread);
+  }
+#endif // INCLUDE_JBOOSTER
 
   print_statistics();
   Universe::heap()->print_tracing_info();

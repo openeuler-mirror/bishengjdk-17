@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2008, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -893,9 +893,23 @@ void Disassembler::decode(CodeBlob* cb, outputStream* st) {
 
   decode_env env(cb, st);
   env.output()->print_cr("--------------------------------------------------------------------------------");
-  env.output()->print("Decoding CodeBlob");
-  if (cb->name() != NULL) {
-    env.output()->print(", name: %s,", cb->name());
+  if (cb->is_aot()) {
+    env.output()->print("A ");
+    if (cb->is_compiled()) {
+      CompiledMethod* cm = (CompiledMethod*)cb;
+      env.output()->print("%d ",cm->compile_id());
+      cm->method()->method_holder()->name()->print_symbol_on(env.output());
+      env.output()->print(".");
+      cm->method()->name()->print_symbol_on(env.output());
+      cm->method()->signature()->print_symbol_on(env.output());
+    } else {
+      env.output()->print_cr("%s", cb->name());
+    }
+  } else {
+    env.output()->print("Decoding CodeBlob");
+    if (cb->name() != NULL) {
+      env.output()->print(", name: %s,", cb->name());
+    }
   }
   env.output()->print_cr(" at  [" PTR_FORMAT ", " PTR_FORMAT "]  " JLONG_FORMAT " bytes", p2i(cb->code_begin()), p2i(cb->code_end()), ((jlong)(cb->code_end() - cb->code_begin())));
 

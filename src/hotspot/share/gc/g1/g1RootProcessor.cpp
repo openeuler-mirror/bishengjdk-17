@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2015, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -45,6 +45,9 @@
 #include "runtime/mutex.hpp"
 #include "utilities/enumIterator.hpp"
 #include "utilities/macros.hpp"
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
+#endif
 
 G1RootProcessor::G1RootProcessor(G1CollectedHeap* g1h, uint n_workers) :
     _g1h(g1h),
@@ -197,6 +200,15 @@ void G1RootProcessor::process_vm_roots(G1RootClosures* closures,
                                        G1GCPhaseTimes* phase_times,
                                        uint worker_id) {
   OopClosure* strong_roots = closures->strong_oops();
+
+#if INCLUDE_AOT
+  if (_process_strong_tasks.try_claim_task(G1RP_PS_aot_oops_do)) {
+    if (UseAOT) {
+      G1GCParPhaseTimesTracker x(phase_times, G1GCPhaseTimes::AOTCodeRoots, worker_id);
+      AOTLoader::oops_do(strong_roots);
+    }
+  }
+#endif
 
   for (auto id : EnumRange<OopStorageSet::StrongId>()) {
     G1GCPhaseTimes::GCParPhases phase = G1GCPhaseTimes::strong_oopstorage_phase(id);

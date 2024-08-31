@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2013, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -41,6 +41,8 @@ import java.util.function.Function;
 public abstract class CompilerWhiteBoxTest {
     /** {@code CompLevel::CompLevel_none} -- Interpreter */
     public static final int COMP_LEVEL_NONE = 0;
+    /** {@code CompLevel::CompLevel_aot} -- AOT */
+    public static final int COMP_LEVEL_AOT = -2;
     /** {@code CompLevel::CompLevel_any}, {@code CompLevel::CompLevel_all} */
     public static final int COMP_LEVEL_ANY = -1;
     /** {@code CompLevel::CompLevel_simple} -- C1 */

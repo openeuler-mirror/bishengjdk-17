@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -54,6 +54,7 @@
 #include "runtime/vm_version.hpp"
 #include "services/management.hpp"
 #include "services/nmtCommon.hpp"
+#include "services/heapRedactor.hpp"
 #include "utilities/align.hpp"
 #include "utilities/defaultStream.hpp"
 #include "utilities/macros.hpp"
@@ -62,6 +63,9 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#if INCLUDE_JBOOSTER
+#include "jbooster/jBoosterManager.hpp"
+#endif // INCLUDE_JBOOSTER
 
 #define DEFAULT_JAVA_LAUNCHER  "generic"
 
@@ -116,6 +120,8 @@ PathString *Arguments::_system_boot_class_path = NULL;
 bool Arguments::_has_jimage = false;
 
 char* Arguments::_ext_dirs = NULL;
+
+char* Arguments::_heap_dump_redact_auth = NULL;
 
 bool PathString::set_value(const char *value) {
   if (_value != NULL) {
@@ -2614,6 +2620,15 @@ jint Arguments::parse_each_vm_init_arg(const JavaVMInitArgs* args, bool* patch_m
     // -D
     } else if (match_option(option, "-D", &tail)) {
       const char* value;
+#ifndef AARCH64
+      if (match_option(option, "-DGZIP_USE_KAE=", &value)) {
+        if (strcmp(value, "true") == 0) {
+          jio_fprintf(defaultStream::output_stream(),
+            "-DGZIP_USE_KAE is not supported. This system propertiy is valid only on aarch64 architecture machines.\n"
+            "The compression action is performed using the native compression capability of the JDK.\n");
+        }
+      }
+#endif
       if (match_option(option, "-Djava.endorsed.dirs=", &value) &&
             *value!= '\0' && strcmp(value, "\"\"") != 0) {
         // abort if -Djava.endorsed.dirs is set
@@ -3146,6 +3161,21 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
   if (UseSharedSpaces && !DumpSharedSpaces && check_unsupported_cds_runtime_properties()) {
     FLAG_SET_DEFAULT(UseSharedSpaces, false);
   }
+#endif
+
+#if !INCLUDE_AOT
+  UNSUPPORTED_OPTION(UseAOT);
+  UNSUPPORTED_OPTION(PrintAOT);
+  UNSUPPORTED_OPTION(UseAOTStrictLoading);
+  UNSUPPORTED_OPTION_NULL(AOTLibrary);
+
+  UNSUPPORTED_OPTION_INIT(Tier3AOTInvocationThreshold, 0);
+  UNSUPPORTED_OPTION_INIT(Tier3AOTMinInvocationThreshold, 0);
+  UNSUPPORTED_OPTION_INIT(Tier3AOTCompileThreshold, 0);
+  UNSUPPORTED_OPTION_INIT(Tier3AOTBackEdgeThreshold, 0);
+#ifndef PRODUCT
+  UNSUPPORTED_OPTION(PrintAOTStatistics);
+#endif
 #endif
 
 #ifndef CAN_SHOW_REGISTERS_ON_ASSERT
@@ -3707,6 +3737,29 @@ jint Arguments::match_special_option_and_act(const JavaVMInitArgs* args,
       vm_exit(0);
     }
 
+    if (match_option(option, "-XX:HeapDumpRedact", &tail)) {
+      // HeapDumpRedact arguments.
+      if (!HeapRedactor::check_launcher_heapdump_redact_support(tail)) {
+        warning("Heap dump redacting did not setup properly, using wrong argument?");
+        vm_exit_during_initialization("Syntax error, expecting -XX:HeapDumpRedact=[off|names|basic|full|diyrules|annotation]",NULL);
+      }
+    }
+
+    // heapDump redact password
+    if(match_option(option, "-XX:RedactPassword=", &tail)) {
+      if(tail == NULL || strlen(tail) == 0) {
+          VerifyRedactPassword = false;
+          jio_fprintf(defaultStream::output_stream(), "redact password is null, disable verify heap dump authority.\n");
+      } else {
+          VerifyRedactPassword = true;
+          size_t redact_password_len = strlen(tail);
+          _heap_dump_redact_auth = NEW_C_HEAP_ARRAY(char, redact_password_len+1, mtArguments);
+          memcpy(_heap_dump_redact_auth, tail, redact_password_len);
+          _heap_dump_redact_auth[redact_password_len] = '\0';
+          memset((void*)tail, '0', redact_password_len);
+      }
+    }
+
 #ifndef PRODUCT
     if (match_option(option, "-XX:+PrintFlagsWithComments")) {
       JVMFlag::printFlags(tty, true);
@@ -3998,8 +4051,31 @@ jint Arguments::apply_ergo() {
 
   GCConfig::arguments()->initialize();
 
+#if INCLUDE_JBOOSTER
+  // The jbooster server identifies the client based on the client VM flags.
+  // After identifying the client, the server sends the corresponding caches
+  // to the client (or no cache to send).
+  // Depending on whether the caches are present, different flags will be set
+  // by JBoosterManager, especially for Dynamic CDS.
+  // So the time for sending client VM flags to the server should be later
+  // than most VM flags are initialized, but earlier than the time for CDS
+  // initialization.
+  JBoosterManager::check_arguments();
+  if (UseJBooster || AsJBooster) {
+    result = JBoosterManager::init_phase1();
+    if (result != JNI_OK) return result;
+  }
+
+  init_class_loader_resource_cache_properties();
+#endif // INCLUDE_JBOOSTER
+
   result = set_shared_spaces_flags_and_archive_paths();
   if (result != JNI_OK) return result;
+
+#if INCLUDE_AGGRESSIVE_CDS
+  result = init_aggressive_cds_properties();
+  if (result != JNI_OK) return result;
+#endif // INCLUDE_AGGRESSIVE_CDS
 
   // Initialize Metaspace flags and alignments
   Metaspace::ergo_initialize();
@@ -4318,3 +4394,101 @@ bool Arguments::copy_expand_pid(const char* src, size_t srclen,
   *b = '\0';
   return (p == src_end); // return false if not all of the source was copied
 }
+
+#if INCLUDE_JBOOSTER
+
+jint Arguments::init_class_loader_resource_cache_properties() {
+  if (UseClassLoaderResourceCache == false) {
+    if (LoadClassLoaderResourceCacheFile != NULL || DumpClassLoaderResourceCacheFile != NULL) {
+      vm_exit_during_initialization("Set -XX:+UseClassLoaderResourceCache first");
+    }
+    return JNI_OK;
+  }
+
+  if (!add_property("jdk.jbooster.clrcache.enable=true", UnwriteableProperty, InternalProperty)) {
+    return JNI_ENOMEM;
+  }
+
+  const int buf_len = 4096;
+  char buffer[buf_len];
+
+  if (LoadClassLoaderResourceCacheFile != NULL) {
+    if (jio_snprintf(buffer, buf_len, "jdk.jbooster.clrcache.load=%s", LoadClassLoaderResourceCacheFile) < 0) {
+      return JNI_ENOMEM;
+    }
+    if (!add_property(buffer, UnwriteableProperty, InternalProperty)) {
+      return JNI_ENOMEM;
+    }
+  }
+
+  if (DumpClassLoaderResourceCacheFile != NULL) {
+    if (jio_snprintf(buffer, buf_len, "jdk.jbooster.clrcache.dump=%s", DumpClassLoaderResourceCacheFile) < 0) {
+      return JNI_ENOMEM;
+    }
+    if (!add_property(buffer, UnwriteableProperty, InternalProperty)) {
+      return JNI_ENOMEM;
+    }
+  }
+
+  if (jio_snprintf(buffer, buf_len, "jdk.jbooster.clrcache.size=%u", ClassLoaderResourceCacheSizeEachLoader) < 0) {
+    return JNI_ENOMEM;
+  }
+  if (!add_property(buffer, UnwriteableProperty, InternalProperty)) {
+    return JNI_ENOMEM;
+  }
+
+  if (ClassLoaderResourceCacheVerboseMode) {
+    if (!add_property("jdk.jbooster.clrcache.verbose=true", UnwriteableProperty, InternalProperty)) {
+      return JNI_ENOMEM;
+    }
+  }
+
+  return JNI_OK;
+}
+
+jint Arguments::init_jbooster_startup_signal_properties(const char* klass_name,
+                                                        const char* method_name,
+                                                        const char* method_signature) {
+  bool added;
+  int jio_res;
+  const int buf_len = 4096;
+  char buffer[buf_len];
+
+  if (klass_name != nullptr) {
+    jio_res = jio_snprintf(buffer, buf_len, "jdk.jbooster.startup_klass_name=%s", klass_name);
+    if (jio_res < 0) return JNI_ENOMEM;
+    added = add_property(buffer, UnwriteableProperty, InternalProperty);
+    if (!added) return JNI_ENOMEM;
+  }
+
+  if (method_name != nullptr) {
+    jio_res = jio_snprintf(buffer, buf_len, "jdk.jbooster.startup_method_name=%s", method_name);
+    if (jio_res < 0) return JNI_ENOMEM;
+    added = add_property(buffer, UnwriteableProperty, InternalProperty);
+    if (!added) return JNI_ENOMEM;
+  }
+
+  if (method_signature != nullptr) {
+    jio_res = jio_snprintf(buffer, buf_len, "jdk.jbooster.startup_method_signature=%s", method_signature);
+    if (jio_res < 0) return JNI_ENOMEM;
+    added = add_property(buffer, UnwriteableProperty, InternalProperty);
+    if (!added) return JNI_ENOMEM;
+  }
+
+  return JNI_OK;
+}
+
+#endif // INCLUDE_JBOOSTER
+
+#if INCLUDE_AGGRESSIVE_CDS
+
+jint Arguments::init_aggressive_cds_properties() {
+  if (!is_dumping_archive() && SharedDynamicArchivePath != NULL && UseAggressiveCDS) {
+    bool added = false;
+    added = add_property("jdk.jbooster.aggressivecds.load=true", UnwriteableProperty, InternalProperty);
+    if (!added) return JNI_ENOMEM;
+  }
+  return JNI_OK;
+}
+
+#endif // INCLUDE_AGGRESSIVE_CDS

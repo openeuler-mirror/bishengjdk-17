@@ -110,6 +110,41 @@ grant codeBase "jrt:/jdk.accessibility" {
     permission java.lang.RuntimePermission "accessClassInPackage.sun.awt";
 };
 
+grant codeBase "jrt:/jdk.aot" {
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.api.directives";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.api.runtime";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.api.replacements";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.asm.amd64";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.asm.aarch64";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.bytecode";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.code";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.core";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.core.common";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.core.target";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.debug";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.graph";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.hotspot";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.hotspot.meta";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.hotspot.replacements";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.hotspot.stubs";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.hotspot.word";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.java";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.lir.asm";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.lir.phases";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.nodes";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.nodes.graphbuilderconf";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.options";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.phases";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.phases.tiers";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.printer";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.runtime";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.replacements";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.serviceprovider";
+    permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.word";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.internal.vm.compiler.word";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.vm.ci.jbooster";
+};
+
 grant codeBase "jrt:/jdk.charsets" {
     permission java.util.PropertyPermission "os.name", "read";
     permission java.lang.RuntimePermission "charsetProvider";
@@ -183,6 +218,15 @@ grant codeBase "jrt:/jdk.internal.vm.compiler.management" {
     permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.options";
     permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.phases.common.jmx";
     permission java.lang.RuntimePermission "accessClassInPackage.org.graalvm.compiler.serviceprovider";
+};
+
+grant codeBase "jrt:/jdk.jbooster" {
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.internal.org.objectweb.asm";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.tools.jaotc";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.tools.jaotc.collect";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.tools.jaotc.collect.module";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.vm.ci.hotspot";
+    permission java.lang.RuntimePermission "accessClassInPackage.jdk.vm.ci.jbooster";
 };
 
 grant codeBase "jrt:/jdk.jsobject" {

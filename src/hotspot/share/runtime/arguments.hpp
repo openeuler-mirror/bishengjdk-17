@@ -468,6 +468,8 @@ class Arguments : AllStatic {
                                          char** base_archive_path,
                                          char** top_archive_path) NOT_CDS_RETURN;
 
+  static char* _heap_dump_redact_auth;
+
  public:
   // Parses the arguments, first phase
   static jint parse(const JavaVMInitArgs* args);
@@ -552,6 +554,9 @@ class Arguments : AllStatic {
   static size_t default_SharedBaseAddress() { return _default_SharedBaseAddress; }
   // Java launcher properties
   static void process_sun_java_launcher_properties(JavaVMInitArgs* args);
+
+  // heap dump redact password
+  static const char* get_heap_dump_redact_auth() { return _heap_dump_redact_auth; }
 
   // System properties
   static void init_system_properties();
@@ -640,6 +645,17 @@ class Arguments : AllStatic {
   static void assert_is_dumping_archive() {
     assert(Arguments::is_dumping_archive(), "dump time only");
   }
+
+#if INCLUDE_JBOOSTER
+  static jint init_class_loader_resource_cache_properties();
+  static jint init_jbooster_startup_signal_properties(const char* klass_name,
+                                                      const char* method_name,
+                                                      const char* method_signature);
+#endif // INCLUDE_JBOOSTER
+
+#if INCLUDE_AGGRESSIVE_CDS
+  static jint init_aggressive_cds_properties();
+#endif // INCLUDE_AGGRESSIVE_CDS
 
   DEBUG_ONLY(static bool verify_special_jvm_flags(bool check_globals);)
 };

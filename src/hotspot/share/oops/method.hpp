@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -91,6 +91,11 @@ class Method : public Metadata {
     _intrinsic_candidate   = 1 << 5,
     _reserved_stack_access = 1 << 6,
     _scoped                = 1 << 7
+#if INCLUDE_JBOOSTER
+    ,
+    _rewrite_invokehandle  = 1 << 8, /* always be the last */
+    _last_method_flags = _rewrite_invokehandle
+#endif // INCLUDE_JBOOSTER
   };
   mutable u2 _flags;
 
@@ -111,6 +116,10 @@ class Method : public Metadata {
   // NULL only at safepoints (because of a de-opt).
   CompiledMethod* volatile _code;                       // Points to the corresponding piece of native code
   volatile address           _from_interpreted_entry; // Cache of _code ? _adapter->i2c_entry() : _i2i_entry
+
+#if INCLUDE_AOT
+  CompiledMethod* _aot_code;
+#endif
 
   // Constructor
   Method(ConstMethod* xconst, AccessFlags access_flags);
@@ -397,6 +406,18 @@ class Method : public Metadata {
     }
   }
 
+#if INCLUDE_AOT
+  void set_aot_code(CompiledMethod* aot_code) {
+    _aot_code = aot_code;
+  }
+
+  CompiledMethod* aot_code() const {
+    return _aot_code;
+  }
+#else
+  CompiledMethod* aot_code() const { return NULL; }
+#endif // INCLUDE_AOT
+
   int nmethod_age() const {
     if (method_counters() == NULL) {
       return INT_MAX;
@@ -654,6 +675,8 @@ public:
   // NOTE: code() is inherently racy as deopt can be clearing code
   // simultaneously. Use with caution.
   bool has_compiled_code() const;
+
+  bool has_aot_code() const                      { return aot_code() != NULL; }
 
   bool needs_clinit_barrier() const;
 
@@ -992,6 +1015,20 @@ public:
   // Inlined elements
   address* native_function_addr() const          { assert(is_native(), "must be native"); return (address*) (this+1); }
   address* signature_handler_addr() const        { return native_function_addr() + 1; }
+
+#if INCLUDE_JBOOSTER
+ public:
+  static ByteSize flags_offset()                 { return byte_offset_of(Method, _flags); }
+  static u2 last_method_flags()                  { return _last_method_flags; }
+
+  bool is_rewrite_invokehandle() {
+    return (_flags & _rewrite_invokehandle) != 0;
+  }
+
+  void set_rewrite_invokehandle(bool x) {
+    _flags = x ? (_flags | _rewrite_invokehandle) : (_flags & ~_rewrite_invokehandle);
+  }
+#endif // INCLUDE_JBOOSTER
 };
 
 

@@ -78,6 +78,7 @@ public class JMap extends Tool {
 
     private static String dumpfile = "heap.bin";
     private static int gzLevel = 0;
+    private static HeapRedactor heapRedactor;
 
     public void run() {
         Tool tool = null;
@@ -123,6 +124,7 @@ public class JMap extends Tool {
 
     public static void main(String[] args) {
         int mode = MODE_PMAP;
+        HeapRedactor.RedactParams redactParams = new HeapRedactor.RedactParams();
         if (args.length > 1 ) {
             String modeFlag = args[0];
             boolean copyArgs = true;
@@ -177,6 +179,16 @@ public class JMap extends Tool {
                                 System.err.println("compression level out of range (1-9): " + level);
                                 System.exit(1);
                             }
+                        } else if (keyValue[0].equals("HeapDumpRedact")) {
+                            if (!redactParams.setAndCheckHeapDumpRedact(keyValue[1])) {
+                                System.exit(1);
+                            }
+                        } else if (keyValue[0].equals("RedactMap")) {
+                            redactParams.setRedactMap(keyValue[1]);
+                        } else if (keyValue[0].equals("RedactMapFile")) {
+                            redactParams.setRedactMapFile(keyValue[1]);
+                        } else if (keyValue[0].equals("RedactClassPath")) {
+                            redactParams.setRedactClassPath(keyValue[1]);
                         } else {
                             System.err.println("unknown option:" + keyValue[0]);
 
@@ -189,12 +201,24 @@ public class JMap extends Tool {
                 }
             }
 
+            if (redactParams.getHeapDumpRedact() == null) {
+                if (redactParams.getRedactMap() == null && redactParams.getRedactMapFile() == null
+                    && redactParams.getRedactClassPath() == null) {
+                    redactParams.setEnableRedact(false);
+                } else {
+                    System.err.println("Error: HeapDumpRedact must be specified to enable heap-dump-redacting");
+                    copyArgs = false;
+                    System.exit(1);
+                }
+            }
+
             if (copyArgs) {
                 String[] newArgs = new String[args.length - 1];
                 for (int i = 0; i < newArgs.length; i++) {
                     newArgs[i] = args[i + 1];
                 }
                 args = newArgs;
+                heapRedactor = new HeapRedactor(redactParams);
             }
         }
 
@@ -204,7 +228,7 @@ public class JMap extends Tool {
 
     public boolean writeHeapHprofBin(String fileName, int gzLevel) {
         try {
-            HeapGraphWriter hgw;
+            HeapHprofBinWriter hgw;
             if (gzLevel == 0) {
                 hgw = new HeapHprofBinWriter();
             } else if (gzLevel >=1 && gzLevel <= 9) {
@@ -213,6 +237,7 @@ public class JMap extends Tool {
                 System.err.println("Illegal compression level: " + gzLevel);
                 return false;
             }
+            hgw.setHeapRedactor(heapRedactor);
             hgw.write(fileName);
             System.out.println("heap written to " + fileName);
             return true;

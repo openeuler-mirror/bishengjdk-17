@@ -133,6 +133,17 @@ public class Inflater {
 
     /**
      * Creates a new decompressor.
+     * This method is mainly used to support the KAE-zip feature.
+     *
+     * @param windowBits compression format (-15~31)
+     * @param flushKAE inflate flush type (0~6)
+     */
+    public Inflater(int windowBits, int flushKAE) {
+        this.zsRef = new InflaterZStreamRef(this, initKAE(windowBits, flushKAE));
+    }
+
+    /**
+     * Creates a new decompressor.
      */
     public Inflater() {
         this(false);
@@ -693,6 +704,17 @@ public class Inflater {
     }
 
     /**
+     * Resets inflater so that a new set of input data can be processed.
+     * This method is mainly used to support the KAE-zip feature.
+     */
+    public void resetKAE() {
+        synchronized (zsRef) {
+            ensureOpen();
+            reset(zsRef.address());
+        }
+    }
+
+    /**
      * Closes the decompressor and discards any unprocessed input.
      *
      * This method should be called when the decompressor is no longer
@@ -716,6 +738,7 @@ public class Inflater {
 
     private static native void initIDs();
     private static native long init(boolean nowrap);
+    private static native long initKAE(int windowBits, int flushKAE);
     private static native void setDictionary(long addr, byte[] b, int off,
                                              int len);
     private static native void setDictionaryBuffer(long addr, long bufAddress, int len);

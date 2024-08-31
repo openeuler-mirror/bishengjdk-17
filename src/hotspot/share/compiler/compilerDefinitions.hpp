@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016, 2021, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2016, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -55,6 +55,7 @@ enum MethodCompilation {
 
 // Enumeration to distinguish tiers of compilation
 enum CompLevel {
+  CompLevel_aot               = -2,
   CompLevel_any               = -1,        // Used for querying the state
   CompLevel_all               = -1,        // Used for changing the state
   CompLevel_none              = 0,         // Interpreter
@@ -137,16 +138,18 @@ public:
   constexpr static bool has_c2()     { return COMPILER2_PRESENT(true) NOT_COMPILER2(false); }
   constexpr static bool has_jvmci()  { return JVMCI_ONLY(true) NOT_JVMCI(false);            }
   constexpr static bool has_tiered() { return has_c1() && (has_c2() || has_jvmci());        }
+  constexpr static bool has_aot()    { return AOT_ONLY(true) NOT_AOT(false);                }
 
+  static bool is_aot()               { return AOT_ONLY(has_aot() && UseAOT) NOT_AOT(false);                 }
   static bool is_jvmci_compiler()    { return JVMCI_ONLY(has_jvmci() && UseJVMCICompiler) NOT_JVMCI(false); }
   static bool is_jvmci()             { return JVMCI_ONLY(has_jvmci() && EnableJVMCI) NOT_JVMCI(false);      }
   static bool is_interpreter_only();
 
   // is_*_only() functions describe situations in which the JVM is in one way or another
   // forced to use a particular compiler or their combination. The constraint functions
-  // deliberately ignore the fact that there may also be methods installed
+  // deliberately ignore the fact that there may also be AOT methods and methods installed
   // through JVMCI (where the JVMCI compiler was invoked not through the broker). Be sure
-  // to check for those (using is_jvmci()) in situations where it matters.
+  // to check for those (using is_jvmci() and is_aot()) in situations where it matters.
   //
 
   // Is the JVM in a configuration that permits only c1-compiled methods (level 1,2,3)?
@@ -160,13 +163,13 @@ public:
     return false;
   }
 
-  static bool is_c1_or_interpreter_only_no_jvmci() {
+  static bool is_c1_or_interpreter_only_no_aot_or_jvmci() {
     assert(is_jvmci_compiler() && is_jvmci() || !is_jvmci_compiler(), "JVMCI compiler implies enabled JVMCI");
-    return !is_jvmci() && (is_interpreter_only() || is_c1_only());
+    return !is_aot() && !is_jvmci() && (is_interpreter_only() || is_c1_only());
   }
 
-  static bool is_c1_only_no_jvmci() {
-    return is_c1_only() && !is_jvmci();
+  static bool is_c1_only_no_aot_or_jvmci() {
+    return is_c1_only() && !is_aot() && !is_jvmci();
   }
 
   // Is the JVM in a configuration that permits only c1-compiled methods at level 1?

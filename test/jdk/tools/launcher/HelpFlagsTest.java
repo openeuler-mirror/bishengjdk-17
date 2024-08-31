@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 2018, 2021, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2018, 2020 SAP SE. All rights reserved.
+ * Copyright (c) 2018, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2023 SAP SE. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -122,6 +122,7 @@ public class HelpFlagsTest extends TestHelper {
         //                                            of help          docu   of wrong
         //                                                             mented flag
         new ToolHelpSpec("jabswitch",   0,   0,   0,   0,         0,    0,     0),     // /?, prints help message anyways, win only
+        new ToolHelpSpec("jaotc",       1,   1,   1,   0,         0,    0,     2),     // -?, -h, --help
         new ToolHelpSpec("jar",         1,   1,   1,   0,         0,    0,     1),     // -?, -h, --help
         new ToolHelpSpec("jarsigner",   1,   1,   1,   0,         1,    0,     1),     // -?, -h, --help, -help accepted but not documented.
         new ToolHelpSpec("java",        1,   1,   1,   0,         1,    1,     1),     // -?, -h, --help -help, Documents -help
@@ -129,6 +130,7 @@ public class HelpFlagsTest extends TestHelper {
         new ToolHelpSpec("javadoc",     1,   1,   1,   0,         1,    1,     1),     // -?, -h, --help -help, Documents -help
         new ToolHelpSpec("javap",       1,   1,   1,   0,         1,    1,     2),     // -?, -h, --help -help, Documents -help
         new ToolHelpSpec("javaw",       1,   1,   1,   0,         1,    1,     1),     // -?, -h, --help -help, Documents -help, win only
+        new ToolHelpSpec("jbooster",    1,   1,   1,   0,         1,    1,     0),     // -?, -h, --help -help, Documents -help
         new ToolHelpSpec("jcmd",        1,   1,   1,   0,         1,    0,     1),     // -?, -h, --help, -help accepted but not documented.
         new ToolHelpSpec("jdb",         1,   1,   1,   0,         1,    1,     0),     // -?, -h, --help -help, Documents -help
         new ToolHelpSpec("jdeprscan",   1,   1,   1,   0,         0,    0,     1),     // -?, -h, --help

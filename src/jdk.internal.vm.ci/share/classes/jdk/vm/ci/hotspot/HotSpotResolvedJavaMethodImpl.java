@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2011, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -38,6 +38,7 @@ import java.lang.reflect.Type;
 
 import jdk.vm.ci.common.JVMCIError;
 import jdk.vm.ci.hotspot.HotSpotJVMCIRuntime.Option;
+import jdk.vm.ci.jbooster.JBoosterCompilationContext;
 import jdk.vm.ci.meta.Constant;
 import jdk.vm.ci.meta.ConstantPool;
 import jdk.vm.ci.meta.DefaultProfilingInfo;
@@ -472,26 +473,40 @@ final class HotSpotResolvedJavaMethodImpl extends HotSpotMethod implements HotSp
     @Override
     public ProfilingInfo getProfilingInfo(boolean includeNormal, boolean includeOSR) {
         ProfilingInfo info;
+        HotSpotMethodData currentMethodData = null;
+        JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+        if (ctx == null || !ctx.usePGO()) {
+            currentMethodData = methodData;
+        }
 
-        if (Option.UseProfilingInformation.getBoolean() && methodData == null) {
-            long metaspaceMethodData = UNSAFE.getAddress(getMetaspaceMethod() + config().methodDataOffset);
+        if (Option.UseProfilingInformation.getBoolean() && (ctx != null && ctx.usePGO() || methodData == null)) {
+            long metaspaceMethodData = 0L;
+            if (ctx == null) {
+                metaspaceMethodData = UNSAFE.getAddress(getMetaspaceMethod() + config().methodDataOffset);
+            } else if (ctx.usePGO()) {
+                // force to get MethodData everytime when use JBooster
+                metaspaceMethodData = JBoosterCompilationContext.get().getMetaspaceMethodData(getMetaspaceMethod());
+            }
             if (metaspaceMethodData != 0) {
-                methodData = new HotSpotMethodData(metaspaceMethodData, this);
+                currentMethodData = new HotSpotMethodData(metaspaceMethodData, this);
+                if (ctx == null) {
+                    methodData = currentMethodData;
+                }
                 String methodDataFilter = Option.TraceMethodDataFilter.getString();
                 if (methodDataFilter != null && this.format("%H.%n").contains(methodDataFilter)) {
-                    String line = methodData.toString() + System.lineSeparator();
+                    String line = currentMethodData.toString() + System.lineSeparator();
                     byte[] lineBytes = line.getBytes();
                     HotSpotJVMCIRuntime.runtime().writeDebugOutput(lineBytes, 0, lineBytes.length, true, true);
                 }
             }
         }
 
-        if (methodData == null || (!methodData.hasNormalData() && !methodData.hasExtraData())) {
+        if (currentMethodData == null || (!currentMethodData.hasNormalData() && !currentMethodData.hasExtraData())) {
             // Be optimistic and return false for exceptionSeen. A methodDataOop is allocated in
             // case of a deoptimization.
             info = DefaultProfilingInfo.get(TriState.FALSE);
         } else {
-            info = new HotSpotProfilingInfo(methodData, this, includeNormal, includeOSR);
+            info = new HotSpotProfilingInfo(currentMethodData, this, includeNormal, includeOSR);
         }
         return info;
     }

@@ -48,6 +48,12 @@ ifneq ($(findstring debug, $(DEBUG_LEVEL)), )
   endif
 endif
 
+JVM_KUNPENG_PLUGIN_DIR := $(call FindSrcDirsForLib, java.base, jplugin)
+JVM_KUNPENG_PLUGIN_SYMBOLS_SRC := $(JVM_KUNPENG_PLUGIN_DIR)/make/hotspot-symbols
+ifeq ($(wildcard $(JVM_KUNPENG_PLUGIN_SYMBOLS_SRC)), $(JVM_KUNPENG_PLUGIN_SYMBOLS_SRC))
+  SYMBOLS_SRC += $(JVM_KUNPENG_PLUGIN_SYMBOLS_SRC)/symbols-plugin
+endif
+
 ################################################################################
 # Create a dynamic list of symbols from the built object files. This is highly
 # platform dependent.

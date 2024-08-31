@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -205,6 +205,11 @@ class CodeCache : AllStatic {
   static address high_bound()                         { return _high_bound; }
   static address high_bound(int code_blob_type);
 
+#if INCLUDE_AOT
+  // Have to use far call instructions to call this pc.
+  static bool is_far_target(address pc);
+#endif
+
   // Profiling
   static size_t capacity();
   static size_t unallocated_capacity(int code_blob_type);
@@ -226,6 +231,7 @@ class CodeCache : AllStatic {
 
   static bool code_blob_type_accepts_compiled(int type) {
     bool result = type == CodeBlobType::All || type <= CodeBlobType::MethodProfiled;
+    AOT_ONLY( result = result || type == CodeBlobType::AOT; )
     return result;
   }
 

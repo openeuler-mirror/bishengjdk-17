@@ -53,11 +53,13 @@
 #include "runtime/vframe.hpp"
 #include "runtime/vmThread.hpp"
 #include "runtime/vmOperations.hpp"
+#include "runtime/fieldDescriptor.inline.hpp"
 #include "services/heapDumper.hpp"
 #include "services/heapDumperCompression.hpp"
 #include "services/threadService.hpp"
 #include "utilities/macros.hpp"
 #include "utilities/ostream.hpp"
+#include "services/heapRedactor.hpp"
 
 /*
  * HPROF binary format - description copied from:
@@ -414,6 +416,8 @@ class DumpWriter : public StackObj {
   // Returns true if we have enough room in the buffer for 'len' bytes.
   bool can_write_fast(size_t len);
 
+  HeapRedactor* redactor;
+
  public:
   // Takes ownership of the writer and compressor.
   DumpWriter(AbstractWriter* writer, AbstractCompressor* compressor);
@@ -427,6 +431,7 @@ class DumpWriter : public StackObj {
 
   // writer functions
   void write_raw(void* s, size_t len);
+  void write_zero_raw(void* s, size_t len);
   void write_u1(u1 x);
   void write_u2(u2 x);
   void write_u4(u4 x);
@@ -443,10 +448,16 @@ class DumpWriter : public StackObj {
   // Finishes the current dump segment if not already finished.
   void finish_dump_segment();
 
-  // Called by threads used for parallel writing.
-  void writer_loop()                    { _backend.thread_loop(); }
-  // Called when finished to release the threads.
-  void deactivate()                     { flush(); _backend.deactivate(); }
+  // remove sensitive data from heapdump information
+
+  void setHeapRedactor(HeapRedactor* value);
+  HeapRedactor* heapRedactor();
+  HeapDumpRedactLevel getHeapDumpRedactLevel();
+
+    // Called by threads used for parallel writing.
+    void writer_loop()                    { _backend.thread_loop(); }
+    // Called when finished to release the threads.
+    void deactivate()                     { flush(); _backend.deactivate(); }
 };
 
 // Check for error after constructing the object and destroy it in case of an error.
@@ -461,6 +472,21 @@ DumpWriter::DumpWriter(AbstractWriter* writer, AbstractCompressor* compressor) :
 
 DumpWriter::~DumpWriter() {
   flush();
+}
+
+void DumpWriter::setHeapRedactor(HeapRedactor* value) {
+  redactor = value;
+}
+
+HeapRedactor* DumpWriter::heapRedactor() {
+  return redactor;
+}
+
+HeapDumpRedactLevel DumpWriter::getHeapDumpRedactLevel() {
+  if(redactor==NULL){
+    return REDACT_OFF;
+  }
+  return redactor->redact_level();
 }
 
 void DumpWriter::write_fast(void* s, size_t len) {
@@ -496,6 +522,27 @@ void DumpWriter::write_raw(void* s, size_t len) {
 
   memcpy(buffer() + position(), s, len);
   set_position(position() + len);
+}
+
+void DumpWriter::write_zero_raw(void* s, size_t len) {
+    assert(!_in_dump_segment || (_sub_record_left >= len), "sub-record too large");
+    debug_only(_sub_record_left -= len);
+
+    // flush buffer to make room.
+    while (len > buffer_size() - position()) {
+        assert(!_in_dump_segment || _is_huge_sub_record,
+               "Cannot overflow in non-huge sub-record.");
+
+        size_t to_write = buffer_size() - position();
+        memset(buffer() + position(), 0, to_write);
+        s = (void*) ((char*) s + to_write);
+        len -= to_write;
+        set_position(position() + to_write);
+        flush();
+    }
+
+    memset(buffer() + position(), 0, len);
+    set_position(position() + len);
 }
 
 // flush any buffered bytes to the file
@@ -615,6 +662,9 @@ void DumpWriter::end_sub_record() {
   debug_only(_sub_record_ended = true);
 }
 
+typedef char* (*CALL_DO_LOOKUP_REPLACE_VALUE)(DumpWriter*, typeArrayOop);
+typedef void (*CALL_DUMP_INSTANCE_FIELDS_DESCRIPTORS)(DumpWriter*, Klass*);
+typedef void (*CALL_DUMP_PRIM_ARRAY)(DumpWriter*, typeArrayOop);
 // Support class with a collection of functions used when dumping the heap
 
 class DumperSupport : AllStatic {
@@ -645,15 +695,27 @@ class DumperSupport : AllStatic {
   static void dump_static_fields(DumpWriter* writer, Klass* k);
   // dump the raw values of the instance fields of the given object
   static void dump_instance_fields(DumpWriter* writer, oop o);
+  // dump the redact values of the instance fields of the given object
+  static void dump_instance_redact_fields(DumpWriter* writer, oop o, void* replace_value_table);
   // get the count of the instance fields for a given class
   static u2 get_instance_fields_count(InstanceKlass* ik);
   // dumps the definition of the instance fields for a given class
   static void dump_instance_field_descriptors(DumpWriter* writer, Klass* k);
+    // dumps the definition of the instance fields for a given class
+    static void dump_instance_annotation_field_descriptors(DumpWriter* writer, Klass* k);
+    // dumps the definition of the instance fields for a given class
+    static void dump_instance_diyrules_field_descriptors(DumpWriter* writer, Klass* k);
   // creates HPROF_GC_INSTANCE_DUMP record for the given object
   static void dump_instance(DumpWriter* writer, oop o);
+  // creates HPROF_GC_INSTANCE_REDACT_DUMP record for the given object
+  static void dump_redact_instance(DumpWriter* writer, oop o);
+  // lookup different value type depend on redact mode
+  static char* do_lookup_replace_value_with_symbol(DumpWriter* writer, typeArrayOop array);
+  static char* do_lookup_replace_value_with_char(DumpWriter* writer, typeArrayOop array);
+  static bool dump_replace_value(CALL_DO_LOOKUP_REPLACE_VALUE fn, DumpWriter* writer, typeArrayOop array);
   // creates HPROF_GC_CLASS_DUMP record for the given class and each of its
   // array classes
-  static void dump_class_and_array_classes(DumpWriter* writer, Klass* k);
+  static void dump_class_and_array_classes(CALL_DUMP_INSTANCE_FIELDS_DESCRIPTORS fn, DumpWriter* writer, Klass* k);
   // creates HPROF_GC_CLASS_DUMP record for a given primitive array
   // class (and each multi-dimensional array class too)
   static void dump_basic_type_array_class(DumpWriter* writer, Klass* k);
@@ -662,11 +724,15 @@ class DumperSupport : AllStatic {
   static void dump_object_array(DumpWriter* writer, objArrayOop array);
   // creates HPROF_GC_PRIM_ARRAY_DUMP record for the given type array
   static void dump_prim_array(DumpWriter* writer, typeArrayOop array);
+  // creates HPROF_GC_PRIM_ARRAY_REDACT_DUMP record for the given type array
+  static void redact_basic_dump_prim_array(DumpWriter* writer, typeArrayOop array);
+  static void redact_replace_dump_prim_array(CALL_DO_LOOKUP_REPLACE_VALUE fn, DumpWriter* writer, typeArrayOop array);
+  static void redact_dump_prim_array(CALL_DUMP_PRIM_ARRAY fn, DumpWriter* dumpWriter, typeArrayOop o);
   // create HPROF_FRAME record for the given method and bci
   static void dump_stack_frame(DumpWriter* writer, int frame_serial_num, int class_serial_num, Method* m, int bci);
 
   // check if we need to truncate an array
-  static int calculate_array_max_length(DumpWriter* writer, arrayOop array, short header_size);
+  static int calculate_array_max_length(DumpWriter* writer, arrayOop array, short header_size, int char_length = 0);
 
   // fixes up the current dump record and writes HPROF_HEAP_DUMP_END record
   static void end_of_dump(DumpWriter* writer);
@@ -928,14 +994,47 @@ void DumperSupport::dump_static_fields(DumpWriter* writer, Klass* k) {
 
 // dump the raw values of the instance fields of the given object
 void DumperSupport::dump_instance_fields(DumpWriter* writer, oop o) {
-  InstanceKlass* ik = InstanceKlass::cast(o->klass());
+    InstanceKlass* ik = InstanceKlass::cast(o->klass());
 
-  for (FieldStream fld(ik, false, false); !fld.eos(); fld.next()) {
-    if (!fld.access_flags().is_static()) {
-      Symbol* sig = fld.signature();
-      dump_field_value(writer, sig->char_at(0), o, fld.offset());
+    for (FieldStream fld(ik, false, false); !fld.eos(); fld.next()) {
+        if (!fld.access_flags().is_static()) {
+            Symbol* sig = fld.signature();
+            dump_field_value(writer, sig->char_at(0), o, fld.offset());
+        }
     }
-  }
+}
+
+// dump the diyrules values of the instance fields of the given object
+void DumperSupport::dump_instance_redact_fields(DumpWriter* writer, oop o, void* replace_value_table) {
+    InstanceKlass* ik = InstanceKlass::cast(o->klass());
+
+    for (FieldStream fld(ik, false, false); !fld.eos(); fld.next()) {
+        if (fld.access_flags().is_static()) {
+            continue;
+        }
+        Symbol *sig = fld.signature();
+        char type = sig->char_at(0);
+
+        ResourceMark rm;
+        Symbol *field_name_symbol = fld.name();
+        address field_adr = (address) ((uintptr_t) field_name_symbol);
+        void* replace_value = writer->heapRedactor()->lookup_value(field_adr, replace_value_table, false);
+        if (replace_value != NULL) {
+            oop field_oop = o->obj_field_access<ON_UNKNOWN_OOP_REF | AS_NO_KEEPALIVE>(fld.offset());
+            if (!java_lang_String::is_instance(field_oop)) {
+                // data not completed, skip this field value;
+                writer->write_objectID(NULL);
+                continue;
+            }
+
+            typeArrayOop field_value_oop = java_lang_String::value(field_oop);
+            address type_array_addr = cast_from_oop<address>(field_value_oop);
+            writer->heapRedactor()->insert_anonymous_value(type_array_addr, replace_value);
+            writer->write_objectID(field_oop);
+            continue;
+        }
+	    dump_field_value(writer, type, o, fld.offset());
+    }
 }
 
 // dumps the definition of the instance fields for a given class
@@ -964,6 +1063,97 @@ void DumperSupport::dump_instance_field_descriptors(DumpWriter* writer, Klass* k
   }
 }
 
+// dumps the definition of the instance fields for a given class
+void DumperSupport::dump_instance_annotation_field_descriptors(DumpWriter* writer, Klass* k) {
+    ResourceMark rm;
+    InstanceKlass* ik = InstanceKlass::cast(k);
+    Symbol *class_name_symbol = ik->name();
+    bool in_exclude_package = false;
+    if (Symbol::is_valid(class_name_symbol)) {
+        char *class_name = class_name_symbol->as_C_string();
+        in_exclude_package = (strncmp("java/", class_name, 5) == 0) || (strncmp("org/springframework", class_name, 19) == 0);
+    }
+
+    if(in_exclude_package) {
+        DumperSupport::dump_instance_field_descriptors(writer, k);
+        return;
+    }
+
+    address obj_adr = (address)((uintptr_t)class_name_symbol);
+    // dump the field descriptors
+    for (FieldStream fld(ik, true, true); !fld.eos(); fld.next()) {
+        if (!fld.access_flags().is_static()) {
+            Symbol* sig = fld.signature();
+            Symbol* field_name = fld.name();
+
+            writer->write_symbolID(field_name);   // name
+            writer->write_u1(sig2tag(sig));       // type
+
+            if(strcmp(sig->as_C_string(), "Ljava/lang/String;") != 0) {
+                continue;
+            }
+
+            AnnotationArray *field_annotations = fld.field_descriptor().annotations();
+            if (field_annotations == NULL || field_annotations->length() == 0) {
+                continue;
+            }
+
+            // byte index into field_annotations
+            ConstantPool *cp = fld.field_descriptor().field_holder()->constants();
+            int byte_i = 0;
+            if (writer->heapRedactor()->lookup_annotation_index_in_constant_pool(field_annotations, cp, byte_i)) {
+                address element_value_addr = (address) field_annotations->adr_at(byte_i);
+                u2 cp_str_index = Bytes::get_Java_u2(element_value_addr);
+                Symbol *element_value_symbol = cp->symbol_at(cp_str_index);
+
+                address field_adr = (address) ((uintptr_t) field_name);
+                writer->heapRedactor()->insert_class_field_value(obj_adr, field_adr, element_value_symbol);
+            }
+        }
+    }
+}
+
+// dumps the definition of the instance fields for a given class
+void DumperSupport::dump_instance_diyrules_field_descriptors(DumpWriter *writer, Klass *k) {
+    ResourceMark rm;
+    InstanceKlass* ik = InstanceKlass::cast(k);
+    Symbol *class_name_symbol = ik->name();
+    void* redact_class_table = NULL;
+    bool has_diyrules = false;
+    if (Symbol::is_valid(class_name_symbol)) {
+        char *class_name = class_name_symbol->as_C_string();
+        redact_class_table = writer->heapRedactor()->lookup_class_rules(class_name);
+        has_diyrules = (redact_class_table != NULL);
+    }
+
+    if (!has_diyrules) {
+        DumperSupport::dump_instance_field_descriptors(writer, k);
+        return;
+    }
+
+    address obj_adr = (address) ((uintptr_t) class_name_symbol);
+    // dump the field descriptors
+    for (FieldStream fld(ik, true, true); !fld.eos(); fld.next()) {
+        if (!fld.access_flags().is_static()) {
+            Symbol* sig = fld.signature();
+            Symbol* field_name = fld.name();
+
+            writer->write_symbolID(field_name);   // name
+            writer->write_u1(sig2tag(sig));       // type
+
+            if(strcmp(sig->as_C_string(), "Ljava/lang/String;") != 0) {
+                continue;
+            }
+            char *field_name_str = field_name->as_C_string();
+            char *replace_value = (char *) writer->heapRedactor()->lookup_value(field_name_str, redact_class_table, false);
+            if (replace_value != NULL) {
+                address field_adr = (address) ((uintptr_t) field_name);
+                writer->heapRedactor()->insert_class_field_value(obj_adr, field_adr, replace_value);
+            }
+        }
+    }
+}
+
 // creates HPROF_GC_INSTANCE_DUMP record for the given object
 void DumperSupport::dump_instance(DumpWriter* writer, oop o) {
   InstanceKlass* ik = InstanceKlass::cast(o->klass());
@@ -986,9 +1176,102 @@ void DumperSupport::dump_instance(DumpWriter* writer, oop o) {
   writer->end_sub_record();
 }
 
+// creates HPROF_GC_INSTANCE_REDACT_DUMP record for the given object
+void DumperSupport::dump_redact_instance(DumpWriter* writer, oop o) {
+    InstanceKlass* ik = InstanceKlass::cast(o->klass());
+    u4 is = instance_size(ik);
+    u4 size = 1 + sizeof(address) + 4 + sizeof(address) + 4 + is;
+
+    writer->start_sub_record(HPROF_GC_INSTANCE_DUMP, size);
+    writer->write_objectID(o);
+    writer->write_u4(STACK_TRACE_ID);
+
+    // class ID
+    writer->write_classID(ik);
+
+    // number of bytes that follow
+    writer->write_u4(is);
+
+    // field values
+    void* replace_value_table = NULL;
+    InstanceKlass* java_super = ik;
+    do {
+        Symbol * class_name_symbol = java_super->name();
+        address obj_adr = (address)((uintptr_t)class_name_symbol);
+        replace_value_table = writer->heapRedactor()->lookup_class_value(obj_adr);
+        java_super = java_super->java_super();
+    } while (replace_value_table == NULL && java_super != NULL);
+
+    bool has_rules = replace_value_table != NULL;
+    if(has_rules) {
+        dump_instance_redact_fields(writer, o, replace_value_table);
+    } else {
+        dump_instance_fields(writer, o);
+    }
+
+    writer->end_sub_record();
+}
+
+char* DumperSupport::do_lookup_replace_value_with_symbol(DumpWriter* writer, typeArrayOop array) {
+    address obj_addr = cast_from_oop<address>(array);
+    Symbol* anonymous_value_symbol = writer->heapRedactor()->lookup_replace_value<Symbol*>(obj_addr);
+    if(anonymous_value_symbol == NULL) {
+        return NULL;
+    }
+    return anonymous_value_symbol->as_C_string();
+}
+
+char* DumperSupport::do_lookup_replace_value_with_char(DumpWriter* writer, typeArrayOop array) {
+    address obj_addr = cast_from_oop<address>(array);
+    char* anonymous_value = writer->heapRedactor()->lookup_replace_value<char*>(obj_addr);
+    return anonymous_value;
+}
+
+bool DumperSupport::dump_replace_value(CALL_DO_LOOKUP_REPLACE_VALUE fn, DumpWriter* writer, typeArrayOop array) {
+    BasicType type = TypeArrayKlass::cast(array->klass())->element_type();
+    if(type != T_BYTE) {
+        return false;
+    }
+    
+    // 2 * sizeof(u1) + 2 * sizeof(u4) + sizeof(objectID)
+    short header_size = 2 * 1 + 2 * 4 + sizeof(address);
+
+    int length = 0;
+
+    char *anonymous_value = NULL;
+    anonymous_value = fn(writer, array);
+    if(anonymous_value == NULL) {
+        return writer->heapRedactor()->record_typeArrayOop(array);
+    }
+
+    size_t char_length = strlen(anonymous_value);
+    length = DumperSupport::calculate_array_max_length(writer, array, header_size, char_length);
+
+    int type_size = type2aelembytes(type);
+    u4 length_in_bytes = (u4)length * type_size;
+    u4 size = header_size + length_in_bytes;
+
+    writer->start_sub_record(HPROF_GC_PRIM_ARRAY_DUMP, size);
+    writer->write_objectID(array);
+    writer->write_u4(STACK_TRACE_ID);
+    writer->write_u4(length);
+    writer->write_u1(HPROF_BYTE);
+
+    // nothing to copy
+    if (length == 0) {
+        writer->end_sub_record();
+        return true;
+    }
+
+    writer->write_raw(anonymous_value, char_length);
+    writer->end_sub_record();
+    return true;
+}
+
 // creates HPROF_GC_CLASS_DUMP record for the given class and each of
 // its array classes
-void DumperSupport::dump_class_and_array_classes(DumpWriter* writer, Klass* k) {
+void DumperSupport::dump_class_and_array_classes(CALL_DUMP_INSTANCE_FIELDS_DESCRIPTORS fn,
+                                                 DumpWriter* writer, Klass* k) {
   InstanceKlass* ik = InstanceKlass::cast(k);
 
   // We can safepoint and do a heap dump at a point where we have a Klass,
@@ -1038,7 +1321,7 @@ void DumperSupport::dump_class_and_array_classes(DumpWriter* writer, Klass* k) {
 
   // description of instance fields
   writer->write_u2(instance_fields_count);
-  dump_instance_field_descriptors(writer, ik);
+  fn(writer, ik);
 
   writer->end_sub_record();
 
@@ -1112,12 +1395,11 @@ void DumperSupport::dump_basic_type_array_class(DumpWriter* writer, Klass* k) {
 
 // Hprof uses an u4 as record length field,
 // which means we need to truncate arrays that are too long.
-int DumperSupport::calculate_array_max_length(DumpWriter* writer, arrayOop array, short header_size) {
+int DumperSupport::calculate_array_max_length(DumpWriter* writer, arrayOop array, short header_size, int char_length) {
   BasicType type = ArrayKlass::cast(array->klass())->element_type();
   assert(type >= T_BOOLEAN && type <= T_OBJECT, "invalid array element type");
 
-  int length = array->length();
-
+  int length = char_length == 0 ? array->length() : char_length;
   int type_size;
   if (type == T_OBJECT) {
     type_size = sizeof(address);
@@ -1266,6 +1548,101 @@ void DumperSupport::dump_prim_array(DumpWriter* writer, typeArrayOop array) {
   writer->end_sub_record();
 }
 
+// creates HPROF_GC_PRIM_ARRAY_DUMP redact record for the given type array
+void DumperSupport::redact_basic_dump_prim_array(DumpWriter* writer, typeArrayOop array) {
+  BasicType type = TypeArrayKlass::cast(array->klass())->element_type();
+
+  // 2 * sizeof(u1) + 2 * sizeof(u4) + sizeof(objectID)
+  short header_size = 2 * 1 + 2 * 4 + sizeof(address);
+
+  int length = calculate_array_max_length(writer, array, header_size);
+  int type_size = type2aelembytes(type);
+  u4 length_in_bytes = (u4)length * type_size;
+  u4 size = header_size + length_in_bytes;
+
+  writer->start_sub_record(HPROF_GC_PRIM_ARRAY_DUMP, size);
+  writer->write_objectID(array);
+  writer->write_u4(STACK_TRACE_ID);
+  writer->write_u4(length);
+  writer->write_u1(type2tag(type));
+
+  // nothing to copy
+  if (length == 0) {
+    writer->end_sub_record();
+    return;
+  }
+
+  // If the byte ordering is big endian then we can copy most types directly
+
+  switch (type) {
+    case T_INT : {
+      writer->write_zero_raw((void*)(array->int_at_addr(0)), length_in_bytes);
+      break;
+    }
+    case T_BYTE : {
+      writer->write_zero_raw((void*)(array->byte_at_addr(0)), length_in_bytes);
+      break;
+    }
+    case T_CHAR : {
+      writer->write_zero_raw((void*)(array->char_at_addr(0)), length_in_bytes);
+      break;
+    }
+    case T_SHORT : {
+      if (Endian::is_Java_byte_ordering_different()) {
+        WRITE_ARRAY(array, short, u2, length);
+      } else {
+        writer->write_raw((void*)(array->short_at_addr(0)), length_in_bytes);
+      }
+      break;
+    }
+    case T_BOOLEAN : {
+      if (Endian::is_Java_byte_ordering_different()) {
+        WRITE_ARRAY(array, bool, u1, length);
+      } else {
+        writer->write_raw((void*)(array->bool_at_addr(0)), length_in_bytes);
+      }
+      break;
+    }
+    case T_LONG : {
+      if (Endian::is_Java_byte_ordering_different()) {
+        WRITE_ARRAY(array, long, u8, length);
+      } else {
+        writer->write_raw((void*)(array->long_at_addr(0)), length_in_bytes);
+      }
+      break;
+    }
+
+      // handle float/doubles in a special value to ensure than NaNs are
+      // written correctly. TO DO: Check if we can avoid this on processors that
+      // use IEEE 754.
+
+    case T_FLOAT : {
+      for (int i = 0; i < length; i++) {
+        dump_float(writer, array->float_at(i));
+      }
+      break;
+    }
+    case T_DOUBLE : {
+      for (int i = 0; i < length; i++) {
+        dump_double(writer, array->double_at(i));
+      }
+      break;
+    }
+    default : ShouldNotReachHere();
+  }
+
+  writer->end_sub_record();
+}
+
+// creates HPROF_GC_PRIM_ARRAY_DUMP redact record for the given type array
+void DumperSupport::redact_replace_dump_prim_array(CALL_DO_LOOKUP_REPLACE_VALUE fn, DumpWriter *writer, typeArrayOop array) {
+    if(dump_replace_value(fn, writer, array)) {
+        return;
+    }
+
+    DumperSupport::dump_prim_array(writer, array);
+}
+
 // create a HPROF_FRAME record of the given Method* and bci
 void DumperSupport::dump_stack_frame(DumpWriter* writer,
                                      int frame_serial_num,
@@ -1309,6 +1686,39 @@ void SymbolTableDumper::do_symbol(Symbol** p) {
   int len = sym->utf8_length();
   if (len > 0) {
     char* s = sym->as_utf8();
+    DumperSupport::write_header(writer(), HPROF_UTF8, oopSize + len);
+    writer()->write_symbolID(sym);
+    writer()->write_raw(s, len);
+  }
+}
+
+// Support class used to generate HPROF_UTF8 records from the entries in the
+// SymbolTable and Redact the sensitive String.
+
+class SymbolTableRedactDumper : public SymbolClosure {
+private:
+    DumpWriter* _writer;
+    DumpWriter* writer() const                { return _writer; }
+public:
+    SymbolTableRedactDumper(DumpWriter* writer)     { _writer = writer; }
+    void do_symbol(Symbol** p);
+};
+
+void SymbolTableRedactDumper::do_symbol(Symbol** p) {
+  ResourceMark rm;
+  Symbol* sym = load_symbol(p);
+  int len = sym->utf8_length();
+  if (len > 0) {
+    char* s = sym->as_utf8();
+
+    char* redact_field = NULL;
+    HeapDumpRedactLevel level = writer()->getHeapDumpRedactLevel();
+    if((level == REDACT_NAMES || level == REDACT_FULL) &&
+       (redact_field = writer()->heapRedactor()->lookup_redact_name(s)) != NULL){
+      len = (int)strlen(redact_field);
+      s = redact_field;
+    }
+
     DumperSupport::write_header(writer(), HPROF_UTF8, oopSize + len);
     writer()->write_symbolID(sym);
     writer()->write_raw(s, len);
@@ -1409,12 +1819,14 @@ class VM_HeapDumper;
 class HeapObjectDumper : public ObjectClosure {
  private:
   DumpWriter* _writer;
+  CALL_DUMP_PRIM_ARRAY _redact_dump_prim_array;
 
   DumpWriter* writer()                  { return _writer; }
 
  public:
-  HeapObjectDumper(DumpWriter* writer) {
+  HeapObjectDumper(DumpWriter* writer, CALL_DUMP_PRIM_ARRAY fn = DumperSupport::dump_prim_array) {
     _writer = writer;
+    _redact_dump_prim_array = fn;
   }
 
   // called for each object in the heap
@@ -1442,7 +1854,54 @@ void HeapObjectDumper::do_object(oop o) {
     DumperSupport::dump_object_array(writer(), objArrayOop(o));
   } else if (o->is_typeArray()) {
     // create a HPROF_GC_PRIM_ARRAY_DUMP record for each type array
-    DumperSupport::dump_prim_array(writer(), typeArrayOop(o));
+    DumperSupport::redact_dump_prim_array(_redact_dump_prim_array, writer(), typeArrayOop(o));
+  }
+}
+
+void DumperSupport::redact_dump_prim_array(CALL_DUMP_PRIM_ARRAY fn, DumpWriter* dumpWriter, typeArrayOop o){
+  fn(dumpWriter, o);
+}
+
+class HeapObjectRedactDumper : public ObjectClosure {
+private:
+    DumpWriter* _writer;
+
+    DumpWriter* writer()                  { return _writer; }
+
+    CALL_DO_LOOKUP_REPLACE_VALUE _do_lookup_replace_value;
+
+public:
+    HeapObjectRedactDumper(DumpWriter* writer, CALL_DO_LOOKUP_REPLACE_VALUE  do_lookup_replace_value) {
+      _writer = writer;
+      _do_lookup_replace_value = do_lookup_replace_value;
+    }
+
+    // called for each object in the heap
+    void do_object(oop o);
+};
+
+void HeapObjectRedactDumper::do_object(oop o) {
+  // skip classes as these emitted as HPROF_GC_CLASS_DUMP records
+  if (o->klass() == vmClasses::Class_klass()) {
+    if (!java_lang_Class::is_primitive(o)) {
+      return;
+    }
+  }
+
+  if (DumperSupport::mask_dormant_archived_object(o) == NULL) {
+    log_debug(cds, heap)("skipped dormant archived object " INTPTR_FORMAT " (%s)", p2i(o), o->klass()->external_name());
+    return;
+  }
+
+  if (o->is_instance()) {
+    // create a HPROF_GC_INSTANCE record for each object
+    DumperSupport::dump_redact_instance(writer(), o);
+  } else if (o->is_objArray()) {
+    // create a HPROF_GC_OBJ_ARRAY_DUMP record for each object array
+    DumperSupport::dump_object_array(writer(), objArrayOop(o));
+  } else if (o->is_typeArray()) {
+    // create a HPROF_GC_PRIM_ARRAY_DUMP record for each type array
+     DumperSupport::redact_replace_dump_prim_array(_do_lookup_replace_value, writer(), typeArrayOop(o));
   }
 }
 
@@ -1458,6 +1917,8 @@ class VM_HeapDumper : public VM_GC_Operation, public AbstractGangTask {
   GrowableArray<Klass*>* _klass_map;
   ThreadStackTrace** _stack_traces;
   int _num_threads;
+
+  static CALL_DUMP_INSTANCE_FIELDS_DESCRIPTORS _dump_instance_fields_descriptors;
 
   // accessors and setters
   static VM_HeapDumper* dumper()         {  assert(_global_dumper != NULL, "Error"); return _global_dumper; }
@@ -1498,6 +1959,9 @@ class VM_HeapDumper : public VM_GC_Operation, public AbstractGangTask {
   // HPROF_TRACE and HPROF_FRAME records
   void dump_stack_traces();
 
+  // HeapVector Records
+  void do_heapVector();
+
  public:
   VM_HeapDumper(DumpWriter* writer, bool gc_before_heap_dump, bool oome) :
     VM_GC_Operation(0 /* total collections,      dummy, ignored */,
@@ -1510,6 +1974,14 @@ class VM_HeapDumper : public VM_GC_Operation, public AbstractGangTask {
     _klass_map = new (ResourceObj::C_HEAP, mtServiceability) GrowableArray<Klass*>(INITIAL_CLASS_COUNT, mtServiceability);
     _stack_traces = NULL;
     _num_threads = 0;
+    if(writer->getHeapDumpRedactLevel() == REDACT_ANNOTATION) {
+        _dump_instance_fields_descriptors = DumperSupport::dump_instance_annotation_field_descriptors;
+    } else if(writer->getHeapDumpRedactLevel() == REDACT_DIYRULES) {
+        _dump_instance_fields_descriptors = DumperSupport::dump_instance_diyrules_field_descriptors;
+    } else {
+        _dump_instance_fields_descriptors = DumperSupport::dump_instance_field_descriptors;
+    }
+
     if (oome) {
       assert(!Thread::current()->is_VM_thread(), "Dump from OutOfMemoryError cannot be called by the VMThread");
       // get OutOfMemoryError zero-parameter constructor
@@ -1541,6 +2013,7 @@ class VM_HeapDumper : public VM_GC_Operation, public AbstractGangTask {
 
 VM_HeapDumper* VM_HeapDumper::_global_dumper = NULL;
 DumpWriter*    VM_HeapDumper::_global_writer = NULL;
+CALL_DUMP_INSTANCE_FIELDS_DESCRIPTORS    VM_HeapDumper::_dump_instance_fields_descriptors = NULL;
 
 bool VM_HeapDumper::skip_operation() const {
   return false;
@@ -1591,7 +2064,7 @@ void VM_HeapDumper::do_load_class(Klass* k) {
 // writes a HPROF_GC_CLASS_DUMP record for the given class
 void VM_HeapDumper::do_class_dump(Klass* k) {
   if (k->is_instance_klass()) {
-    DumperSupport::dump_class_and_array_classes(writer(), k);
+    DumperSupport::dump_class_and_array_classes(_dump_instance_fields_descriptors, writer(), k);
   }
 }
 
@@ -1796,8 +2269,14 @@ void VM_HeapDumper::work(uint worker_id) {
   writer()->write_u8(os::javaTimeMillis());
 
   // HPROF_UTF8 records
-  SymbolTableDumper sym_dumper(writer());
-  SymbolTable::symbols_do(&sym_dumper);
+  if(writer()->heapRedactor() != NULL && (writer()->heapRedactor()->redact_level() == REDACT_NAMES ||
+                                          writer()->heapRedactor()->redact_level() == REDACT_FULL)){
+    SymbolTableRedactDumper sym_dumper(writer());
+    SymbolTable::symbols_do(&sym_dumper);
+  } else{
+    SymbolTableDumper sym_dumper(writer());
+    SymbolTable::symbols_do(&sym_dumper);
+  }
 
   // write HPROF_LOAD_CLASS records
   {
@@ -1823,8 +2302,25 @@ void VM_HeapDumper::work(uint worker_id) {
   // segment is started.
   // The HPROF_GC_CLASS_DUMP and HPROF_GC_INSTANCE_DUMP are the vast bulk
   // of the heap dump.
-  HeapObjectDumper obj_dumper(writer());
-  Universe::heap()->object_iterate(&obj_dumper);
+  if(writer()->heapRedactor() != NULL && (writer()->heapRedactor()->redact_level() == REDACT_BASIC ||
+                                          writer()->heapRedactor()->redact_level() == REDACT_FULL)) {
+    HeapObjectDumper obj_dumper(writer(), DumperSupport::redact_basic_dump_prim_array);
+    Universe::heap()->object_iterate(&obj_dumper);
+  } else if(writer()->heapRedactor() != NULL && writer()->heapRedactor()->redact_level() == REDACT_ANNOTATION) {
+    HeapObjectRedactDumper obj_dumper(writer(), DumperSupport::do_lookup_replace_value_with_symbol);
+    Universe::heap()->object_iterate(&obj_dumper);
+  } else if(writer()->heapRedactor() != NULL && writer()->heapRedactor()->redact_level() == REDACT_DIYRULES) {
+    HeapObjectRedactDumper obj_dumper(writer(), DumperSupport::do_lookup_replace_value_with_char);
+    Universe::heap()->object_iterate(&obj_dumper);
+  } else {
+    HeapObjectDumper obj_dumper(writer());
+    Universe::heap()->object_iterate(&obj_dumper);
+  }
+
+  // if value in INSTANCE is sensitive,
+  // and redact level is REDACT_ANNOTATION
+  // writes HeapVector records
+  do_heapVector();
 
   // HPROF_GC_ROOT_THREAD_OBJ + frames + jni locals
   do_threads();
@@ -1904,13 +2400,84 @@ void VM_HeapDumper::dump_stack_traces() {
   }
 }
 
+void VM_HeapDumper::do_heapVector(){
+  CALL_DO_LOOKUP_REPLACE_VALUE fn = NULL;
+  if(writer()->getHeapDumpRedactLevel() == REDACT_ANNOTATION) {
+    fn = DumperSupport::do_lookup_replace_value_with_symbol;
+  } else if(writer()->getHeapDumpRedactLevel() == REDACT_DIYRULES) {
+    fn = DumperSupport::do_lookup_replace_value_with_char;
+  } else {
+    return;
+  }
+
+  BasicType type = T_BYTE;
+  short header_size = 2 * 1 + 2 * 4 + sizeof(address); 
+  int type_size = type2aelembytes(type);
+  uint max_bytes = max_juint - header_size;
+
+  int node_len = 0, i =0;
+  void** items = NULL;
+  void *vector_node = writer()->heapRedactor()->get_vector_node_next(NULL, node_len, items);
+  while (vector_node != NULL && items != NULL) {
+    for (i = 0; i < node_len; i++) {
+      typeArrayOop array = (typeArrayOopDesc*)items[i];
+
+      char *anonymous_value = fn(writer(), array);
+      int length = anonymous_value == NULL ? array->length() : strlen(anonymous_value);
+
+      u4 length_in_bytes = (u4) length * type_size;
+      if (length_in_bytes > max_bytes) {
+         length = max_bytes / type_size;
+         length_in_bytes = (size_t)length * type_size;
+      }
+      u4 size = header_size + length_in_bytes;
+
+      writer()->start_sub_record(HPROF_GC_PRIM_ARRAY_DUMP, size);
+      writer()->write_objectID(array);
+      writer()->write_u4(STACK_TRACE_ID);
+      writer()->write_u4(length);
+      writer()->write_u1(HPROF_BYTE);
+
+      // nothing to copy
+      if (length == 0) {
+        writer()->end_sub_record();
+        continue;
+      }
+      if(anonymous_value != NULL){
+          writer()->write_raw(anonymous_value, length);
+      } else {
+           writer()->write_raw((void *) (array->byte_at_addr(0)), length_in_bytes);
+      }
+      writer()->end_sub_record();
+    }
+    // clear current node info, maybe next node items is NULL, node_len = 0 will skip this NULL point error
+    node_len = 0;
+    items = NULL;
+    void *temp = writer()->heapRedactor()->get_vector_node_next(vector_node, node_len, items);
+    vector_node = temp;
+  }
+}
+
 // dump the heap to given path.
 int HeapDumper::dump(const char* path, outputStream* out, int compression, bool overwrite) {
   assert(path != NULL && strlen(path) > 0, "path missing");
 
+  const char* path_and_anonymous = path;
+  const char* redact_params = NULL;
+  // parse args[0] to get real path and redact_params
+  const char* split_char = strstr(path_and_anonymous, ";");
+  size_t path_length = (split_char == NULL) ? strlen(path_and_anonymous) : (unsigned long)(split_char - path_and_anonymous);
+  size_t path_and_anonymous_length = strlen(path_and_anonymous);
+  char* _path = NEW_C_HEAP_ARRAY(char, path_and_anonymous_length + 1, mtInternal);
+  strncpy(_path, path_and_anonymous, path_and_anonymous_length + 1);
+  _path[path_length] = '\0';
+  if (split_char != NULL) {
+    redact_params = split_char + 1;
+  }
+
   // print message in interactive case
   if (out != NULL) {
-    out->print_cr("Dumping heap to %s ...", path);
+    out->print_cr("Dumping heap to %s ...", _path);
     timer()->start();
   }
 
@@ -1928,17 +2495,26 @@ int HeapDumper::dump(const char* path, outputStream* out, int compression, bool 
     }
   }
 
-  DumpWriter writer(new (std::nothrow) FileWriter(path, overwrite), compressor);
+  HeapRedactor heapRedactor(redact_params, out);
+  DumpWriter writer(new (std::nothrow) FileWriter(_path, overwrite), compressor);
+  if(heapRedactor.redact_level() > REDACT_UNKNOWN) {
+    if(out != NULL) {
+      out->print_cr("HeapDump Redact Level = %s", heapRedactor.get_redact_level_string());
+    }
+  }
+  writer.setHeapRedactor(&heapRedactor);
 
   if (writer.error() != NULL) {
     set_error(writer.error());
     if (out != NULL) {
-      out->print_cr("Unable to create %s: %s", path,
-        (error() != NULL) ? error() : "reason unknown");
+      out->print_cr("Unable to create %s: %s", _path,
+                    (error() != NULL) ? error() : "reason unknown");
     }
+    FREE_C_HEAP_ARRAY(char, _path);
     return -1;
   }
 
+  FREE_C_HEAP_ARRAY(char, _path);
   // generate the dump
   VM_HeapDumper dumper(&writer, _gc_before_heap_dump, _oome);
   if (Thread::current()->is_VM_thread()) {

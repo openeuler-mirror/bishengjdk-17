@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 1997, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -104,6 +104,9 @@ Method::Method(ConstMethod* xconst, AccessFlags access_flags) {
   set_hidden(false);
   set_dont_inline(false);
   set_has_injected_profile(false);
+#if INCLUDE_JBOOSTER
+  set_rewrite_invokehandle(false);
+#endif
   set_method_data(NULL);
   clear_method_counters();
   set_vtable_index(Method::garbage_vtable_index);
@@ -1169,6 +1172,10 @@ void Method::unlink_method() {
   _i2i_entry = NULL;
   _from_compiled_entry = NULL;
   _from_interpreted_entry = NULL;
+
+#if INCLUDE_AOT
+  _aot_code = NULL;
+#endif
 
   if (is_native()) {
     *native_function_addr() = NULL;

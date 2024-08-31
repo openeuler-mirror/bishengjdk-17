@@ -1,6 +1,6 @@
 /*
- * Copyright (c) 1997, 2021, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2021, Azul Systems, Inc. All rights reserved.
+ * Copyright (c) 1997, 2023, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2021, 2023, Azul Systems, Inc. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -148,6 +148,12 @@
 #endif
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
+#endif
+#if INCLUDE_JBOOSTER
+#include "jbooster/jBoosterManager.hpp"
+#endif // INCLUDE_JBOOSTER
+#if INCLUDE_AOT
+#include "aot/aotLoader.hpp"
 #endif
 
 // Initialization after module runtime initialization
@@ -2741,6 +2747,10 @@ void Threads::initialize_java_lang_classes(JavaThread* main_thread, TRAPS) {
   initialize_class(vmSymbols::java_lang_StackOverflowError(), CHECK);
   initialize_class(vmSymbols::java_lang_IllegalMonitorStateException(), CHECK);
   initialize_class(vmSymbols::java_lang_IllegalArgumentException(), CHECK);
+#if INCLUDE_AOT
+  // Eager box cache initialization only if AOT is on and any library is loaded.
+  AOTLoader::initialize_box_caches(CHECK);
+#endif
 }
 
 void Threads::initialize_jsr292_core_classes(TRAPS) {
@@ -2952,8 +2962,8 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
   }
 
   // We need this to update the java.vm.info property in case any flags used
-  // to initially define it have been changed. This is needed for both CDS
-  // since UseSharedSpaces may be changed after java.vm.info
+  // to initially define it have been changed. This is needed for both CDS and
+  // AOT, since UseSharedSpaces and UseAOT may be changed after java.vm.info
   // is initially computed. See Abstract_VM_Version::vm_info_string().
   // This update must happen before we initialize the java classes, but
   // after any initialization logic that might modify the flags.
@@ -3149,6 +3159,12 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
     MetaspaceShared::preload_and_dump();
     ShouldNotReachHere();
   }
+
+#if INCLUDE_JBOOSTER
+  if (UseJBooster || AsJBooster) {
+    JBoosterManager::init_phase2(CHECK_JNI_ERR);
+  }
+#endif // INCLUDE_JBOOSTER
 
   return JNI_OK;
 }

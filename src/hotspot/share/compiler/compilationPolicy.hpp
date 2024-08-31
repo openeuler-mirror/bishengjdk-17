@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2010, 2023, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -209,6 +209,8 @@ class CompilationPolicy : AllStatic {
   static void create_mdo(const methodHandle& mh, JavaThread* THREAD);
   // Is method profiled enough?
   static bool is_method_profiled(const methodHandle& method);
+
+  static bool maybe_switch_to_aot(const methodHandle& mh, CompLevel cur_level, CompLevel next_level, TRAPS);
 
   static void set_c1_count(int x) { _c1_count = x;    }
   static void set_c2_count(int x) { _c2_count = x;    }
