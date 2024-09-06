@@ -180,7 +180,6 @@ void BlockTree::verify() const {
   //  as many nodes as are in this tree)
   _counter.check(counter);
 
-  #undef assrt0n
 }
 
 void BlockTree::zap_range(MetaWord* p, size_t word_size) {
