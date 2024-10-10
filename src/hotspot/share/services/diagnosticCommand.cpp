@@ -191,16 +191,6 @@ void HelpDCmd::execute(DCmdSource source, TRAPS) {
                          factory->is_enabled() ? "" : " [disabled]");
       output()->print_cr("%s", factory->description());
       output()->print_cr("\nImpact: %s", factory->impact());
-      JavaPermission p = factory->permission();
-      if(p._class != NULL) {
-        if(p._action != NULL) {
-          output()->print_cr("\nPermission: %s(%s, %s)",
-                  p._class, p._name == NULL ? "null" : p._name, p._action);
-        } else {
-          output()->print_cr("\nPermission: %s(%s)",
-                  p._class, p._name == NULL ? "null" : p._name);
-        }
-      }
       output()->cr();
       cmd = factory->create_resource_instance(output());
       if (cmd != NULL) {
