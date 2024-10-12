@@ -691,7 +691,7 @@ public class StyleSheet extends StyleContext {
      * to return an AttributeSet that provides some sort of
      * attribute conversion.
      *
-     * @param a The set of attributes to be represented in the
+     * @param a The set of attributes to be represented in
      *  the compact form.
      */
     protected SmallAttributeSet createSmallAttributeSet(AttributeSet a) {
@@ -707,7 +707,7 @@ public class StyleSheet extends StyleContext {
      * to return a MutableAttributeSet that provides some sort of
      * attribute conversion.
      *
-     * @param a The set of attributes to be represented in the
+     * @param a The set of attributes to be represented in
      *  the larger form.
      */
     protected MutableAttributeSet createLargeAttributeSet(AttributeSet a) {
@@ -2140,7 +2140,7 @@ public class StyleSheet extends StyleContext {
         /**
          * Returns a string that represents the value
          * of the HTML.Attribute.TYPE attribute.
-         * If this attributes is not defined, then
+         * If this attributes is not defined,
          * then the type defaults to "disc" unless
          * the tag is on Ordered list.  In the case
          * of the latter, the default type is "decimal".
