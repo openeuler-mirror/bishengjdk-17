@@ -253,7 +253,7 @@ public:
 
   bool is_null() const { return _file_size == MessageConst::NULL_PTR; }
   bool is_file_all_handled() const {
-    assert(_file_size >= _handled_file_size, "sanity");
+    guarantee(_file_size >= _handled_file_size, "sanity");
     return _handled_once && _file_size == _handled_file_size;
   }
 

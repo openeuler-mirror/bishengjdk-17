@@ -46,8 +46,8 @@ static const char* get_type_name(T t) {
 }
 
 static void write_file(const char* file_path, const char* content) {
-  int fd = os::open(file_path, O_BINARY | O_WRONLY | O_CREAT, 0666);;
-  os::write(fd, content, strlen(content) + 1);
+  int fd = os::open(file_path, O_BINARY | O_WRONLY | O_CREAT, 0666);
+  ASSERT_TRUE(os::write(fd, content, strlen(content) + 1));
   os::close(fd);
 }
 
