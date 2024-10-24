@@ -348,11 +348,7 @@ static void create_test_file_for_file_wrapper(const char* file_name) {
   int fd = os::open(file_name, O_BINARY | O_WRONLY | O_CREAT | O_EXCL | O_TRUNC, 0666);
   ASSERT_TRUE(fd >= 0);
   ASSERT_EQ(errno, 0);
-  uint32_t left = mem_size;
-  do {
-    uint32_t write_size = (uint32_t) os::write(fd, mem + mem_size - left, left);
-    left -= write_size;
-  } while (left > 0);
+  ASSERT_TRUE(os::write(fd, mem, mem_size));
   os::close(fd);
   FREE_C_HEAP_ARRAY(char, mem);
 }

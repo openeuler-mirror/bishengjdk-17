@@ -385,12 +385,15 @@ int FileWrapper::deserialize(MessageBuffer& buf) {
   JB_RETURN(buf.deserialize_ref_no_meta(size_to_recv));
 
   // content (use low-level APIs to save a memcpy)
-  uint32_t left = size_to_recv;
-  do {
-    uint32_t write_size = (uint32_t) os::write(_fd, buf.cur_buf_ptr(), left);
-    buf.skip_cur_offset(write_size);
-    left -= write_size;
-  } while (left > 0);
+  if (!os::write(_fd, buf.cur_buf_ptr(), size_to_recv)) {
+    int e = errno;
+    errno = 0;
+    guarantee(e != 0, "sanity");
+    log_warning(jbooster, serialization)("Fail to write file \"%s\": errno=%s(\"%s\") .",
+                                         _file_path, os::errno_name(e), os::strerror(e));
+    JB_RETURN(e);
+  }
+  buf.skip_cur_offset(size_to_recv);
 
   // update status
   _handled_file_size += size_to_recv;
