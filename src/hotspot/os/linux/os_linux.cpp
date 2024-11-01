@@ -122,6 +122,12 @@
   #include <sched.h>
 #endif
 
+#if defined(AARCH64)
+  __asm__(".symver fcntl64,fcntl@GLIBC_2.17");
+#elif defined(AMD64)
+  __asm__(".symver fcntl64,fcntl@GLIBC_2.2.5");
+#endif
+
 // if RUSAGE_THREAD for getrusage() has not been defined, do it here. The code calling
 // getrusage() is prepared to handle the associated failure.
 #ifndef RUSAGE_THREAD
