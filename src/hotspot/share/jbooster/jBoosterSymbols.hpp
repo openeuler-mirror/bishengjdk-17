@@ -26,6 +26,7 @@
 
 #define JBOOSTER_TEMPLATES(template)                                                                               \
   template(receiveConnection_name,                        "receiveConnection")                                     \
+  template(receiveConnection_signature,                   "(IJ)Z")                                                 \
   template(codesource_signature,                          "Ljava/security/CodeSource;")                            \
   template(getProtectionDomainByURLString_name,           "getProtectionDomainByURLString")                        \
   template(getProtectionDomainByURLString_signature,      "(Ljava/lang/String;)Ljava/security/ProtectionDomain;")  \

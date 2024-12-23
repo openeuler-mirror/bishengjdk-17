@@ -28,6 +28,10 @@ import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.*;
+import java.nio.CharBuffer;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
 import java.util.*;
 import java.util.zip.*;
 import sun.jvm.hotspot.debugger.*;
@@ -36,6 +40,10 @@ import sun.jvm.hotspot.oops.*;
 import sun.jvm.hotspot.runtime.*;
 import sun.jvm.hotspot.classfile.*;
 import sun.jvm.hotspot.gc.z.ZCollectedHeap;
+
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 
 /*
  * This class writes Java heap in hprof binary format. This format is
@@ -386,6 +394,11 @@ public class HeapHprofBinWriter extends AbstractHeapGraphWriter {
     private static final long MAX_U4_VALUE = 0xFFFFFFFFL;
     int serialNum = 1;
 
+    // encrypt
+    private static int SALT_MIN_LENGTH = 8;
+    private static int HASH_BIT_SIZE = 256;
+    private static int HASH_ITERATIONS_COUNT = 10000;
+
     // Heap Redact
     private HeapRedactor heapRedactor;
 
@@ -402,6 +415,10 @@ public class HeapHprofBinWriter extends AbstractHeapGraphWriter {
             return HeapRedactor.HeapDumpRedactLevel.REDACT_OFF;
         }
         return heapRedactor.getHeapDumpRedactLevel();
+    }
+
+    public Optional<CharBuffer> getHeapDumpRedactPassword() {
+        return heapRedactor == null ? Optional.empty() : Optional.ofNullable(heapRedactor.getRedactPassword());
     }
 
     private Optional<String> lookupRedactName(String name){
@@ -454,10 +471,66 @@ public class HeapHprofBinWriter extends AbstractHeapGraphWriter {
         this.gzLevel = gzLevel;
     }
 
+    private boolean checkPassword() {
+        Optional<String> redactAuthOption = getVMRedactParameter("RedactPassword");
+        String redactAuth = redactAuthOption.isPresent() ? redactAuthOption.get() : null;
+        boolean redactAuthFlag = true;
+        if(redactAuth != null) {
+            String[] auths = redactAuth.split(",");
+            if(auths.length != 2) {
+                return redactAuthFlag;
+            }
+
+            Optional<CharBuffer> passwordOption = getHeapDumpRedactPassword();
+            CharBuffer password = passwordOption.isPresent() ? passwordOption.get() : CharBuffer.wrap("");
+            char[] passwordChars = null;
+            try {
+                passwordChars = password.array();
+
+                byte[] saltBytes = auths[1].getBytes("UTF-8");
+                if(saltBytes.length < SALT_MIN_LENGTH) {
+                    return redactAuthFlag;
+                }
+
+                String digestStr = getEncryptValue(passwordChars, saltBytes);
+                redactAuthFlag = auths[0].equals(digestStr);
+            } catch (Exception e) {
+                // ignore
+                redactAuthFlag = false;
+            } finally {
+                // clear all password
+                if(passwordChars != null) {
+                    Arrays.fill(passwordChars, '0');
+                }
+            }
+        }
+
+        return redactAuthFlag;
+    }
+
+    private String getEncryptValue(char[] passwordValue, byte[] saltBytes) throws InvalidKeySpecException, NoSuchAlgorithmException {
+        StringBuilder digestStrBuilder = new StringBuilder();
+
+        KeySpec spec = new PBEKeySpec(passwordValue, saltBytes, HASH_ITERATIONS_COUNT, HASH_BIT_SIZE);
+        SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+        SecretKey secretKey = secretKeyFactory.generateSecret(spec);
+        byte[] digestBytes = secretKey.getEncoded();
+        for (byte b : digestBytes) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) {
+                digestStrBuilder.append('0');
+            }
+            digestStrBuilder.append(hex);
+        }
+        String digestStr = digestStrBuilder.toString();
+
+        return digestStr;
+    }
+
     public synchronized void write(String fileName) throws IOException {
         VM vm = VM.getVM();
 
-        if(getHeapDumpRedactLevel() == HeapRedactor.HeapDumpRedactLevel.REDACT_UNKNOWN) {
+        if(getHeapDumpRedactLevel() == HeapRedactor.HeapDumpRedactLevel.REDACT_UNKNOWN || !checkPassword()) {
             resetRedactParams();
         }
 

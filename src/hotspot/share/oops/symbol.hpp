@@ -194,6 +194,10 @@ class Symbol : public MetaspaceObj {
   }
   bool equals(const char* str) const { return equals(str, (int) strlen(str)); }
 
+  bool is_primhashmap_related_class() const {
+    return starts_with("java/util/HashMap") || starts_with("java/util/LinkedHashMap");
+  }
+
   // Tests if the symbol starts with the given prefix.
   bool starts_with(const char* prefix, int len) const {
     return contains_utf8_at(0, prefix, len);

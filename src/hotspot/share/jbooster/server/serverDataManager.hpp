@@ -133,7 +133,6 @@ class JClientCacheState final: public StackObj {
   static const int BEING_GENERATED  = 1;
   static const int GENERATED        = 2;
 
-  bool          _is_allowed;
   volatile int  _state;
   const char*   _file_path;
   uint64_t      _file_timestamp;
@@ -149,9 +148,7 @@ public:
   JClientCacheState();
   ~JClientCacheState();
 
-  void init(bool allow, const char* file_path);
-
-  bool is_allowed() { return _is_allowed; }
+  void init(const char* file_path);
 
   // <cache_dir>/server/cache-<parogram_str_id>-<cache-name>
   const char* file_path() { return _file_path; }
@@ -167,6 +164,7 @@ public:
   // Unlike the APIs above, the APIs above only change the atomic variables,
   // while the following APIs checks whether the cache file exists.
   bool is_cached();
+  const char* cache_state_str();
 
   void remove_file();
 };
@@ -175,6 +173,9 @@ public:
  * The data of the program (usually a .class or .jar file) executed by the client.
  */
 class JClientProgramData final: public CHeapObj<mtJBooster> {
+  // @see test/hotspot/gtest/jbooster/test_server.cpp
+  friend class Gtest_JBoosterServer;
+
 public:
   using ClassLoaderTable = ConcurrentHashMap<ClassLoaderKey, ClassLoaderData*, mtJBooster>;
 
@@ -188,15 +189,16 @@ private:
   RefCntWithTime _ref_cnt;
 
   JClientCacheState _clr_cache_state;
-  JClientCacheState _cds_cache_state;
-  JClientCacheState _aot_cache_state;
-
-  bool _using_pgo; // use pgo if or not, as boost level 4
+  JClientCacheState _dy_cds_cache_state;
+  JClientCacheState _agg_cds_cache_state;
+  JClientCacheState _aot_static_cache_state;
+  JClientCacheState _aot_pgo_cache_state;
 
   NONCOPYABLE(JClientProgramData);
 
 public:
   JClientProgramData(uint32_t program_id, JClientArguments* program_args);
+  JClientProgramData(DebugUtils* ignored) {} // for GTEST only
   ~JClientProgramData();
 
   uint32_t program_id() const { return _program_id; }
@@ -211,9 +213,10 @@ public:
   RefCntWithTime& ref_cnt() { return _ref_cnt; }
 
   JClientCacheState& clr_cache_state() { return _clr_cache_state; }
-  JClientCacheState& cds_cache_state() { return _cds_cache_state; }
-  JClientCacheState& aot_cache_state() { return _aot_cache_state; }
-  bool using_pgo() { return _using_pgo; }
+  JClientCacheState& dy_cds_cache_state() { return _dy_cds_cache_state; }
+  JClientCacheState& agg_cds_cache_state() { return _agg_cds_cache_state; }
+  JClientCacheState& aot_static_cache_state() { return _aot_static_cache_state; }
+  JClientCacheState& aot_pgo_cache_state() { return _aot_pgo_cache_state; }
 };
 
 /**
@@ -248,6 +251,8 @@ private:
 
   JClientProgramData* const _program_data;
 
+  JClientBoostLevel _boost_level;
+
   // server-side CLD pointer -> client-side CLD pointer
   AddressMap _cl_s2c;
   // client-side CLD pointer -> server-side CLD pointer
@@ -269,7 +274,7 @@ private:
   static bool remove_address(AddressMap& table, address key, Thread* thread);
 
 public:
-  JClientSessionData(uint32_t session_id, uint64_t client_random_id, JClientProgramData* program_data);
+  JClientSessionData(uint32_t session_id, uint64_t client_random_id, JClientProgramData* program_data, JClientBoostLevel boost_level);
   ~JClientSessionData();
 
   uint32_t session_id() const { return _session_id; }
@@ -277,6 +282,8 @@ public:
   uint64_t random_id() const { return _random_id; }
 
   JClientProgramData* program_data() const { return _program_data; }
+
+  const JClientBoostLevel& boost_level() const { return _boost_level; }
 
   address client_cld_address(ClassLoaderData* server_data, Thread* thread);
   ClassLoaderData* server_cld_address(address client_data, Thread* thread);
@@ -288,9 +295,9 @@ public:
   Klass* server_klass_address(address client_klass_addr, Thread* thread);
   void add_klass_address(address client_klass_addr, address server_cld_addr, Thread* thread);
 
-  void klass_array(GrowableArray<address>* key_array, GrowableArray<address>* value_array, Thread* thread);
+  void klass_array(GrowableArray<uintptr_t>* key_array, GrowableArray<uintptr_t>* value_array, Thread* thread);
 
-  void klass_pointer_map_to_server(GrowableArray<address>* klass_array, Thread* thread);
+  void klass_pointer_map_to_server(GrowableArray<uintptr_t>* klass_array, Thread* thread);
 
   void add_method_data(address method, address method_data, Thread* thread);
   bool remove_method_data(address method, Thread* thread);
@@ -399,7 +406,7 @@ public:
 
   static jint init_phase1();
   static void init_phase2(TRAPS) { /* do nothing */ }
-  static void init_phase3(int server_port, int connection_timeout, int cleanup_timeout, const char* cache_path, TRAPS);
+  static void init_phase3(int server_port, int connection_timeout, int cleanup_timeout, const char* cache_path, const char* ssl_key, const char* ssl_cert, TRAPS);
 
   // $HOME/.jbooster/server
   const char* cache_dir_path() { return _cache_dir_path; }
@@ -416,6 +423,7 @@ public:
   JClientSessionData* get_session(uint32_t session_id, Thread* thread);
   JClientSessionData* create_session(uint64_t client_random_id,
                                      JClientArguments* program_args,
+                                     JClientBoostLevel boost_level,
                                      Thread* thread);
   bool try_remove_session(uint32_t session_id, Thread* thread);
 

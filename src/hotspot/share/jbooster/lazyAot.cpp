@@ -199,7 +199,11 @@ void LazyAOT::collect_klasses_in_constant_pool(GrowableArray<InstanceKlass*>* ds
     int len = dst->length();
     for (int i = last_len; i < len; ++i) {
       ThreadInVMfromNative tiv(THREAD);
-      collect_klasses_in_constant_pool(dst, vis, dst->at(i), ALL_KLASSES, CHECK);
+      if (JBoosterResolveExtraKlasses) {
+        collect_klasses_in_constant_pool(dst, vis, dst->at(i), ALL_KLASSES, CHECK);
+      } else {
+        collect_klasses_in_constant_pool(dst, vis, dst->at(i), RESOLVED_KLASSES, CHECK);
+      }
     }
     last_len = len;
   }
@@ -527,6 +531,7 @@ bool LazyAOT::compile_classes_by_graal(int session_id,
                                        const char* file_path,
                                        GrowableArray<InstanceKlass*>* klasses,
                                        bool use_pgo,
+                                       bool resolve_no_extra_klasses,
                                        TRAPS) {
   DebugUtils::assert_thread_in_vm();
 
@@ -541,9 +546,11 @@ bool LazyAOT::compile_classes_by_graal(int session_id,
   java_args.push_int(session_id);
   java_args.push_oop(file_path_h);
   java_args.push_oop(hash_set_h);
+  java_args.push_int(use_pgo);
+  java_args.push_int(resolve_no_extra_klasses);
 
   TempNewSymbol compile_classes_name = SymbolTable::new_symbol("compileClasses");
-  TempNewSymbol compile_classes_signature = SymbolTable::new_symbol("(ILjava/lang/String;Ljava/util/Set;)Z");
+  TempNewSymbol compile_classes_signature = SymbolTable::new_symbol("(ILjava/lang/String;Ljava/util/Set;ZZ)Z");
   JavaCalls::call_static(&result, ServerDataManager::get().main_klass(),
                          compile_classes_name,
                          compile_classes_signature,
@@ -557,6 +564,7 @@ bool LazyAOT::compile_methods_by_graal(int session_id,
                                        GrowableArray<Method*>* methods_to_compile,
                                        GrowableArray<Method*>* methods_not_compile,
                                        bool use_pgo,
+                                       bool resolve_no_extra_klasses,
                                        TRAPS) {
   DebugUtils::assert_thread_in_vm();
 
@@ -580,9 +588,10 @@ bool LazyAOT::compile_methods_by_graal(int session_id,
   java_args.push_oop(method_name_set_h);
   java_args.push_oop(not_method_name_set_h);
   java_args.push_int(use_pgo);
+  java_args.push_int(resolve_no_extra_klasses);
 
   TempNewSymbol compile_methods_name = SymbolTable::new_symbol("compileMethods");
-  TempNewSymbol compile_methods_signature = SymbolTable::new_symbol("(ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;Z)Z");
+  TempNewSymbol compile_methods_signature = SymbolTable::new_symbol("(ILjava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Set;ZZ)Z");
   JavaCalls::call_static(&result, ServerDataManager::get().main_klass(),
                          compile_methods_name,
                          compile_methods_signature,

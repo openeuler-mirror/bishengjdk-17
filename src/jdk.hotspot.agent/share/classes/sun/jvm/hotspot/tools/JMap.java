@@ -25,6 +25,9 @@
 package sun.jvm.hotspot.tools;
 
 import java.io.*;
+import java.nio.CharBuffer;
+import java.util.regex.Pattern;
+
 import sun.jvm.hotspot.debugger.JVMDebugger;
 import sun.jvm.hotspot.utilities.*;
 
@@ -189,6 +192,9 @@ public class JMap extends Tool {
                             redactParams.setRedactMapFile(keyValue[1]);
                         } else if (keyValue[0].equals("RedactClassPath")) {
                             redactParams.setRedactClassPath(keyValue[1]);
+                        } else if (keyValue[0].equals("RedactPassword")) {
+                            redactParams.setRedactPassword(getRedactPassword());
+
                         } else {
                             System.err.println("unknown option:" + keyValue[0]);
 
@@ -224,6 +230,36 @@ public class JMap extends Tool {
 
         JMap jmap = new JMap(mode);
         jmap.execute(args);
+    }
+
+    private static CharBuffer getRedactPassword() {
+        CharBuffer redactPassword = CharBuffer.wrap("");
+        // heap dump may need a password
+        Console console = System.console();
+        char[] passwords = null;
+        if (console == null) {
+            return redactPassword;
+        }
+
+        try {
+            passwords = console.readPassword("redact authority password:");
+        } catch (Exception e) {
+        }
+        if(passwords == null) {
+            return redactPassword;
+        }
+
+        try {
+            CharBuffer cb = CharBuffer.wrap(passwords);
+            String passwordPattern = "^[0-9a-zA-Z!@#$]{1,9}$";
+            if(!Pattern.matches(passwordPattern, cb)) {
+                return redactPassword;
+            }
+            redactPassword = cb;
+        } catch (Exception e) {
+        }
+
+        return redactPassword;
     }
 
     public boolean writeHeapHprofBin(String fileName, int gzLevel) {

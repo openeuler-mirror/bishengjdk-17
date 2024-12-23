@@ -59,7 +59,8 @@ private:
   int try_to_compile_lazy_aot(GrowableArray<InstanceKlass*>* klasses_to_compile,
                               GrowableArray<Method*>* methods_to_compile,
                               GrowableArray<Method*>* methods_not_compile,
-                              bool use_pgo,
+                              bool enabling_aot_pgo,
+                              bool resolve_extra_klasses,
                               TRAPS);
 public:
   ServerMessageHandler(ServerStream* server_stream);

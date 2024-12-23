@@ -170,12 +170,15 @@ void HeapRedactor::init(outputStream* out) {
    * if HeapDumpRedact is NULL , jmap operation can not open redact feature without password
    * if HeapDumpRedact is not NULL, jmap operation can not change redact level without password
    **/
-    if(Arguments::get_heap_dump_redact_auth() == NULL) {
+    char* split_char = NULL;
+    if(RedactPassword == NULL || (split_char = strstr(const_cast<char*>(RedactPassword), ",")) == NULL || strlen(split_char) < SALT_LEN) {
         VerifyRedactPassword = false;
     }
     if(VerifyRedactPassword && !_use_sys_params) {
+      size_t auth_len = strlen(RedactPassword);
+      size_t suffix_len = strlen(split_char);
       if(_redact_params.redact_password == NULL ||
-       strcmp(_redact_params.redact_password, Arguments::get_heap_dump_redact_auth()) ) {
+        strncmp(_redact_params.redact_password, RedactPassword, auth_len-suffix_len) ) {
         // no password or wrong password
         _use_sys_params = true;
         if(out != NULL) {

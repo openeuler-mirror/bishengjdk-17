@@ -99,7 +99,8 @@ public final class JBooster {
         connectionPool = new ConnectionPool();
         Main.initForJBooster();
         initInVM(options.getServerPort(), options.getConnectionTimeout(),
-                options.getCleanupTimeout(), options.getCachePath());
+                options.getCleanupTimeout(), options.getCachePath(),
+                options.getSSLKey(), options.getSSLCert());
     }
 
     private static void loop() {
@@ -167,22 +168,22 @@ public final class JBooster {
     /**
      * This method is invoked only in C++.
      */
-    private static boolean receiveConnection(int connectionFd) {
-        return connectionPool.execute(() -> handleConnection(connectionFd));
+    private static boolean receiveConnection(int connectionFd, long connectionSSL) {
+        return connectionPool.execute(() -> handleConnection(connectionFd, connectionSSL));
     }
 
     /**
      * This method is invoked only in C++.
      */
-    private static boolean compileClasses(int sessionId, String filePath, Set<Class<?>> classes, boolean usePGO) {
-        return compileMethods(sessionId, filePath, classes, null, null, usePGO);
+    private static boolean compileClasses(int sessionId, String filePath, Set<Class<?>> classes, boolean usePGO, boolean resolveExtraKlasses) {
+        return compileMethods(sessionId, filePath, classes, null, null, usePGO, resolveExtraKlasses);
     }
 
     /**
      * This method is invoked only in C++.
      */
     private static boolean compileMethods(int sessionId, String filePath, Set<Class<?>> classes,
-                                          Set<String> methodsToCompile, Set<String> methodsNotToCompile, boolean usePGO) {
+                                          Set<String> methodsToCompile, Set<String> methodsNotToCompile, boolean usePGO, boolean resolveExtraKlasses) {
         LOGGER.log(INFO, "Compilation task received: classes_to_compile={0}, methods_to_compile={1}, methods_not_compile={2}, session_id={3}.",
                 classes.size(),
                 (methodsToCompile == null ? "all" : String.valueOf(methodsToCompile.size())),
@@ -190,7 +191,7 @@ public final class JBooster {
                 sessionId);
         try {
             JBoosterCompilationContextImpl ctx = new JBoosterCompilationContextImpl(
-                    sessionId, filePath, classes, methodsToCompile, methodsNotToCompile, usePGO);
+                    sessionId, filePath, classes, methodsToCompile, methodsNotToCompile, usePGO, resolveExtraKlasses);
             return new Main(ctx).compileForJBooster();
         } catch (Exception e) {
             e.printStackTrace();
@@ -198,9 +199,9 @@ public final class JBooster {
         return false;
     }
 
-    private static native void initInVM(int serverPort, int connectionTimeout, int cleanupTimeout, String cachePath);
+    private static native void initInVM(int serverPort, int connectionTimeout, int cleanupTimeout, String cachePath, String sslKey, String sslCert);
 
-    private static native void handleConnection(int connectionFd);
+    private static native void handleConnection(int connectionFd, long connectionSSL);
 
     static native void printStoredClientData(boolean printAll);
 

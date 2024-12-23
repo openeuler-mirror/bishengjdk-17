@@ -322,7 +322,8 @@ public class SALauncher {
                 Map.entry("HeapDumpRedact=", "HeapDumpRedact"),
                 Map.entry("RedactMap=", "RedactMap"),
                 Map.entry("RedactMapFile=", "RedactMapFile"),
-                Map.entry("RedactClassPath=", "RedactClassPath"));
+                Map.entry("RedactClassPath=", "RedactClassPath"),
+                Map.entry("RedactPassword", "RedactPassword"));
     }
 
     private static void runJMAP(String[] oldArgs) {
@@ -337,6 +338,7 @@ public class SALauncher {
         String redactMap = newArgMap.get("RedactMap");
         String redactMapFile = newArgMap.get("RedactMapFile");
         String redactClassPath = newArgMap.get("RedactClassPath");
+        boolean hasRedactPassword = newArgMap.containsKey("RedactPassword");
         if (!requestHeapdump && (dumpfile != null)) {
             throw new IllegalArgumentException("Unexpected argument: dumpfile");
         }
@@ -359,6 +361,9 @@ public class SALauncher {
             if (redactClassPath != null) {
                 command += ",RedactClassPath=" + redactClassPath;
             }
+            if(hasRedactPassword) {
+                command += ",RedactPassword";
+            }
             newArgMap.put(command, null);
         }
 
@@ -369,8 +374,11 @@ public class SALauncher {
         newArgMap.remove("RedactMap");
         newArgMap.remove("RedactMapFile");
         newArgMap.remove("RedactClassPath");
+        newArgMap.remove("RedactPassword");
         JMap.main(buildAttachArgs(newArgMap, false));
     }
+
+
 
     private static void runJINFO(String[] oldArgs) {
         Map<String, String> longOptsMap = Map.of("exe=", "exe",

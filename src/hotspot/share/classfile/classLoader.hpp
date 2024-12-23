@@ -216,6 +216,8 @@ class ClassLoader: AllStatic {
   // Last entry in linked list of appended ClassPathEntry instances
   static ClassPathEntry* volatile _last_append_entry;
 
+  static ClassPathEntry* _prim_collection_entry;
+
   // Info used by CDS
   CDS_ONLY(static ClassPathEntry* _app_classpath_entries;)
   CDS_ONLY(static ClassPathEntry* _last_app_classpath_entry;)
@@ -243,6 +245,7 @@ class ClassLoader: AllStatic {
   static void setup_bootstrap_search_path(JavaThread* current);
   static void setup_bootstrap_search_path_impl(JavaThread* current, const char *class_path);
   static void setup_patch_mod_entries();
+  static void set_prim_collection_path(JavaThread *current);
   static void create_javabase();
 
   static void* dll_lookup(void* lib, const char* name, const char* path);

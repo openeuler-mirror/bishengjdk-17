@@ -75,6 +75,13 @@ bool FileUtils::is_dir(const char* path) {
   return S_ISDIR(st.st_mode);
 }
 
+int64_t FileUtils::file_size(const char* path) {
+  struct stat st = {0};
+  if (os::stat(path, &st) != 0) return -1;
+  // We don't care if it is a regular file.
+  return st.st_size;
+}
+
 uint64_t FileUtils::modify_time(const char* path) {
   struct stat st = {0};
   if (os::stat(path, &st) != 0) return 0;
@@ -118,61 +125,4 @@ bool FileUtils::move(const char* path_from, const char* path_to) {
 
 bool FileUtils::remove(const char* path) {
   return ::remove(path) == 0;
-}
-
-bool FileUtils::is_same(const char* path1, const char* path2) {
-  bool res = false;
-  char* buf1 = nullptr;
-  char* buf2 = nullptr;
-  int fd1 = os::open(path1, O_BINARY | O_RDONLY, 0);
-  int fd2 = os::open(path2, O_BINARY | O_RDONLY, 0);
-  do {
-    if (fd1 < 0 || fd2 < 0) break;
-    int64_t size1 = os::lseek(fd1, 0, SEEK_END);
-    int64_t size2 = os::lseek(fd2, 0, SEEK_END);
-    if (size1 != size2) break;
-    int64_t size = size1;
-    os::lseek(fd1, 0, SEEK_SET);
-    os::lseek(fd2, 0, SEEK_SET);
-    // We don't use NEW_RESOURCE_ARRAY here as Thread::current() may
-    // not be initialized yet.
-    buf1 = NEW_C_HEAP_ARRAY(char, (size_t) size, mtJBooster);
-    buf2 = NEW_C_HEAP_ARRAY(char, (size_t) size, mtJBooster);
-    size1 = (int64_t) os::read(fd1, buf1, size);
-    size2 = (int64_t) os::read(fd2, buf2, size);
-    guarantee(size1 == size && size2 == size, "sanity");
-    res = memcmp(buf1, buf2, size) == 0;
-  } while (false);
-  if (fd1 >= 0) os::close(fd1);
-  if (fd2 >= 0) os::close(fd2);
-  if (buf1 != nullptr) {
-    FREE_C_HEAP_ARRAY(char, buf1);
-  }
-  if (buf2 != nullptr) {
-    FREE_C_HEAP_ARRAY(char, buf2);
-  }
-  return res;
-}
-
-bool FileUtils::is_same(const char* path, const char* content, int64_t size) {
-  bool res = false;
-  char* buf = nullptr;
-  int fd = os::open(path, O_BINARY | O_RDONLY, 0);
-  do {
-    if (fd < 0) break;
-    int64_t fsize = os::lseek(fd, 0, SEEK_END);
-    if (fsize != size) break;
-    os::lseek(fd, 0, SEEK_SET);
-    // We don't use NEW_RESOURCE_ARRAY here as Thread::current() may
-    // not be initialized yet.
-    buf = NEW_C_HEAP_ARRAY(char, (size_t) size, mtJBooster);
-    fsize = (int64_t) os::read(fd, buf, size);
-    guarantee(fsize == size, "sanity");
-    res = memcmp(content, buf, size) == 0;
-  } while (false);
-  if (fd >= 0) os::close(fd);
-  if (buf != nullptr) {
-    FREE_C_HEAP_ARRAY(char, buf);
-  }
-  return res;
 }

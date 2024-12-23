@@ -72,21 +72,20 @@
 // ------------------------------ Default Serializer -------------------------------
 // The types it support for serialization/deserialization:
 // - Base types: bool, int, long long, size_t, uint64_t, and so on.
-// - POD classes without pointers.
 //
-// memcpy() is good enough in most cases. Even for base types such as char and size_t,
-// memcpy() has the similar performance as assignment (`=`) according to our tests.
-// It's also a choice to use assignment here. But if a class overloads the operator `=`
-// and allocates something on the heap, it can cause a memory leak.
+// No default serializer for classes! Implement them manually.
+//
+// Use uintptr_t instead of address (aka unsigned char*) if you want to serialize a
+// pointer.
 
 template <typename Arg>
 struct SerializationImpl {
   static int serialize(MessageBuffer& buf, const Arg& arg) {
-    return buf.serialize_memcpy(&arg, sizeof(Arg));
+    return buf.serialize_base(arg);
   }
 
   static int deserialize_ref(MessageBuffer& buf, Arg& arg) {
-    return buf.deserialize_memcpy(&arg, sizeof(Arg));
+    return buf.deserialize_base(arg);
   }
 
   CANNOT_DESERIALIZE_POINTER(Arg);

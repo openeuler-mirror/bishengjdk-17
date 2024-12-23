@@ -133,13 +133,15 @@
 
 class MessageConst {
 public:
+  static constexpr uint32_t MAX_MSG_SIZE = 0x80000000;
+  static constexpr uint16_t RPC_MAGIC = 0xB05E;
   enum: uint32_t {
     /**
      * The layout of the message in the buffer:
-     * | msg_size | msg_type | ... (all of the arguments) ... |
-     * | 4 bytes  | 2 bytes  |     msg_size - 4 - 2 bytes     |
+     * | msg_size | magic_num | msg_type | ... (all of the arguments) ... |
+     * | 4 bytes  |  2 bytes  | 2 bytes  |     msg_size - 4 - 2 bytes     |
      */
-    meta_size = sizeof(uint32_t) + sizeof(MessageType),
+    meta_size = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(MessageType),
     /**
      * The layout of each argument in the buffer:
      * | arg_size | ... (payload of the argument) ... |

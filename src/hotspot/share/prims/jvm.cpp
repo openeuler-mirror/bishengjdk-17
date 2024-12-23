@@ -3860,20 +3860,28 @@ JVM_END
 
 // JBooster ////////////////////////////////////////////////////////////////////////
 
-JVM_ENTRY(void, JVM_JBoosterInitVM(JNIEnv *env, jint server_port, jint connection_timeout, jint cleanup_timeout, jstring cache_path))
+JVM_ENTRY(void, JVM_JBoosterInitVM(JNIEnv *env, jint server_port, jint connection_timeout, jint cleanup_timeout, jstring cache_path, jstring ssl_key, jstring ssl_cert))
 #if INCLUDE_JBOOSTER
   ResourceMark rm(THREAD);
   const char* cache_path_c = NULL;
   if (cache_path != NULL) {
     cache_path_c = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(cache_path));
   }
-  ServerDataManager::init_phase3(server_port, connection_timeout, cleanup_timeout, cache_path_c, THREAD);
+  const char* ssl_key_c = NULL;
+  if (ssl_key != NULL) {
+    ssl_key_c = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(ssl_key));
+  }
+  const char* ssl_cert_c = NULL;
+  if (ssl_cert != NULL) {
+    ssl_cert_c = java_lang_String::as_utf8_string(JNIHandles::resolve_non_null(ssl_cert));
+  }
+  ServerDataManager::init_phase3(server_port, connection_timeout, cleanup_timeout, cache_path_c, ssl_key_c, ssl_cert_c, THREAD);
 #endif // INCLUDE_JBOOSTER
 JVM_END
 
-JVM_ENTRY(void, JVM_JBoosterHandleConnection(JNIEnv *env, jint connection_fd))
+JVM_ENTRY(void, JVM_JBoosterHandleConnection(JNIEnv *env, jint connection_fd, jlong connection_ssl))
 #if INCLUDE_JBOOSTER
-  ServerDataManager::get().listening_thread()->handle_connection(connection_fd);
+  ServerDataManager::get().listening_thread()->handle_connection(connection_fd, connection_ssl);
 #endif // INCLUDE_JBOOSTER
 JVM_END
 

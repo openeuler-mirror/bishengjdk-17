@@ -22,6 +22,7 @@
  */
 
 #include "jbooster/net/communicationStream.inline.hpp"
+#include "jbooster/net/sslUtils.hpp"
 #include "runtime/os.inline.hpp"
 #ifdef ASSERT
 #include "runtime/thread.inline.hpp"
@@ -54,19 +55,27 @@ void CommunicationStream::handle_net_err(int comm_size, bool is_recv) {
   return;
 }
 
+int CommunicationStream::read_from_fd_or_ssl(char* buf, size_t size) {
+  if (_ssl == nullptr) {
+    return os::recv(_conn_fd, buf, size, 0);
+  } else {
+    return SSLUtils::ssl_read(_ssl, buf, size);
+  }
+}
+
 uint32_t CommunicationStream::read_once_from_stream(char* buf, uint32_t size) {
-    int read_size = os::recv(_conn_fd, buf, (size_t) size, 0);
-    if (read_size <= 0) {
-      handle_net_err(read_size, true);
-      return 0;
-    }
-    return (uint32_t) read_size;
+  int read_size = read_from_fd_or_ssl(buf, size);
+  if (read_size <= 0) {
+    handle_net_err(read_size, true);
+    return 0;
+  }
+  return (uint32_t) read_size;
 }
 
 uint32_t CommunicationStream::read_all_from_stream(char* buf, uint32_t size) {
   uint32_t total_read_size = 0;
   while (total_read_size < size) {
-    int read_size = os::recv(_conn_fd, buf + total_read_size, (size_t) (size - total_read_size), 0);
+    int read_size = read_from_fd_or_ssl(buf + total_read_size, (size_t) (size - total_read_size));
     if (read_size <= 0) {
       handle_net_err(read_size, true);
       break;
@@ -76,8 +85,16 @@ uint32_t CommunicationStream::read_all_from_stream(char* buf, uint32_t size) {
   return total_read_size;
 }
 
+int CommunicationStream::write_to_fd_or_ssl(char* buf, size_t size) {
+  if (_ssl == nullptr) {
+    return os::send(_conn_fd, buf, size, 0);
+  } else {
+    return SSLUtils::ssl_write(_ssl, buf, size);
+  }
+}
+
 uint32_t CommunicationStream::write_once_to_stream(char* buf, uint32_t size) {
-  int written_size = os::send(_conn_fd, buf, size, 0);
+  int written_size = write_to_fd_or_ssl(buf, size);
   if (written_size <= 0) {
     handle_net_err(written_size, false);
     return 0;
@@ -88,7 +105,7 @@ uint32_t CommunicationStream::write_once_to_stream(char* buf, uint32_t size) {
 uint32_t CommunicationStream::write_all_to_stream(char* buf, uint32_t size) {
   uint32_t total_written_size = 0;
   while (total_written_size < size) {
-    int written_size = os::send(_conn_fd, buf + total_written_size, (size_t) (size - total_written_size), 0);
+    int written_size = write_to_fd_or_ssl(buf + total_written_size, (size_t) (size - total_written_size));
     if (written_size <= 0) {
       handle_net_err(written_size, false);
       break;
@@ -99,6 +116,8 @@ uint32_t CommunicationStream::write_all_to_stream(char* buf, uint32_t size) {
 }
 
 void CommunicationStream::close_stream() {
+  SSLUtils::shutdown_and_free_ssl(_ssl);
+
   if (_conn_fd >= 0) {
     log_trace(jbooster, rpc)("Connection closed. stream_id=%u.", stream_id());
     os::close(_conn_fd);
@@ -126,16 +145,18 @@ int CommunicationStream::recv_message() {
   Message& msg = _msg_recv;
   // read once (or memmove from the overflowed buffer) to get message size
   uint32_t read_size, msg_size;
+  uint16_t magic_num;
+  const uint32_t min_read_size = sizeof(msg_size) + sizeof(magic_num);
   if (msg.has_overflow()) {
     read_size = msg.move_overflow();
-    if (read_size < sizeof(msg_size)) {
+    if (read_size < min_read_size) {
       read_size += read_once_from_stream(msg.buf_beginning() + read_size, msg.buf_size() - read_size);
     }
   } else {
     read_size = read_once_from_stream(msg.buf_beginning(), msg.buf_size());
   }
 
-  if (read_size < sizeof(msg_size)) {
+  if (read_size < min_read_size) {
     if (!is_stream_closed()) {
       log_warning(jbooster, rpc)("Failed to read the size of the message (read_size=%d). stream_id=%u.",
                                  read_size, stream_id());
@@ -143,7 +164,16 @@ int CommunicationStream::recv_message() {
     return return_errno_or_flag(JBErr::BAD_MSG_SIZE);
   }
 
+  magic_num = msg.deserialize_magic_num_only();
+  if (magic_num != MessageConst::RPC_MAGIC) {
+    log_warning(jbooster, rpc)("Message not from JBooster client. stream_id=%u.", stream_id());
+    return return_errno_or_flag(JBErr::BAD_MAGIC_NUM);
+  }
   msg_size = msg.deserialize_size_only();
+  if (msg_size > MessageConst::MAX_MSG_SIZE) {
+    log_warning(jbooster, rpc)("Message size should be no more than 2GB. stream_id=%u.", stream_id());
+    return return_errno_or_flag(JBErr::BAD_MSG_SIZE);
+  }
   if (read_size > msg_size) {         // read too much
     msg.set_overflow(msg_size, read_size - msg_size);
   } else if (read_size < msg_size) {  // read the rest then

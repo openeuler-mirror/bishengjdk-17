@@ -93,6 +93,18 @@ public final class Options {
         protected void process(Options options, String arg) {
             options.interactive = false;
         }
+    }, new Option(of("--ssl-key"), "file-path",
+            "The file path to save server SSL key.") {
+        @Override
+        protected void process(Options options, String arg) {
+            options.sslKey = arg;
+        }
+    }, new Option(of("--ssl-cert"), "file-path",
+            "The file path to save server SSL certificate.") {
+        @Override
+        protected void process(Options options, String arg) {
+            options.sslCert = arg;
+        }
     }};
 
     private int serverPort = UNSET_PORT;
@@ -100,6 +112,8 @@ public final class Options {
     private int cleanupTimeout = CLEANUP_TIMEOUT;
     private String cachePath = null;   // set on C++ side
     private boolean interactive = true;
+    private String sslKey = null;
+    private String sslCert = null;
 
     public int getServerPort() {
         return serverPort;
@@ -119,6 +133,14 @@ public final class Options {
 
     public boolean isInteractive() {
         return interactive;
+    }
+
+    public String getSSLKey() {
+        return sslKey;
+    }
+
+    public String getSSLCert() {
+        return sslCert;
     }
 
     /**

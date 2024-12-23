@@ -25,10 +25,15 @@
 #define SHARE_JBOOSTER_NET_SERVERLISTENINGTHREAD_HPP
 
 #include "runtime/thread.hpp"
+#include <netdb.h>        // for addrinfo
+
+typedef struct ssl_st SSL;
+typedef struct ssl_ctx_st SSL_CTX;
 
 class ServerListeningThread : public CHeapObj<mtJBooster> {
 private:
   static ServerListeningThread* _singleton;
+  static SSL_CTX* _server_ssl_ctx;
 
   JavaThread* const _the_java_thread;
   const char* const _address;
@@ -40,13 +45,15 @@ private:
   volatile bool _exit_flag;
 
 private:
+  static void server_init_ssl_ctx(const char* ssl_key, const char* ssl_cert);
   static void server_listener_thread_entry(JavaThread* thread, TRAPS);
 
   ServerListeningThread(JavaThread* the_java_thread, const char* address, uint16_t port, uint32_t timeout_ms);
 
   uint32_t new_stream_id();
 
-  void handle_new_connection(int conn_fd, TRAPS);
+  bool prepare_and_handle_new_connection(int server_fd, sockaddr_in* acc_addr, socklen_t* acc_addrlen, TRAPS);
+  void handle_new_connection(int conn_fd, SSL* ssl, TRAPS);
 
   int run_listener(TRAPS);
 
@@ -54,6 +61,8 @@ public:
   static ServerListeningThread* start_thread(const char* address,
                                              uint16_t port,
                                              uint32_t timeout_ms,
+                                             const char* ssl_key,
+                                             const char* ssl_cert,
                                              TRAPS);
 
   ~ServerListeningThread();
@@ -61,7 +70,7 @@ public:
   bool get_exit_flag() { return _exit_flag; }
   void set_exit_flag() { _exit_flag = true; }
 
-  void handle_connection(int conn_fd);
+  void handle_connection(int conn_fd, long ssl);
 };
 
 #endif // SHARE_JBOOSTER_NET_SERVERLISTENINGTHREAD_HPP

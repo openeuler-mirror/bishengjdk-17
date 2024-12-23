@@ -95,6 +95,11 @@ public interface JBoosterCompilationContext {
     boolean usePGO();
 
     /**
+     * return true if compilation uses extra-resolved klasses
+     */
+    boolean resolveExtraKlasses();
+
+    /**
      * Get methodCount of CompiledMethodInfo.
      * (To support multi-task concurrent compilation of AOT)
      */

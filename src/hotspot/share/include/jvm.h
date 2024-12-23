@@ -1105,13 +1105,14 @@ JVM_GetEnclosingMethodInfo(JNIEnv* env, jclass ofClass);
  * Init the JBooster server in Hotspot.
  */
 JNIEXPORT void JNICALL
-JVM_JBoosterInitVM(JNIEnv *env, jint server_port, jint connection_timeout, jint cleanup_timeout, jstring cache_path);
+JVM_JBoosterInitVM(JNIEnv *env, jint server_port, jint connection_timeout, jint cleanup_timeout,
+                   jstring cache_path, jstring ssl_key, jstring ssl_cert);
 
 /**
  * Handle a TCP connection.
  */
 JNIEXPORT void JNICALL
-JVM_JBoosterHandleConnection(JNIEnv *env, jint connection_fd);
+JVM_JBoosterHandleConnection(JNIEnv *env, jint connection_fd, jlong connection_ssl);
 
 /**
  * Print data in ServerDataManager.

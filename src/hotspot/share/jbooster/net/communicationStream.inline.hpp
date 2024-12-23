@@ -58,6 +58,7 @@ inline bool CommunicationStream::check_received_message_size() {
 template <typename... Args>
 inline int CommunicationStream::send_request(MessageType type, const Args* const... args) {
   _msg_send.set_msg_type(type);
+  _msg_send.set_magic_num(MessageConst::RPC_MAGIC);
   _msg_send.set_cur_buf_offset_after_meta();
   JB_RETURN(_msg_send.serialize(args...));
   _msg_send.set_msg_size_based_on_cur_buf_offset();

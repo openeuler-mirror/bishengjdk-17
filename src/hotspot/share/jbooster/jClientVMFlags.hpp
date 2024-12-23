@@ -29,14 +29,7 @@
 #include "runtime/globals_extension.hpp"
 
 #define JCLIENT_CDS_VM_FLAGS(f)               \
-  f(bool,     DynamicDumpSharedSpaces       ) \
-  f(bool,     DumpSharedSpaces              ) \
-  f(bool,     UseSharedSpaces               ) \
-  f(ccstr,    SharedArchiveFile             ) \
-  f(ccstr,    SharedArchiveConfigFile       ) \
-  f(ccstr,    ArchiveClassesAtExit          ) \
   f(size_t,   MaxMetaspaceSize              ) \
-  f(bool,     UseAggressiveCDS              ) \
   f(size_t,   SharedBaseAddress             ) \
   f(bool,     UseCompressedOops             ) \
   f(bool,     UseCompressedClassPointers    ) \
@@ -87,8 +80,8 @@ public:
   int serialize(MessageBuffer& buf) const;
   int deserialize(MessageBuffer& buf);
 
-  bool equals(JClientVMFlags* that, bool allow_clr, bool allow_cds, bool allow_aot);
-  uint32_t hash(bool allow_clr, bool allow_cds, bool allow_aot);
+  bool equals(JClientVMFlags* that);
+  uint32_t hash();
 
   void print_flags(outputStream* st);
 };

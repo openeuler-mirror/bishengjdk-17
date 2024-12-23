@@ -78,6 +78,7 @@ inline int Message::deserialize(Args* const&... args) {
 inline void Message::serialize_meta() {
   _buf.set_cur_offset(0);
   _buf.serialize_no_meta(_meta.msg_size);
+  _buf.serialize_no_meta(_meta.magic_num);
   _buf.serialize_no_meta(_meta.msg_type);
   assert(cur_buf_offset() == meta_size, "sanity");
 }
@@ -85,6 +86,7 @@ inline void Message::serialize_meta() {
 inline void Message::deserialize_meta() {
   _buf.set_cur_offset(0);
   _buf.deserialize_ref_no_meta(_meta.msg_size);
+  _buf.deserialize_ref_no_meta(_meta.magic_num);
   _buf.deserialize_ref_no_meta(_meta.msg_type);
   assert(cur_buf_offset() == meta_size, "sanity");
 }

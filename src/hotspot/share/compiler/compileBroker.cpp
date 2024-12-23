@@ -82,6 +82,9 @@
 #ifdef COMPILER2
 #include "opto/c2compiler.hpp"
 #endif
+#if INCLUDE_JBOLT
+#include "jbolt/jBoltManager.hpp"
+#endif // INCLUDE_JBOLT
 
 #ifdef DTRACE_ENABLED
 
@@ -2008,6 +2011,12 @@ void CompileBroker::compiler_thread_loop() {
       } else {
         task->set_failure_reason("breakpoints are present");
       }
+
+#if INCLUDE_JBOLT
+      if (UseJBolt && JBoltLoadMode) {
+        JBoltManager::check_start_reordering(thread);
+      }
+#endif // INCLUDE_JBOLT
 
       if (UseDynamicNumberOfCompilerThreads) {
         possibly_add_compiler_threads(thread);

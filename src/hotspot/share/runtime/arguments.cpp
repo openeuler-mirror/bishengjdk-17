@@ -121,8 +121,6 @@ bool Arguments::_has_jimage = false;
 
 char* Arguments::_ext_dirs = NULL;
 
-char* Arguments::_heap_dump_redact_auth = NULL;
-
 bool PathString::set_value(const char *value) {
   if (_value != NULL) {
     FreeHeap(_value);
@@ -2971,6 +2969,13 @@ jint Arguments::parse_each_vm_init_arg(const JavaVMInitArgs* args, bool* patch_m
     LogConfiguration::configure_stdout(LogLevel::Info, true, LOG_TAGS(class, path));
   }
 
+  if (DumpSharedSpaces && UsePrimHashMap) {
+    warning("UsePrimHashMap is confilict with -Xshare:dump. ignoring UsePrimHashMap.");
+    if (FLAG_SET_CMDLINE(UsePrimHashMap, false) != JVMFlag::SUCCESS) {
+      return JNI_EINVAL;
+    }
+  }
+
   fix_appclasspath();
 
   return JNI_OK;
@@ -3743,22 +3748,22 @@ jint Arguments::match_special_option_and_act(const JavaVMInitArgs* args,
         warning("Heap dump redacting did not setup properly, using wrong argument?");
         vm_exit_during_initialization("Syntax error, expecting -XX:HeapDumpRedact=[off|names|basic|full|diyrules|annotation]",NULL);
       }
+      continue;
     }
 
     // heapDump redact password
     if(match_option(option, "-XX:RedactPassword=", &tail)) {
       if(tail == NULL || strlen(tail) == 0) {
           VerifyRedactPassword = false;
-          jio_fprintf(defaultStream::output_stream(), "redact password is null, disable verify heap dump authority.\n");
       } else {
-          VerifyRedactPassword = true;
-          size_t redact_password_len = strlen(tail);
-          _heap_dump_redact_auth = NEW_C_HEAP_ARRAY(char, redact_password_len+1, mtArguments);
-          memcpy(_heap_dump_redact_auth, tail, redact_password_len);
-          _heap_dump_redact_auth[redact_password_len] = '\0';
-          memset((void*)tail, '0', redact_password_len);
+          char* split_char = strstr(const_cast<char*>(tail), ",");
+          VerifyRedactPassword = !(split_char == NULL || strlen(split_char) < SALT_LEN);
+      }
+      if(!VerifyRedactPassword) {
+          jio_fprintf(defaultStream::output_stream(), "redact password is null or with bad format, disable verify heap dump authority.\n");
       }
     }
+
 
 #ifndef PRODUCT
     if (match_option(option, "-XX:+PrintFlagsWithComments")) {

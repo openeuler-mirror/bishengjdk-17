@@ -57,7 +57,7 @@ public class ClassLoaderTest {
         String bootClassPath = "-Xbootclasspath/a:" + appJar +
             File.pathSeparator + whiteBoxJar;
 
-        TestCommon.dump(appJar, appClasses, bootClassPath);
+        TestCommon.dump(appJar, appClasses, bootClassPath).shouldHaveExitValue(0);
 
         TestCommon.run(
             "-XX:+UnlockDiagnosticVMOptions", "-XX:+WhiteBoxAPI",

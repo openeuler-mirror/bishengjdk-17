@@ -25,9 +25,12 @@
 #include "jbooster/net/clientStream.hpp"
 #include "jbooster/net/rpcCompatibility.hpp"
 #include "jbooster/net/serializationWrappers.hpp"
+#include "jbooster/net/sslUtils.hpp"
 #include "jbooster/utilities/fileUtils.hpp"
 #include "runtime/java.hpp"
 #include "runtime/thread.hpp"
+
+SSL_CTX* ClientStream::_client_ssl_ctx = nullptr;
 
 ClientStream::ClientStream(const char* address, const char* port, uint32_t timeout_ms):
         CommunicationStream(Thread::current_or_null()),
@@ -49,6 +52,29 @@ ClientStream::~ClientStream() {
   }
 }
 
+void ClientStream::client_init_ssl_ctx(const char* root_certs) {
+  guarantee(_client_ssl_ctx == nullptr, "sanity");
+
+  SSLUtils::openssl_init_ssl();
+  _client_ssl_ctx = SSLUtils::ssl_ctx_new(SSLUtils::sslv23_client_method());
+  if (_client_ssl_ctx == nullptr) {
+    vm_exit_during_initialization("Failed to create SSL context.");
+  }
+
+  SSLUtils::ssl_ctx_set_options(_client_ssl_ctx, SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_2);
+
+  const int security_level = 2;
+  SSLUtils::ssl_ctx_set_security_level(_client_ssl_ctx, security_level);
+
+  SSLUtils::ssl_ctx_set_verify(_client_ssl_ctx, SSL_VERIFY_PEER, NULL);
+  if (SSLUtils::ssl_ctx_load_verify_locations(_client_ssl_ctx, root_certs, NULL) != 1) {
+    if (log_is_enabled(Error, jbooster, rpc)) {
+      SSLUtils::err_print_errors_fp(stderr);
+    }
+    vm_exit_during_initialization("Failed to load root cert.");
+  }
+}
+
 int ClientStream::connect_to_server() {
   close_stream();
   const int retries = 3;
@@ -58,10 +84,16 @@ int ClientStream::connect_to_server() {
       int conn_fd;
       JB_THROW(try_to_connect_once(&conn_fd, _server_address, _server_port, _timeout_ms));
       assert(conn_fd >= 0 && errno == 0, "sanity");
-      init_stream(conn_fd);
+
+      SSL* ssl = nullptr;
+      if (_client_ssl_ctx != nullptr) {
+        JB_THROW(try_to_ssl_connect(&ssl, conn_fd));
+        assert(ssl != nullptr && errno == 0, "sanity");
+      }
+      init_stream(conn_fd, ssl);
       return 0;
     } JB_TRY_BREAKABLE_END
-    JB_CATCH(ECONNREFUSED, EBADF) {
+    JB_CATCH(ECONNREFUSED, EBADF, JBErr::BAD_SSL) {
       last_err = JB_ERR;
     } JB_CATCH_REST() {
       last_err = JB_ERR;
@@ -69,7 +101,7 @@ int ClientStream::connect_to_server() {
     } JB_CATCH_END;
   }
 
-  if (last_err == ECONNREFUSED || last_err == EBADF) {
+  if (last_err == ECONNREFUSED || last_err == EBADF || last_err == JBErr::BAD_SSL) {
     constexpr const char* fmt = "Failed to connect to the JBooster server! Retried %d times.";
     if (JBoosterCrashIfNoServer) {
       fatal(fmt, retries);
@@ -119,7 +151,9 @@ int ClientStream::sync_session_meta__client(bool* has_remote_clr, bool* has_remo
   RpcCompatibility comp;
   uint64_t client_random_id = cdm.random_id();
   JClientArguments* program_args = cdm.program_args();
-  JB_RETURN(send_request(MessageType::ClientSessionMeta, &comp, &client_random_id, program_args));
+  JClientBoostLevel boost_level = cdm.boost_level();
+
+  JB_RETURN(send_request(MessageType::ClientSessionMeta, &comp, &client_random_id, program_args, &boost_level));
 
   uint64_t server_random_id;
   uint32_t session_id, program_id;
@@ -176,21 +210,21 @@ int ClientStream::connect_and_init_session(bool* use_clr, bool* use_cds, bool* u
     JB_THROW(sync_session_meta__client(&has_remote_clr, &has_remote_cds, &has_remote_aot));
 
     JB_THROW(request_cache_file(use_clr,
-                                cdm.is_clr_allowed(),
+                                cdm.boost_level().is_clr_allowed(),
                                 FileUtils::is_file(cdm.cache_clr_path()),
                                 has_remote_clr,
                                 cdm.cache_clr_path(),
                                 MessageType::GetClassLoaderResourceCache));
 
     JB_THROW(request_cache_file(use_cds,
-                                cdm.is_cds_allowed(),
+                                cdm.boost_level().is_cds_allowed(),
                                 FileUtils::is_file(cdm.cache_cds_path()),
                                 has_remote_cds,
                                 cdm.cache_cds_path(),
                                 MessageType::GetAggressiveCDSCache));
 
     JB_THROW(request_cache_file(use_aot,
-                                cdm.is_aot_allowed(),
+                                cdm.boost_level().is_aot_allowed(),
                                 FileUtils::is_file(cdm.cache_aot_path()),
                                 has_remote_aot,
                                 cdm.cache_aot_path(),

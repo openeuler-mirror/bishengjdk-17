@@ -116,6 +116,13 @@
                                                                             \
   product(bool, ClassLoaderResourceCacheVerboseMode, false, DIAGNOSTIC,     \
           "Dump/load more data for verification and debugging.")            \
+                                                                            \
+  product(ccstr, JBoosterServerSSLRootCerts, NULL, EXPERIMENTAL,            \
+          "The file path to save server SSL root certificate.")             \
+                                                                            \
+  product(bool, JBoosterResolveExtraKlasses, true, EXPERIMENTAL,            \
+          "Whether resolve additional klasses "                             \
+          "while collecting klasses for AOT.")                              \
 
 
 // end of JBOOSTER_FLAGS

@@ -785,10 +785,11 @@ void VM_PopulateDumpSharedSpace::dump_java_heap_objects(GrowableArray<Klass*>* k
   if(!HeapShared::is_heap_object_archiving_allowed()) {
     log_info(cds)(
       "Archived java heap is not supported as UseG1GC, "
-      "UseCompressedOops and UseCompressedClassPointers are required."
-      "Current settings: UseG1GC=%s, UseCompressedOops=%s, UseCompressedClassPointers=%s.",
+      "UseCompressedOops, UseCompressedClassPointers and !UsePrimHashMap are required."
+      "Current settings: UseG1GC=%s, UseCompressedOops=%s, "
+      "UseCompressedClassPointers=%s, UsePrimHashMap=%s",
       BOOL_TO_STR(UseG1GC), BOOL_TO_STR(UseCompressedOops),
-      BOOL_TO_STR(UseCompressedClassPointers));
+      BOOL_TO_STR(UseCompressedClassPointers), BOOL_TO_STR(UsePrimHashMap));
     return;
   }
   // Find all the interned strings that should be dumped.

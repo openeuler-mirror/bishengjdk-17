@@ -1216,7 +1216,7 @@ void FileMapInfo::open_for_write(const char* path) {
 
   int fd;
 #if INCLUDE_JBOOSTER
-  if (UseJBooster && ClientDataManager::get().is_cds_allowed()) {
+  if (UseJBooster && ClientDataManager::get().boost_level().is_cds_allowed()) {
     // The _full_path points to the tmp file in the JBooster environment.
     // The tmp file should have been created before (see dump_cds() in
     // clientMessageHandler.cpp). So do not remove it or try to create it.
@@ -1807,8 +1807,8 @@ MemRegion FileMapInfo::get_heap_regions_range_with_current_oop_encoding_mode() {
 // open archive objects.
 void FileMapInfo::map_heap_regions_impl() {
   if (!HeapShared::is_heap_object_archiving_allowed()) {
-    log_info(cds)("CDS heap data is being ignored. UseG1GC, "
-                  "UseCompressedOops and UseCompressedClassPointers are required.");
+    log_info(cds)("CDS heap data is being ignored. UseG1GC, UseCompressedOops, "
+                  "UseCompressedClassPointers and !UsePrimHashMap are required.");
     return;
   }
 

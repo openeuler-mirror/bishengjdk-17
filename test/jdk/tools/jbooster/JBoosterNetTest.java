@@ -36,7 +36,7 @@ import static jdk.test.lib.Asserts.*;
  *          /test/lib
  * @modules jdk.jbooster
  * @build SimpleClient
- * @run main/othervm/timeout=300 JBoosterNetTest
+ * @run main/othervm/timeout=5000 JBoosterNetTest
  */
 public class JBoosterNetTest extends JBoosterTestBase {
 

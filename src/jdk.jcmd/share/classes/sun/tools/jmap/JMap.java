@@ -25,14 +25,17 @@
 
 package sun.tools.jmap;
 
+import java.io.BufferedInputStream;
 import java.io.Console;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.UnsupportedEncodingException;
 import java.nio.CharBuffer;
-import java.nio.charset.Charset;
-import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.KeySpec;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.regex.Pattern;
@@ -43,6 +46,10 @@ import com.sun.tools.attach.AttachNotSupportedException;
 import sun.tools.attach.HotSpotVirtualMachine;
 import sun.tools.common.ProcessArgumentMatcher;
 
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
+
 /*
  * This class is the main class for the JMap utility. It parses its arguments
  * and decides if the command should be satisfied using the VM attach mechanism
@@ -51,6 +58,10 @@ import sun.tools.common.ProcessArgumentMatcher;
  * options are mapped to SA tools.
  */
 public class JMap {
+    // encrypt
+    private static int SALT_MIN_LENGTH = 8;
+    private static int HASH_BIT_SIZE = 256;
+    private static int HASH_ITERATIONS_COUNT = 10000;
 
     public static void main(String[] args) throws Exception {
         if (args.length == 0) {
@@ -250,7 +261,7 @@ public class JMap {
             } else if (subopt.startsWith("RedactClassPath")) {
                 redactParams.setRedactClassPath(subopt.substring("RedactClassPath=".length()));
             }  else if (subopt.startsWith("RedactPassword")) {
-                redactPassword = getRedactPassword();
+                redactPassword = getRedactPassword(pid);
             } else {
                 System.err.println("Fail: invalid option: '" + subopt + "'");
                 usage(1);
@@ -282,7 +293,7 @@ public class JMap {
         }
     }
 
-    private static String getRedactPassword() {
+    private static String getRedactPassword(String pid) {
         String redactPassword = ",RedactPassword=";
         // heap dump may need a password
         Console console = System.console();
@@ -300,40 +311,83 @@ public class JMap {
         }
 
         String digestStr = null;
-        byte[] passwordBytes = null;
         try {
             CharBuffer cb = CharBuffer.wrap(passwords);
             String passwordPattern = "^[0-9a-zA-Z!@#$]{1,9}$";
             if(!Pattern.matches(passwordPattern, cb)) {
                 return redactPassword;
             }
-            Charset cs = Charset.forName("UTF-8");
-            passwordBytes= cs.encode(cb).array();
 
-            StringBuilder digestStrBuilder = new StringBuilder();
-            MessageDigest messageDigest = MessageDigest.getInstance("SHA-256");
-            byte[] digestBytes = messageDigest.digest(passwordBytes);
-            for(byte b : digestBytes) {
-                String hex = Integer.toHexString(0xff & b);
-                if(hex.length() == 1) {
-                    digestStrBuilder.append('0');
-                }
-                digestStrBuilder.append(hex);
+            String salt = getSalt(pid);
+            if(salt == null) {
+                return redactPassword;
             }
-            digestStr = digestStrBuilder.toString();
+            byte[] saltBytes = salt.getBytes("UTF-8");
+            if(saltBytes.length < SALT_MIN_LENGTH) {
+                return redactPassword;
+            }
+            digestStr = getEncryptValue(passwords, saltBytes);
         } catch (Exception e) {
         }finally {
             // clear all password
             if(passwords != null) {
                 Arrays.fill(passwords, '0');
             }
-            if(passwordBytes != null) {
-                Arrays.fill(passwordBytes, (byte) 0);
-            }
         }
 
         redactPassword += (digestStr == null ? "" : digestStr);
         return redactPassword;
+    }
+
+    private static String getSalt(String pid) throws Exception {
+        String salt = null;
+        StringBuilder redactAuth = new StringBuilder();
+
+        VirtualMachine vm = VirtualMachine.attach(pid);
+        HotSpotVirtualMachine hvm = (HotSpotVirtualMachine) vm;
+        String flag = "RedactPassword";
+        try (InputStream in = hvm.printFlag(flag); BufferedInputStream bis = new BufferedInputStream(in);
+            InputStreamReader isr = new InputStreamReader(bis, "UTF-8")) {
+            char c[] = new char[256];
+            int n;
+            do {
+                n = isr.read(c);
+
+                if (n > 0) {
+                    redactAuth.append(n == c.length ? c : Arrays.copyOf(c, n));
+                }
+            } while (n > 0);
+        }
+        vm.detach();
+
+        if(redactAuth.length() > 0) {
+            String[] auths = redactAuth.toString().split(",");
+            if(auths.length != 2) {
+                return salt;
+            }
+            return auths[1].trim();
+        }
+
+        return salt;
+    }
+
+    private static String getEncryptValue(char[] passwordValue, byte[] saltBytes) throws InvalidKeySpecException, NoSuchAlgorithmException {
+        StringBuilder digestStrBuilder = new StringBuilder();
+
+        KeySpec spec = new PBEKeySpec(passwordValue, saltBytes, HASH_ITERATIONS_COUNT, HASH_BIT_SIZE);
+        SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256");
+        SecretKey secretKey = secretKeyFactory.generateSecret(spec);
+        byte[] digestBytes = secretKey.getEncoded();
+        for (byte b : digestBytes) {
+            String hex = Integer.toHexString(0xff & b);
+            if (hex.length() == 1) {
+                digestStrBuilder.append('0');
+            }
+            digestStrBuilder.append(hex);
+        }
+        String digestStr = digestStrBuilder.toString();
+
+        return digestStr;
     }
 
     private static void checkForUnsupportedOptions(String[] args) {

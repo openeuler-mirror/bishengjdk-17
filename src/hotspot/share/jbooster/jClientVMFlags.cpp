@@ -125,28 +125,17 @@ JClientVMFlags::~JClientVMFlags() {
 #undef FREE_FLAG
 }
 
-bool JClientVMFlags::equals(JClientVMFlags* that, bool allow_clr, bool allow_cds, bool allow_aot) {
+bool JClientVMFlags::equals(JClientVMFlags* that) {
 #define CMP_FLAG(type, flag) if (!FlagTypeHandler<type>::equals(this->v_##flag, that->v_##flag)) return false;
-  if (allow_cds) {
-    JCLIENT_CDS_VM_FLAGS(CMP_FLAG)
-  }
-  if (allow_aot) {
-    JCLIENT_AOT_VM_FLAGS(CMP_FLAG)
-  }
+  JCLIENT_VM_FLAGS(CMP_FLAG)
 #undef CMP_FLAG
-
   return true;
 }
 
-uint32_t JClientVMFlags::hash(bool allow_clr, bool allow_cds, bool allow_aot) {
+uint32_t JClientVMFlags::hash() {
   uint32_t result = 1;
 #define CALC_FLAG_HASH(type, flag) result = 31 * result + FlagTypeHandler<type>::hash(v_##flag);
-  if (allow_cds) {
-    JCLIENT_CDS_VM_FLAGS(CALC_FLAG_HASH)
-  }
-  if (allow_aot) {
-    JCLIENT_AOT_VM_FLAGS(CALC_FLAG_HASH)
-  }
+  JCLIENT_VM_FLAGS(CALC_FLAG_HASH)
 #undef CALC_FLAG_HASH
   return result;
 }

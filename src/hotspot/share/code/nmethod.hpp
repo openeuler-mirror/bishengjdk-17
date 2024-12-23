@@ -329,6 +329,11 @@ class nmethod : public CompiledMethod {
   // findable by nmethod iterators! In particular, they must not contain oops!
   void* operator new(size_t size, int nmethod_size, bool allow_NonNMethod_space) throw();
 
+#if INCLUDE_JBOLT
+  // For JBolt. So the code can be allocated in code segments defined by JBolt.
+  void* operator new(size_t size, int nmethod_size, int comp_level, int code_blob_type) throw ();
+#endif // INCLUDE_JBOLT
+
   const char* reloc_string_for(u_char* begin, u_char* end);
 
   bool try_transition(int new_state);
@@ -375,6 +380,9 @@ class nmethod : public CompiledMethod {
                               const char* nmethod_mirror_name = NULL,
                               FailedSpeculation** failed_speculations = NULL
 #endif
+#if INCLUDE_JBOLT
+                              , int code_blob_type = CodeBlobType::All  // for jbolt
+#endif // INCLUDE_JBOLT
   );
 
   // Only used for unit tests.

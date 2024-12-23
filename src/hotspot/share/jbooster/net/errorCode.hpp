@@ -29,6 +29,8 @@
 #define JB_ERROR_CODES(f)                                                           \
   f(CONN_CLOSED,              "Connection has been closed"                        ) \
   f(CONN_CLOSED_BY_PEER,      "Connection is closed by the other end"             ) \
+  f(BAD_SSL,                  "Unexpected SSL error during initialization"        ) \
+  f(BAD_MAGIC_NUM,            "Unexpected magic number of the received message"   ) \
   f(BAD_MSG_SIZE,             "Unexpected size of the received message"           ) \
   f(BAD_MSG_TYPE,             "Unexpected message type of the received message"   ) \
   f(BAD_MSG_DATA,             "Unexpected payload data of the received message"   ) \

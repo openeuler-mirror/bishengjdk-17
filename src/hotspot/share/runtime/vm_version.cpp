@@ -31,6 +31,14 @@
 void VM_Version_init() {
   VM_Version::initialize();
 
+#ifdef AARCH64
+  if (!VM_Version::is_hisi_enabled()) {
+    UsePrimHashMap = false;
+  }
+#else
+  UsePrimHashMap = false;
+#endif
+
   if (log_is_enabled(Info, os, cpu)) {
     char buf[1024];
     ResourceMark rm;

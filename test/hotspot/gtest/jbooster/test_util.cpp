@@ -26,6 +26,8 @@
 
 #if INCLUDE_JBOOSTER
 
+#include "common.hpp"
+
 #include "classfile/symbolTable.hpp"
 #include "jbooster/utilities/concurrentHashMap.inline.hpp"
 #include "jbooster/utilities/debugUtils.inline.hpp"
@@ -33,9 +35,10 @@
 #include "jbooster/utilities/scalarHashMap.inline.hpp"
 #include "runtime/os.inline.hpp"
 #include "runtime/thread.hpp"
-#include "unittest.hpp"
 #include "utilities/exceptions.hpp"
 #include "utilities/stringUtils.hpp"
+
+#include "unittest.hpp"
 
 class ATestClass {};
 
@@ -95,13 +98,13 @@ TEST(JBoosterUtil, file) {
 
   write_file("gtest-jbooster-tmp5", "12345");
   write_file("gtest-jbooster-tmp6", "12345");
-  EXPECT_TRUE(FileUtils::is_same("gtest-jbooster-tmp5", "gtest-jbooster-tmp6"));
+  EXPECT_TRUE(TestUtils::is_same("gtest-jbooster-tmp5", "gtest-jbooster-tmp6"));
   write_file("gtest-jbooster-tmp6", "123456");
-  EXPECT_FALSE(FileUtils::is_same("gtest-jbooster-tmp5", "gtest-jbooster-tmp6"));
+  EXPECT_FALSE(TestUtils::is_same("gtest-jbooster-tmp5", "gtest-jbooster-tmp6"));
 
-  EXPECT_TRUE(FileUtils::is_same("gtest-jbooster-tmp5", "12345", 6));
-  EXPECT_FALSE(FileUtils::is_same("gtest-jbooster-tmp5", "12346", 6));
-  EXPECT_FALSE(FileUtils::is_same("gtest-jbooster-tmp5", "123456", 7));
+  EXPECT_TRUE(TestUtils::is_same("gtest-jbooster-tmp5", "12345", 6));
+  EXPECT_FALSE(TestUtils::is_same("gtest-jbooster-tmp5", "12346", 6));
+  EXPECT_FALSE(TestUtils::is_same("gtest-jbooster-tmp5", "123456", 7));
 
   EXPECT_FALSE(FileUtils::is_file("gtest-jbooster-tmp4"));
   EXPECT_TRUE(FileUtils::is_dir("gtest-jbooster-tmp4"));

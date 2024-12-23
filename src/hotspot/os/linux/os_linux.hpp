@@ -235,6 +235,14 @@ class Linux {
   typedef void (*jboosterLazyAOT_do_t)(int data_layout[], address methods, address tc_method_array, address nc_method_array, address klasses);
   static jboosterLazyAOT_do_t _jboosterLazyAOT_do;
 #endif // INCLUDE_JBOOSTER
+#if INCLUDE_JBOLT
+  typedef void (*jboltLog_precalc_t)(unsigned int topFrameIndex, unsigned int &max_frames);
+  typedef bool (*jboltLog_do_t)(uintptr_t related_data[], address stacktrace, unsigned int i, int comp_level, address new_func, address *tempfunc);
+  typedef int (*jboltMerge_judge_t)(uintptr_t data_layout[], int candidate, address clusters, address merged, address cluster);
+  static jboltLog_precalc_t _jboltLog_precalc;
+  static jboltLog_do_t _jboltLog_do;
+  static jboltMerge_judge_t _jboltMerge_judge;
+#endif
   static sched_getcpu_func_t _sched_getcpu;
   static numa_node_to_cpus_func_t _numa_node_to_cpus;
   static numa_node_to_cpus_v2_func_t _numa_node_to_cpus_v2;
@@ -504,6 +512,25 @@ class Linux {
     }
   }
 #endif // INCLUDE_JBOOSTER
+#if INCLUDE_JBOLT
+  static void jboltLog_precalc(unsigned int topFrameIndex, unsigned int &max_frames) {
+    if (_jboltLog_precalc != NULL) {
+      _jboltLog_precalc(topFrameIndex, max_frames);
+    }
+  }
+  static bool jboltLog_do(uintptr_t related_data[], address stacktrace, unsigned int i, int comp_level, address new_func, address *tempfunc) {
+    if (_jboltLog_do != NULL) {
+      return _jboltLog_do(related_data, stacktrace, i, comp_level, new_func, tempfunc);
+    }
+    return false;
+  }
+  static int jboltMerge_judge(uintptr_t data_layout[], int candidate, address clusters, address merged, address cluster) {
+    if (_jboltMerge_judge != NULL) {
+      return _jboltMerge_judge(data_layout, candidate, clusters, merged, cluster);
+    }
+    return -1;
+  }
+#endif // INCLUDE_JBOLT
 };
 
 #endif // OS_LINUX_OS_LINUX_HPP

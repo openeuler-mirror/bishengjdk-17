@@ -930,6 +930,8 @@
     <Field type="ulong" contentType="bytes" name="nonNMethodSize" label="Non-nmethod Size" />
     <Field type="ulong" contentType="bytes" name="profiledSize" label="Profiled Size" />
     <Field type="ulong" contentType="bytes" name="nonProfiledSize" label="Non-profiled Size" />
+    <Field type="ulong" contentType="bytes" name="jboltHotSize" label="JBolt Hot Size" />
+    <Field type="ulong" contentType="bytes" name="jboltTmpSize" label="JBolt Tmp Size" />
     <Field type="ulong" contentType="bytes" name="expansionSize" label="Expansion size" />
     <Field type="ulong" contentType="bytes" name="minBlockLength" label="Minimum Block Length" />
     <Field type="ulong" contentType="address" name="startAddress" label="Start Address" />

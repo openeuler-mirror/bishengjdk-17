@@ -4611,6 +4611,11 @@ os::Linux::jboosterAggressiveCDS_do_t os::Linux::_jboosterAggressiveCDS_do;
 #if INCLUDE_JBOOSTER
 os::Linux::jboosterLazyAOT_do_t os::Linux::_jboosterLazyAOT_do;
 #endif // INCLUDE_JBOOSTER
+#if INCLUDE_JBOLT
+os::Linux::jboltLog_precalc_t os::Linux::_jboltLog_precalc;
+os::Linux::jboltLog_do_t os::Linux::_jboltLog_do;
+os::Linux::jboltMerge_judge_t os::Linux::_jboltMerge_judge;
+#endif // INCLUDE_JBOLT
 
 void os::Linux::load_plugin_library() {
 
@@ -4620,6 +4625,11 @@ void os::Linux::load_plugin_library() {
 #if INCLUDE_JBOOSTER
     _jboosterLazyAOT_do = CAST_TO_FN_PTR(jboosterLazyAOT_do_t, dlsym(RTLD_DEFAULT, "JBoosterLazyAOT_DO"));
 #endif // INCLUDE_JBOOSTER
+#if INCLUDE_JBOLT
+    _jboltLog_precalc = CAST_TO_FN_PTR(jboltLog_precalc_t, dlsym(RTLD_DEFAULT, "JBoltLog_PreCalc"));
+    _jboltLog_do = CAST_TO_FN_PTR(jboltLog_do_t, dlsym(RTLD_DEFAULT, "JBoltLog_DO"));
+    _jboltMerge_judge = CAST_TO_FN_PTR(jboltMerge_judge_t, dlsym(RTLD_DEFAULT, "JBoltMerge_Judge"));
+#endif // INCLUDE_JBOLT
 
   _heap_dict_add = CAST_TO_FN_PTR(heap_dict_add_t, dlsym(RTLD_DEFAULT, "HeapDict_Add"));
   _heap_dict_lookup = CAST_TO_FN_PTR(heap_dict_lookup_t, dlsym(RTLD_DEFAULT, "HeapDict_Lookup"));
@@ -4664,6 +4674,17 @@ void os::Linux::load_plugin_library() {
       _jboosterLazyAOT_do = CAST_TO_FN_PTR(jboosterLazyAOT_do_t, dlsym(handle, "JBoosterLazyAOT_DO"));
     }
 #endif // INCLUDE_JBOOSTER
+#if INCLUDE_JBOLT
+    if (_jboltLog_precalc == NULL) {
+      _jboltLog_precalc = CAST_TO_FN_PTR(jboltLog_precalc_t, dlsym(handle, "JBoltLog_PreCalc"));
+    }
+    if (_jboltLog_do == NULL) {
+      _jboltLog_do = CAST_TO_FN_PTR(jboltLog_do_t, dlsym(handle, "JBoltLog_DO"));
+    }
+    if (_jboltMerge_judge == NULL) {
+      _jboltMerge_judge = CAST_TO_FN_PTR(jboltMerge_judge_t, dlsym(handle, "JBoltMerge_Judge"));   
+    }
+#endif // INCLUDE_JBOLT
   }
 }
 

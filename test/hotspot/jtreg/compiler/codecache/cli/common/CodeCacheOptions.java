@@ -33,20 +33,27 @@ import java.util.List;
 public class CodeCacheOptions {
     public static final String SEGMENTED_CODE_CACHE = "SegmentedCodeCache";
 
-    private static final EnumSet<BlobType> NON_SEGMENTED_HEAPS
+    public static final EnumSet<BlobType> NON_SEGMENTED_HEAPS
             = EnumSet.of(BlobType.All);
-    private static final EnumSet<BlobType> ALL_SEGMENTED_HEAPS
-            = EnumSet.complementOf(NON_SEGMENTED_HEAPS);
-    private static final EnumSet<BlobType> SEGMENTED_HEAPS_WO_PROFILED
+    public static final EnumSet<BlobType> JBOLT_HEAPS
+            = EnumSet.of(BlobType.MethodJBoltHot, BlobType.MethodJBoltTmp);
+    public static final EnumSet<BlobType> ALL_SEGMENTED_HEAPS
+            = EnumSet.complementOf(union(NON_SEGMENTED_HEAPS, JBOLT_HEAPS));
+    public static final EnumSet<BlobType> ALL_SEGMENTED_HEAPS_WITH_JBOLT
+            = union(ALL_SEGMENTED_HEAPS, JBOLT_HEAPS);
+    public static final EnumSet<BlobType> SEGMENTED_HEAPS_WO_PROFILED
             = EnumSet.of(BlobType.NonNMethod, BlobType.MethodNonProfiled);
-    private static final EnumSet<BlobType> ONLY_NON_METHODS_HEAP
+    public static final EnumSet<BlobType> ONLY_NON_METHODS_HEAP
             = EnumSet.of(BlobType.NonNMethod);
 
     public final long reserved;
     public final long nonNmethods;
     public final long nonProfiled;
     public final long profiled;
+    public final long jboltHot;
+    public final long jboltTmp;
     public final boolean segmented;
+    public final boolean useJBolt;
 
     public static long mB(long val) {
         return CodeCacheOptions.kB(val) * 1024L;
@@ -56,12 +63,21 @@ public class CodeCacheOptions {
         return val * 1024L;
     }
 
+    public static <E extends Enum<E>> EnumSet<E> union(EnumSet<E> e1, EnumSet<E> e2) {
+        EnumSet<E> res = EnumSet.copyOf(e1);
+        res.addAll(e2);
+        return res;
+    }
+
     public CodeCacheOptions(long reserved) {
         this.reserved = reserved;
         this.nonNmethods = 0;
         this.nonProfiled = 0;
         this.profiled = 0;
+        this.jboltHot = 0;
+        this.jboltTmp = 0;
         this.segmented = false;
+        this.useJBolt = false;
     }
 
     public CodeCacheOptions(long reserved, long nonNmethods, long nonProfiled,
@@ -70,7 +86,25 @@ public class CodeCacheOptions {
         this.nonNmethods = nonNmethods;
         this.nonProfiled = nonProfiled;
         this.profiled = profiled;
+        this.jboltHot = 0;
+        this.jboltTmp = 0;
         this.segmented = true;
+        this.useJBolt = false;
+    }
+
+    /**
+     * No tests for JBolt yet as the related VM options are experimental now.
+     */
+    public CodeCacheOptions(long reserved, long nonNmethods, long nonProfiled,
+            long profiled, long jboltHot, long jboltTmp) {
+        this.reserved = reserved;
+        this.nonNmethods = nonNmethods;
+        this.nonProfiled = nonProfiled;
+        this.profiled = profiled;
+        this.jboltHot = jboltHot;
+        this.jboltTmp = jboltTmp;
+        this.segmented = true;
+        this.useJBolt = true;
     }
 
     public long sizeForHeap(BlobType heap) {
@@ -83,6 +117,10 @@ public class CodeCacheOptions {
                 return this.nonProfiled;
             case MethodProfiled:
                 return this.profiled;
+            case MethodJBoltHot:
+                return this.jboltHot;
+            case MethodJBoltTmp:
+                return this.jboltTmp;
             default:
                 throw new Error("Unknown heap: " + heap.name());
         }
@@ -107,14 +145,26 @@ public class CodeCacheOptions {
                     CommandLineOptionTest.prepareNumericFlag(
                             BlobType.MethodProfiled.sizeOptionName, profiled));
         }
+
+        if (useJBolt) {
+            Collections.addAll(options,
+                    CommandLineOptionTest.prepareNumericFlag(
+                            BlobType.MethodJBoltHot.sizeOptionName, jboltHot),
+                    CommandLineOptionTest.prepareNumericFlag(
+                            BlobType.MethodJBoltTmp.sizeOptionName, jboltTmp));
+        }
+
         return options.toArray(new String[options.size()]);
     }
 
     public CodeCacheOptions mapOptions(EnumSet<BlobType> involvedCodeHeaps) {
         if (involvedCodeHeaps.isEmpty()
                 || involvedCodeHeaps.equals(NON_SEGMENTED_HEAPS)
-                || involvedCodeHeaps.equals(ALL_SEGMENTED_HEAPS)) {
+                || involvedCodeHeaps.equals(ALL_SEGMENTED_HEAPS_WITH_JBOLT)) {
             return this;
+        } else if (involvedCodeHeaps.equals(ALL_SEGMENTED_HEAPS)) {
+            return new CodeCacheOptions(reserved, nonNmethods,
+                    nonProfiled + jboltHot + jboltTmp, profiled);
         } else if (involvedCodeHeaps.equals(SEGMENTED_HEAPS_WO_PROFILED)) {
             return new CodeCacheOptions(reserved, nonNmethods,
                     profiled + nonProfiled, 0L);

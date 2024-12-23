@@ -28,6 +28,8 @@
 
 class ClientStream: public CommunicationStream {
 private:
+  static SSL_CTX* _client_ssl_ctx;
+
   const char* const _server_address;
   const char* const _server_port;
   const uint32_t _timeout_ms;
@@ -36,6 +38,8 @@ private:
 
 private:
   static int try_to_connect_once(int* res_fd, const char* address, const char* port, uint32_t timeout_ms);
+  static int try_to_ssl_connect(SSL** res_ssl, int conn_fd);
+  static bool verify_cert(SSL* ssl);
 
   int request_cache_file(bool* use_it,
                          bool allowed_to_use,
@@ -54,6 +58,8 @@ public:
   ClientStream(const char* address, const char* port, uint32_t timeout_ms);
   ClientStream(const char* address, const char* port, uint32_t timeout_ms, Thread* thread);
   ~ClientStream();
+
+  static void client_init_ssl_ctx(const char* root_certs);
 
   void set_inform_before_close(bool should) { _inform_before_close = should; }
 
