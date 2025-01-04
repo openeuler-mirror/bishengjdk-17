@@ -40,6 +40,9 @@
 #include "runtime/semaphore.hpp"
 #include "runtime/thread.inline.hpp"
 #include "runtime/threadSMR.hpp"
+#if INCLUDE_JBOLT
+#include "jbolt/jBoltManager.hpp"
+#endif
 
 enum JfrSampleType {
   NO_SAMPLE = 0,
@@ -262,7 +265,13 @@ bool JfrThreadSampleClosure::sample_thread_in_java(JavaThread* thread, JfrStackF
     return false;
   }
   EventExecutionSample *event = &_events[_added_java - 1];
-  traceid id = JfrStackTraceRepository::add(sampler.stacktrace());
+  traceid id = 0; 
+#if INCLUDE_JBOLT
+  if (UseJBolt && JBoltManager::reorder_phase_is_profiling()) {
+    id = JfrStackTraceRepository::add_jbolt(sampler.stacktrace());
+  } else 
+#endif
+  id = JfrStackTraceRepository::add(sampler.stacktrace());
   assert(id != 0, "Stacktrace id should not be 0");
   event->set_stackTrace(id);
   return true;

@@ -119,6 +119,18 @@
 #define NOT_CDS_RETURN_(code) { return code; }
 #endif // INCLUDE_CDS
 
+#ifndef INCLUDE_JBOLT
+#define INCLUDE_JBOLT 1
+#endif
+
+#if INCLUDE_JBOLT
+#define JBOLT_ONLY(x) x
+#define NOT_JBOLT(x)
+#else
+#define JBOLT_ONLY(x)
+#define NOT_JBOLT(x) x
+#endif // INCLUDE_JBOLT
+
 #ifndef INCLUDE_JBOOSTER
 #define INCLUDE_JBOOSTER 1
 #endif

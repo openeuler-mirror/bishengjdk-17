@@ -1189,7 +1189,7 @@ void Parse::do_method_entry() {
   set_parse_bci(InvocationEntryBci); // Pseudo-BCP
   set_sp(0);                         // Java Stack Pointer
 
-  NOT_PRODUCT( count_compiled_calls(true/*at_method_entry*/, false/*is_inline*/); )
+  NOT_PRODUCT(count_compiled_calls(true/* at_method_entry */, false/* is_inline */);)
 
   if (C->env()->dtrace_method_probes()) {
     make_dtrace_method_entry(method());

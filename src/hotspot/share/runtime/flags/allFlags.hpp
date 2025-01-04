@@ -30,6 +30,9 @@
 #include "gc/shared/tlab_globals.hpp"
 #include "runtime/flags/debug_globals.hpp"
 #include "runtime/globals.hpp"
+#if INCLUDE_JBOLT
+#include "jbolt/jbolt_globals.hpp"
+#endif // INCLUDE_JBOLT
 #if INCLUDE_JBOOSTER
 #include "jbooster/jbooster_globals.hpp"
 #endif // INCLUDE_JBOOSTER
@@ -142,6 +145,16 @@
     notproduct,               \
     range,                    \
     constraint)               \
+                              \
+  JBOLT_ONLY(                 \
+      JBOLT_FLAGS(            \
+    develop,                  \
+    develop_pd,               \
+    product,                  \
+    product_pd,               \
+    notproduct,               \
+    range,                    \
+    constraint))              \
                               \
   JBOOSTER_ONLY(              \
       JBOOSTER_FLAGS(         \

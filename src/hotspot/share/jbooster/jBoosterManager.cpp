@@ -178,4 +178,5 @@ void JBoosterManager::check_arguments() {
   check_argument(FLAG_MEMBER_ENUM(JBoosterClientStrictMatch));
   check_argument(FLAG_MEMBER_ENUM(PrintAllClassInfo));
   check_argument(FLAG_MEMBER_ENUM(CheckClassFileTimeStamp));
+  check_argument(FLAG_MEMBER_ENUM(JBoosterServerSSLRootCerts));
 }

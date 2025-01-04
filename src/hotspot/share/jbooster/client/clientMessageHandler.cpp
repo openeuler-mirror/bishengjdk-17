@@ -87,7 +87,7 @@ void ClientMessageHandler::trigger_cache_generation_tasks(TriggerTaskPhase phase
     ClientMessageHandler msg_handler(client_stream);
 
     bool cache_file_task = false;
-    if (ClientDataManager::get().is_clr_allowed() || ClientDataManager::get().is_cds_allowed()) {
+    if (ClientDataManager::get().boost_level().is_clr_allowed() || ClientDataManager::get().boost_level().is_cds_allowed()) {
       cache_file_task = (phase == ON_SHUTDOWN);
     }
     if (cache_file_task) {
@@ -95,7 +95,7 @@ void ClientMessageHandler::trigger_cache_generation_tasks(TriggerTaskPhase phase
     }
 
     bool lazy_aot_task = false;
-    if (ClientDataManager::get().is_aot_allowed()) {
+    if (ClientDataManager::get().boost_level().is_aot_allowed()) {
       lazy_aot_task = ((phase == ON_STARTUP) || ((phase == ON_SHUTDOWN) && !ClientDataManager::get().is_startup_end()));
     }
     if (lazy_aot_task) {
@@ -170,7 +170,7 @@ static void dump_cds() {
 }
 
 int ClientMessageHandler::handle_CacheAggressiveCDS() {
-  if (DynamicDumpSharedSpaces && ClientDataManager::get().is_cds_allowed()) {
+  if (DynamicDumpSharedSpaces && ClientDataManager::get().boost_level().is_cds_allowed()) {
     dump_cds();
   }
   FileWrapper file(ClientDataManager::get().cache_cds_path(),
@@ -289,6 +289,12 @@ int ClientMessageHandler::handle_ArrayKlasses() {
   return 0;
 }
 
+int ClientMessageHandler::handle_ResolveExtraKlasses() {
+  ResourceMark rm;
+  bool should_resolve_extra_Klasses = JBoosterResolveExtraKlasses;
+  JB_RETURN(cs().send_response(&should_resolve_extra_Klasses));
+  return 0;
+}
 // ---------------------------------- Some Tasks -----------------------------------
 
 int ClientMessageHandler::send_cache_file_sync_task() {

@@ -263,6 +263,7 @@ import static org.graalvm.compiler.nodes.extended.BranchProbabilityNode.LUDICROU
 import static org.graalvm.compiler.nodes.graphbuilderconf.IntrinsicContext.CompilationContext.INLINE_DURING_PARSING;
 import static org.graalvm.compiler.nodes.type.StampTool.isPointerNonNull;
 
+import java.lang.annotation.Target;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -4386,6 +4387,20 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected void maybeEagerlyResolve(int cpi, int bytecode) {
+        JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+        if (ctx != null && !ctx.resolveExtraKlasses()) {
+            try{
+                maybeEagerlyResolveBase(cpi, bytecode);
+            } catch (NoClassDefFoundError e) {
+                debug.log("Cannot resolve all elements in constant pool");
+                return;
+            }
+        } else {
+            maybeEagerlyResolveBase(cpi, bytecode);
+        }
+    }
+
+    protected void maybeEagerlyResolveBase(int cpi, int bytecode) {
         if (intrinsicContext != null) {
             constantPool.loadReferencedType(cpi, bytecode);
         } else if (graphBuilderConfig.eagerResolving()) {
@@ -4420,6 +4435,20 @@ public class BytecodeParser implements GraphBuilderContext {
     }
 
     protected JavaType maybeEagerlyResolve(JavaType type, ResolvedJavaType accessingClass) {
+        JBoosterCompilationContext ctx = JBoosterCompilationContext.get();
+        if (ctx != null && !ctx.resolveExtraKlasses()) {
+            try{
+                return maybeEagerlyResolveBase(type, accessingClass);
+            } catch (NoClassDefFoundError e) {
+                debug.log("Cannot resolve all elements in constant pool");
+                return type;
+            }
+        } else {
+            return maybeEagerlyResolveBase(type, accessingClass);
+        }
+    }
+
+    protected JavaType maybeEagerlyResolveBase(JavaType type, ResolvedJavaType accessingClass) {
         if (graphBuilderConfig.eagerResolving() || parsingIntrinsic()) {
             return type.resolve(accessingClass);
         }

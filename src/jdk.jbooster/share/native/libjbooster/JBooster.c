@@ -27,15 +27,15 @@
 #include "jdk_jbooster_JBooster.h"
 
 JNIEXPORT void JNICALL
-Java_jdk_jbooster_JBooster_initInVM(JNIEnv * env, jclass unused, jint server_port, jint connection_timeout, jint cleanup_timeout, jstring cache_path)
+Java_jdk_jbooster_JBooster_initInVM(JNIEnv * env, jclass unused, jint server_port, jint connection_timeout, jint cleanup_timeout, jstring cache_path, jstring ssl_key, jstring ssl_cert)
 {
-  JVM_JBoosterInitVM(env, server_port, connection_timeout, cleanup_timeout, cache_path);
+  JVM_JBoosterInitVM(env, server_port, connection_timeout, cleanup_timeout, cache_path, ssl_key, ssl_cert);
 }
 
 JNIEXPORT void JNICALL
-Java_jdk_jbooster_JBooster_handleConnection(JNIEnv * env, jclass unused, jint connection_fd)
+Java_jdk_jbooster_JBooster_handleConnection(JNIEnv * env, jclass unused, jint connection_fd, jlong connection_ssl)
 {
-  JVM_JBoosterHandleConnection(env, connection_fd);
+  JVM_JBoosterHandleConnection(env, connection_fd, connection_ssl);
 }
 
 JNIEXPORT void JNICALL

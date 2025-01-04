@@ -21,6 +21,7 @@
  * questions.
  */
 
+#include "classfile/vmSymbols.hpp"
 #include "jbooster/dataTransmissionUtils.hpp"
 #include "jbooster/jBoosterManager.hpp"
 #include "jbooster/jClientArguments.hpp"
@@ -33,9 +34,18 @@
 #include "jbooster/net/rpcCompatibility.hpp"
 #include "jbooster/net/serializationWrappers.hpp"
 #include "jbooster/net/serverStream.hpp"
+#include "oops/instanceKlass.hpp"
+#include "oops/method.hpp"
+#include "oops/methodData.hpp"
 
-static constexpr uint32_t calc_new_hash(uint32_t old_hash, uint32_t ele_hash) {
-  return 31 * old_hash + ele_hash;
+static constexpr uint32_t calc_new_hash(uint32_t old_hash) {
+  return old_hash;
+}
+
+template <typename... Rest>
+static constexpr uint32_t calc_new_hash(uint32_t old_hash, uint32_t ele_hash, Rest... rest_hashes) {
+  uint32_t new_hash = old_hash * 31u + ele_hash;
+  return calc_new_hash(new_hash, rest_hashes...);
 }
 
 template <typename T>
@@ -54,20 +64,35 @@ static constexpr uint32_t calc_classes_hash() {
   return calc_new_hash(calc_classes_hash<Second, Rest...>(), calc_class_hash<First>());
 }
 
-/**
- * Returns a magic number computed at compile time based on the sizes of some classes.
- * It is just an crude way to check compatibility for now. More policies can be added later.
- */
-static constexpr uint32_t calc_magic_num() {
+static constexpr uint32_t classes_hash() {
   return calc_classes_hash<
       JBoosterManager, JClientVMFlags, JClientArguments,
       JBErr, Message, MessageBuffer,
       CommunicationStream, ClientStream, ServerStream,
       ArrayWrapper<int>, MemoryWrapper, StringWrapper, FileWrapper,
-      ClassLoaderKey, ClassLoaderChain, ClassLoaderLocator, KlassLocator, MethodLocator, ProfileDataCollector
+      ClassLoaderKey, ClassLoaderChain, ClassLoaderLocator, KlassLocator, MethodLocator, ProfileDataCollector,
+      InstanceKlass, Method, MethodData
   >();
 }
 
+static constexpr uint32_t little_or_big_endian() {
+  return (uint32_t) LITTLE_ENDIAN_ONLY('L') BIG_ENDIAN_ONLY('B');
+}
+
+/**
+ * Returns a magic number computed at compile time based on the sizes of some classes.
+ * It is just an crude way to check compatibility for now. More policies can be added later.
+ */
+static constexpr uint32_t calc_magic_num() {
+  return calc_new_hash(
+    classes_hash(),
+    little_or_big_endian(),
+    static_cast<uint32_t>(vmSymbolID::SID_LIMIT)
+  );
+}
+
+static constexpr uint32_t _magic_num = calc_magic_num();
+
 uint32_t RpcCompatibility::magic_num() {
-  return calc_magic_num();
+  return _magic_num;
 }

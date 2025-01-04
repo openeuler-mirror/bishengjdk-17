@@ -170,15 +170,13 @@ jlong RefCntWithTime::no_ref_time(jlong current_time) const {
 
 // -------------------------------- JClientCacheState ---------------------------------
 
-JClientCacheState::JClientCacheState(): _is_allowed(false),
-                                        _state(NOT_GENERATED),
+JClientCacheState::JClientCacheState(): _state(NOT_GENERATED),
                                         _file_path(nullptr),
                                         _file_timestamp(0) {
   // The real assignment is in JClientProgramData::JClientProgramData().
 }
 
-void JClientCacheState::init(bool allow, const char* file_path) {
-  _is_allowed = allow;
+void JClientCacheState::init(const char* file_path) {
   _file_path = file_path;
   bool file_exists = FileUtils::is_file(file_path);
   _state = file_exists ? GENERATED : NOT_GENERATED;
@@ -259,6 +257,11 @@ bool JClientCacheState::is_cached() {
   return false;
 }
 
+const char* JClientCacheState::cache_state_str() {
+  return is_cached() ? "generated" : (is_being_generated() ? "generating" : "none");
+}
+
+
 void JClientCacheState::remove_file() {
   if (is_cached()) {
     remove_file_and_set_not_generated_sync();
@@ -277,18 +280,16 @@ JClientProgramData::JClientProgramData(uint32_t program_id, JClientArguments* pr
                                                             _program_args->program_entry(),
                                                             _program_args->is_jar(),
                                                             _program_args->hash());
-  bool allow_clr = _program_args->jbooster_allow_clr();
-  bool allow_cds = _program_args->jbooster_allow_cds();
-  bool allow_aot = _program_args->jbooster_allow_aot();
-  bool allow_pgo = _program_args->jbooster_allow_pgo();
   const char* clr_path = JBoosterManager::calc_cache_path(sd, _program_str_id, "clr.log");
-  const char* cds_path = JBoosterManager::calc_cache_path(sd, _program_str_id, "cds.jsa");
-  const char* aot_path_suffix = allow_pgo ? "aot-pgo.so" : "aot.so";
-  const char* aot_path = JBoosterManager::calc_cache_path(sd, _program_str_id, aot_path_suffix);
-  clr_cache_state().init(allow_clr, clr_path);
-  cds_cache_state().init(allow_cds, cds_path);
-  aot_cache_state().init(allow_aot, aot_path);
-  _using_pgo = allow_pgo;
+  const char* dy_cds_path = JBoosterManager::calc_cache_path(sd, _program_str_id, "cds-dy.jsa");
+  const char* agg_cds_path = JBoosterManager::calc_cache_path(sd, _program_str_id, "cds-agg.jsa");
+  const char* aot_static_path = JBoosterManager::calc_cache_path(sd, _program_str_id, "aot-static.so");
+  const char* aot_pgo_path = JBoosterManager::calc_cache_path(sd, _program_str_id, "aot-pgo.so");
+  clr_cache_state().init(clr_path);
+  dy_cds_cache_state().init(dy_cds_path);
+  agg_cds_cache_state().init(agg_cds_path);
+  aot_static_cache_state().init(aot_static_path);
+  aot_pgo_cache_state().init(aot_pgo_path);
 }
 
 JClientProgramData::~JClientProgramData() {
@@ -339,28 +340,30 @@ ClassLoaderData* JClientProgramData::add_class_loader_if_absent(const ClassLoade
 // ------------------------------ JClientSessionData -------------------------------
 
 class AddressMapKVArray: public StackObj {
-  GrowableArray<address>* _key_array;
-  GrowableArray<address>* _value_array;
+  GrowableArray<uintptr_t>* _key_array;
+  GrowableArray<uintptr_t>* _value_array;
 public:
-  AddressMapKVArray(GrowableArray<address>* key_array,
-                    GrowableArray<address>* value_array) :
+  AddressMapKVArray(GrowableArray<uintptr_t>* key_array,
+                    GrowableArray<uintptr_t>* value_array) :
                     _key_array(key_array),
                     _value_array(value_array) {}
 
   bool operator () (JClientSessionData::AddressMap::KVNode* kv_node) {
     assert(kv_node->key() != nullptr && kv_node->value() != nullptr, "sanity");
-    _key_array->append(kv_node->key());
-    _value_array->append(kv_node->value());
+    _key_array->append(reinterpret_cast<uintptr_t>(kv_node->key()));
+    _value_array->append(reinterpret_cast<uintptr_t>(kv_node->value()));
     return true;
   }
 };
 
 JClientSessionData::JClientSessionData(uint32_t session_id,
                                        uint64_t client_random_id,
-                                       JClientProgramData* program_data):
+                                       JClientProgramData* program_data,
+                                       JClientBoostLevel boost_level):
         _session_id(session_id),
         _random_id(client_random_id),
         _program_data(program_data),
+        _boost_level(boost_level),
         _cl_s2c(),
         _cl_c2s(),
         _k_c2s(),
@@ -419,17 +422,17 @@ void JClientSessionData::add_klass_address(address client_klass_addr,
   put_address(_k_c2s, client_klass_addr, server_cld_addr, thread);
 }
 
-void JClientSessionData::klass_array(GrowableArray<address>* key_array,
-                                     GrowableArray<address>* value_array,
+void JClientSessionData::klass_array(GrowableArray<uintptr_t>* key_array,
+                                     GrowableArray<uintptr_t>* value_array,
                                      Thread* thread) {
   AddressMapKVArray array(key_array, value_array);
   _k_c2s.for_each(array, thread);
 }
 
-void JClientSessionData::klass_pointer_map_to_server(GrowableArray<address>* klass_array, Thread* thread) {
-  for (GrowableArrayIterator<address> iter = klass_array->begin();
+void JClientSessionData::klass_pointer_map_to_server(GrowableArray<uintptr_t>* klass_array, Thread* thread) {
+  for (GrowableArrayIterator<uintptr_t> iter = klass_array->begin();
                                       iter != klass_array->end(); ++iter) {
-    InstanceKlass* klass = (InstanceKlass*) (*iter);
+    InstanceKlass* klass = reinterpret_cast<InstanceKlass*>(*iter);
     Array<Method*>* methods = klass->methods();
     for (int method_index = 0; method_index < methods->length(); method_index++) {
       MethodData* method_data = method_data_address((address)(methods->at(method_index)), thread);
@@ -540,7 +543,7 @@ void ServerDataManager::init_cache_path(const char* optional_cache_path) {
   FileUtils::mkdirs(JBoosterCachePath);
 }
 
-void ServerDataManager::init_phase3(int server_port, int connection_timeout, int cleanup_timeout, const char* cache_path, TRAPS) {
+void ServerDataManager::init_phase3(int server_port, int connection_timeout, int cleanup_timeout, const char* cache_path, const char* ssl_key, const char* ssl_cert, TRAPS) {
   JBoosterManager::server_only();
   init_cache_path(cache_path);
 
@@ -548,7 +551,7 @@ void ServerDataManager::init_phase3(int server_port, int connection_timeout, int
 
   ServerControlThread::set_unused_shared_data_cleanup_timeout(cleanup_timeout);
   _singleton->_control_thread = ServerControlThread::start_thread(CHECK);
-  _singleton->_listening_thread = ServerListeningThread::start_thread(JBoosterAddress, (uint16_t) server_port, connection_timeout, CHECK);
+  _singleton->_listening_thread = ServerListeningThread::start_thread(JBoosterAddress, (uint16_t) server_port, connection_timeout, ssl_key, ssl_cert, CHECK);
 }
 
 /**
@@ -610,10 +613,11 @@ JClientSessionData* ServerDataManager::get_session(uint32_t session_id, Thread* 
  */
 JClientSessionData* ServerDataManager::create_session(uint64_t client_random_id,
                                                       JClientArguments* program_args,
+                                                      JClientBoostLevel boost_level,
                                                       Thread* thread) {
   uint32_t session_id = Atomic::add(&_next_session_allocation_id, 1u);
   JClientProgramData* pd = get_or_create_program(program_args, thread);
-  JClientSessionData* sd = new JClientSessionData(session_id, client_random_id, pd);
+  JClientSessionData* sd = new JClientSessionData(session_id, client_random_id, pd, boost_level);
 
   JClientSessionData** res = _sessions.put_if_absent(session_id, sd, thread);
   guarantee(res != nullptr && *res == sd, "sanity");

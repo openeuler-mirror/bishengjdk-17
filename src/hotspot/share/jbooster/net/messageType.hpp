@@ -54,6 +54,7 @@
   f(ArrayKlasses,                       "from server"   ) \
   f(DataOfKlasses,                      "from server"   ) \
   f(MethodLocators,                     "from server"   ) \
+  f(ResolveExtraKlasses,                "from server"   ) \
                                                           \
   /* others */                                            \
   f(FileSegment,                        "from both"     ) \

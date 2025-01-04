@@ -33,6 +33,7 @@ class Message: public MessageConst {
 private:
   struct {
     uint32_t msg_size;
+    uint16_t magic_num;
     MessageType msg_type;
   } _meta;
 
@@ -58,6 +59,7 @@ public:
   uint32_t msg_size() const { return _meta.msg_size; }
   void set_msg_size(uint32_t size) { _meta.msg_size = size; }
   void set_msg_size_based_on_cur_buf_offset() { set_msg_size(cur_buf_offset()); }
+  void set_magic_num(uint16_t magic_num) { _meta.magic_num = magic_num; }
   MessageType msg_type() const { return _meta.msg_type; }
   void set_msg_type(MessageType type) { _meta.msg_type = type; }
 
@@ -76,6 +78,9 @@ public:
   }
 
   uint32_t deserialize_size_only() { return *((uint32_t*)_buf.buf()); }
+  uint16_t deserialize_magic_num_only() { return *((uint16_t*)(_buf.buf() + sizeof(_meta.msg_size))); }
+
+  bool check_magic_num(uint16_t magic_num) { return magic_num == MessageConst::RPC_MAGIC; }
 
   template <typename... Args>
   int serialize(const Args* const... args);

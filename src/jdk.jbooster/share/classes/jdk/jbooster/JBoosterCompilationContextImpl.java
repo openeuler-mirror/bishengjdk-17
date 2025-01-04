@@ -43,6 +43,7 @@ public class JBoosterCompilationContextImpl implements JBoosterCompilationContex
     private final Set<String> methodsToCompile;
     private final Set<String> methodsNotToCompile;
     private final boolean usePGO;
+    private final boolean resolveExtraKlasses;
 
     // These values are used to replace the static values in AOT classes.
     private final AtomicInteger compiledMethodInfoMethodsCount = new AtomicInteger(0);
@@ -63,13 +64,15 @@ public class JBoosterCompilationContextImpl implements JBoosterCompilationContex
             Set<Class<?>> classesToCompile,
             Set<String> methodsToCompile,
             Set<String> methodsNotCompile,
-            boolean usePGO) {
+            boolean usePGO,
+            boolean resolveExtraKlasses) {
         this.sessionId = sessionId;
         this.filePath = filePath;
         this.classesToCompile = classesToCompile;
         this.methodsToCompile = methodsToCompile;
         this.methodsNotToCompile = methodsNotCompile;
         this.usePGO = usePGO;
+        this.resolveExtraKlasses = resolveExtraKlasses;
     }
 
     @Override
@@ -100,6 +103,11 @@ public class JBoosterCompilationContextImpl implements JBoosterCompilationContex
     @Override
     public boolean usePGO() {
         return usePGO;
+    }
+
+    @Override
+    public boolean resolveExtraKlasses() {
+        return resolveExtraKlasses;
     }
 
     @Override

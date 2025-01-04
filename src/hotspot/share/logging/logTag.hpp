@@ -93,6 +93,7 @@
   LOG_TAG(install) \
   LOG_TAG(interpreter) \
   LOG_TAG(itables) \
+  JBOLT_ONLY(LOG_TAG(jbolt)) \
   JBOOSTER_ONLY(LOG_TAG(jbooster)) \
   LOG_TAG(jfr) \
   LOG_TAG(jit) \

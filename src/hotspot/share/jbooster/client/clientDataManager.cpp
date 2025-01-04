@@ -27,6 +27,7 @@
 #include "jbooster/client/clientDataManager.hpp"
 #include "jbooster/client/clientStartupSignal.hpp"
 #include "jbooster/net/clientStream.hpp"
+#include "jbooster/net/sslUtils.hpp"
 #include "logging/log.hpp"
 #include "runtime/arguments.hpp"
 #include "runtime/globals_extension.hpp"
@@ -43,15 +44,9 @@ ClientDataManager::ClientDataManager() {
   _program_str_id = nullptr;
   _cache_dir_path = nullptr;
 
-  _allow_aot = false;
-  _allow_cds = false;
-  _allow_clr = false;
-  _allow_pgo = false;
-
   _using_aot = false;
   _using_cds = false;
   _using_clr = false;
-  _using_pgo = false;
 
   _cache_clr_path = nullptr;
   _cache_cds_path = nullptr;
@@ -81,23 +76,30 @@ void ClientDataManager::init_client_vm_options() {
 
   if (!FLAG_IS_DEFAULT(UseBoostPackages)) {
     if (strcmp(UseBoostPackages, "all") == 0) {
-      _allow_clr = _allow_cds = _allow_aot = _allow_pgo = true;
+      _boost_level.set_allow_clr(true);
+      _boost_level.set_allow_cds(true);
+      _boost_level.set_allow_aot(true);
+      _boost_level.set_enable_aot_pgo(true);
     } else {
-      _allow_clr = is_option_on("UseBoostPackages", UseBoostPackages, "clr");
-      _allow_cds = is_option_on("UseBoostPackages", UseBoostPackages, "cds");
-      _allow_aot = is_option_on("UseBoostPackages", UseBoostPackages, "aot");
-      _allow_pgo = is_option_on("UseBoostPackages", UseBoostPackages, "pgo");
-      if (_allow_pgo) _allow_aot = true;
+      _boost_level.set_allow_clr(is_option_on("UseBoostPackages", UseBoostPackages, "clr"));
+      _boost_level.set_allow_cds(is_option_on("UseBoostPackages", UseBoostPackages, "cds"));
+      _boost_level.set_allow_aot(is_option_on("UseBoostPackages", UseBoostPackages, "aot"));
+      _boost_level.set_enable_aot_pgo(is_option_on("UseBoostPackages", UseBoostPackages, "pgo"));
+      if (_boost_level.is_aot_pgo_enabled()) _boost_level.set_allow_aot(true);
     }
   } else {
     switch (BoostStopAtLevel) {
-    case 4: _allow_pgo = true;
-    case 3: _allow_aot = true;
-    case 2: _allow_cds = true;
-    case 1: _allow_clr = true;
+    case 4: _boost_level.set_enable_aot_pgo(true);
+    case 3: _boost_level.set_allow_aot(true);
+    case 2: _boost_level.set_allow_cds(true);
+    case 1: _boost_level.set_allow_clr(true);
     case 0: break;
     default: break;
     }
+  }
+
+  if (FLAG_IS_DEFAULT(UseAggressiveCDS) || UseAggressiveCDS) {
+    _boost_level.set_enable_cds_agg(true);
   }
 
   if (JBoosterStartupSignal != nullptr) {
@@ -113,17 +115,23 @@ void ClientDataManager::init_const() {
                                                             _program_args->is_jar(),
                                                             _program_args->hash());
   _cache_clr_path = JBoosterManager::calc_cache_path(_cache_dir_path, _program_str_id, "clr.log");
-  _cache_cds_path = JBoosterManager::calc_cache_path(_cache_dir_path, _program_str_id, "cds.jsa");
-  const char* aot_path_suffix = _allow_pgo ? "aot-pgo.so" : "aot.so";
+  const char* cds_path_suffix = _boost_level.is_cds_agg_enabled() ? "cds-agg.jsa" : "cds-dy.jsa";
+  _cache_cds_path = JBoosterManager::calc_cache_path(_cache_dir_path, _program_str_id, cds_path_suffix);
+  const char* aot_path_suffix = _boost_level.is_aot_pgo_enabled() ? "aot-pgo.so" : "aot-static.so";
   _cache_aot_path = JBoosterManager::calc_cache_path(_cache_dir_path, _program_str_id, aot_path_suffix);
 }
 
 void ClientDataManager::init_client_duty() {
+  if (JBoosterServerSSLRootCerts) {
+    if (!SSLUtils::init_ssl_lib()) {
+      vm_exit_during_initialization("Failed to load all functions from OpenSSL Dynamic Library.");
+    }
+    ClientStream::client_init_ssl_ctx(JBoosterServerSSLRootCerts);
+  }
   // Connect to jbooster before initializing CDS, before loading java_lang_classes
   // and before starting the compiler threads.
   ClientStream client_stream(JBoosterAddress, JBoosterPort, JBoosterTimeout, nullptr);
   int rpc_err = client_stream.connect_and_init_session(&_using_clr, &_using_cds, &_using_aot);
-  if (_using_aot && _allow_pgo) _using_pgo = true;
   set_server_available(rpc_err == 0);
 }
 
@@ -132,11 +140,10 @@ void ClientDataManager::init_client_duty_under_local_mode() {
   _using_clr = FileUtils::is_file(_cache_clr_path);
   _using_cds = FileUtils::is_file(_cache_cds_path);
   _using_aot = FileUtils::is_file(_cache_aot_path);
-  if (_using_aot && _allow_pgo) _using_pgo = true;
 }
 
 jint ClientDataManager::init_clr_options() {
-  if (!is_clr_allowed()) return JNI_OK;
+  if (!_boost_level.is_clr_allowed()) return JNI_OK;
 
   if (FLAG_SET_CMDLINE(UseClassLoaderResourceCache, true) != JVMFlag::SUCCESS) {
     return JNI_EINVAL;
@@ -156,10 +163,14 @@ jint ClientDataManager::init_clr_options() {
 }
 
 jint ClientDataManager::init_cds_options() {
-  if (!is_cds_allowed()) return JNI_OK;
+  if (!_boost_level.is_cds_allowed()) return JNI_OK;
 
-  if (FLAG_IS_CMDLINE(SharedArchiveFile) || FLAG_IS_CMDLINE(ArchiveClassesAtExit)) {
-    vm_exit_during_initialization("Do not set CDS manually whe using JBooster.");
+  if (FLAG_IS_CMDLINE(SharedArchiveFile) || FLAG_IS_CMDLINE(ArchiveClassesAtExit) || FLAG_IS_CMDLINE(SharedArchiveConfigFile)) {
+    vm_exit_during_initialization("Do not set CDS path manually whe using JBooster.");
+  }
+
+  if (FLAG_IS_CMDLINE(DynamicDumpSharedSpaces) || FLAG_IS_CMDLINE(DumpSharedSpaces) || FLAG_IS_CMDLINE(UseSharedSpaces)) {
+    vm_exit_during_initialization("Do not set dump/load CDS manually whe using JBooster.");
   }
 
   if (is_cds_being_used()) {
@@ -197,7 +208,7 @@ jint ClientDataManager::init_cds_options() {
 }
 
 jint ClientDataManager::init_aot_options() {
-  if (!is_aot_allowed()) return JNI_OK;
+  if (!_boost_level.is_aot_allowed()) return JNI_OK;
   if (FLAG_SET_CMDLINE(UseAOT, true) != JVMFlag::SUCCESS) {
     return JNI_EINVAL;
   }
@@ -210,7 +221,7 @@ jint ClientDataManager::init_aot_options() {
 }
 
 jint ClientDataManager::init_pgo_options() {
-  if (!is_pgo_allowed()) return JNI_OK;
+  if (!_boost_level.is_aot_pgo_enabled()) return JNI_OK;
   if (FLAG_SET_CMDLINE(TypeProfileWidth, 8) != JVMFlag::SUCCESS) {
     return JNI_EINVAL;
   }
@@ -220,13 +231,11 @@ jint ClientDataManager::init_pgo_options() {
 void ClientDataManager::print_init_state() {
   log_info(jbooster)("Using boost packages:\n"
                      " - CLR: allowed_to_use=%s,\tis_being_used=%s\n"
-                     " - CDS: allowed_to_use=%s,\tis_being_used=%s\n"
-                     " - AOT: allowed_to_use=%s,\tis_being_used=%s\n"
-                     " - PGO: allowed_to_use=%s,\tis_being_used=%s",
-                     BOOL_TO_STR(is_clr_allowed()), BOOL_TO_STR(is_clr_being_used()),
-                     BOOL_TO_STR(is_cds_allowed()), BOOL_TO_STR(is_cds_being_used()),
-                     BOOL_TO_STR(is_aot_allowed()), BOOL_TO_STR(is_aot_being_used()),
-                     BOOL_TO_STR(is_pgo_allowed()), BOOL_TO_STR(is_pgo_being_used()));
+                     " - CDS: allowed_to_use=%s,\tis_being_used=%s,\tis_aggressive_cds_enabled=%s\n"
+                     " - AOT: allowed_to_use=%s,\tis_being_used=%s,\tis_pgo_aot_enabled=%s\n",
+                     BOOL_TO_STR(_boost_level.is_clr_allowed()), BOOL_TO_STR(is_clr_being_used()),
+                     BOOL_TO_STR(_boost_level.is_cds_allowed()), BOOL_TO_STR(is_cds_being_used()), BOOL_TO_STR(_boost_level.is_cds_agg_enabled()),
+                     BOOL_TO_STR(_boost_level.is_aot_allowed()), BOOL_TO_STR(is_aot_being_used()), BOOL_TO_STR(_boost_level.is_aot_pgo_enabled()));
 }
 
 static void check_jbooster_port() {
@@ -328,7 +337,7 @@ void ClientDataManager::init_phase2(TRAPS) {
   }
   ClientDaemonThread::start_thread(CHECK);
 
-  if (_singleton->is_clr_allowed()) {
+  if (_singleton->_boost_level.is_clr_allowed()) {
     Klass* klass = SystemDictionary::resolve_or_fail(vmSymbols::java_net_ClassLoaderResourceCache(), true, CHECK);
     InstanceKlass::cast(klass)->initialize(CHECK);
   }
@@ -339,7 +348,7 @@ jint ClientDataManager::escape() {
     return JNI_EINVAL;
   }
 
-  if(!JBoosterLocalMode){
+  if (!JBoosterLocalMode) {
     log_error(jbooster)("Rolled back to the original path (UseJBooster=false), since the server is unavailable.");
   }
   return JNI_OK;

@@ -1049,8 +1049,8 @@ void Parse::catch_inline_exceptions(SafePointNode* ex_map) {
 
 #ifndef PRODUCT
 void Parse::count_compiled_calls(bool at_method_entry, bool is_inline) {
-  if( CountCompiledCalls ) {
-    if( at_method_entry ) {
+  if(CountCompiledCalls) {
+    if(at_method_entry) {
       // bump invocation counter if top method (for statistics)
       if (CountCompiledCalls && depth() == 1) {
         const TypePtr* addr_type = TypeMetadataPtr::make(method());

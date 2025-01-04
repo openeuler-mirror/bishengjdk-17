@@ -196,14 +196,14 @@ int ServerMessageHandler::request_missing_klasses(TRAPS) {
 
 int ServerMessageHandler::request_method_data(TRAPS) {
   ResourceMark rm(THREAD);
-  GrowableArray<address> client_klass_array;
-  GrowableArray<address> server_klass_array;
+  GrowableArray<uintptr_t> client_klass_array;
+  GrowableArray<uintptr_t> server_klass_array;
   ss().session_data()->klass_array(&client_klass_array,
                                    &server_klass_array,
                                    THREAD);
 
   {
-    ArrayWrapper<address> aw(&client_klass_array);
+    ArrayWrapper<uintptr_t> aw(&client_klass_array);
     JB_RETURN(ss().send_request(MessageType::Profilinginfo, &aw));
     InstanceKlass** klass_array_base = NULL;
     if (server_klass_array.length() > 0) {
@@ -275,7 +275,7 @@ int ServerMessageHandler::request_methods_not_compile(GrowableArray<Method*>* me
 }
 
 int ServerMessageHandler::request_client_cache(MessageType msg_type, JClientCacheState& cache) {
-  if (cache.is_allowed() && !cache.is_cached() && cache.set_being_generated()) {
+  if (!cache.is_cached() && cache.set_being_generated()) {
     JB_TRY {
       JB_THROW(ss().send_request(msg_type));
       FileWrapper file(cache.file_path(), SerializationMode::DESERIALIZE);
@@ -294,10 +294,14 @@ int ServerMessageHandler::request_client_cache(MessageType msg_type, JClientCach
 int ServerMessageHandler::handle_cache_file_sync_task(TRAPS) {
   DebugUtils::assert_thread_nonjava_or_in_native();
 
-  JClientProgramData* pd = ss().session_data()->program_data();
+  JClientSessionData* sd = ss().session_data();
+  JClientProgramData* pd = sd->program_data();
+  bool enabling_cds_agg = sd->boost_level().is_cds_agg_enabled();
 
   JB_RETURN(request_client_cache(MessageType::CacheClassLoaderResource, pd->clr_cache_state()));
-  JB_RETURN(request_client_cache(MessageType::CacheAggressiveCDS,       pd->cds_cache_state()));
+
+  JClientCacheState& cds_cache_state = enabling_cds_agg ? pd->agg_cds_cache_state() : pd->dy_cds_cache_state();
+  JB_RETURN(request_client_cache(MessageType::CacheAggressiveCDS, cds_cache_state));
 
   JB_RETURN(ss().send_request(MessageType::EndOfCurrentPhase));
   return 0;
@@ -306,22 +310,28 @@ int ServerMessageHandler::handle_cache_file_sync_task(TRAPS) {
 int ServerMessageHandler::handle_lazy_aot_compilation_task(TRAPS) {
   DebugUtils::assert_thread_in_native();
 
-  JClientProgramData* pd = ss().session_data()->program_data();
-  JClientCacheState& aot_cache_state = pd->aot_cache_state();
+  JClientSessionData* sd = ss().session_data();
+  JClientProgramData* pd = sd->program_data();
+  bool enabling_aot_pgo = sd->boost_level().is_aot_pgo_enabled();
+  JClientCacheState& aot_cache_state = enabling_aot_pgo ? pd->aot_pgo_cache_state() : pd->aot_static_cache_state();
   ResourceMark rm(THREAD);
   GrowableArray<InstanceKlass*> klasses_to_compile;
   GrowableArray<Method*>        methods_to_compile;
   GrowableArray<Method*>        methods_not_compile;
   bool compile_in_current_thread = false;
+  bool resolve_extra_klasses = true;
 
   JB_TRY {
     compile_in_current_thread = !aot_cache_state.is_cached() && aot_cache_state.set_being_generated();
     JB_THROW(ss().send_response(&compile_in_current_thread));
     if (compile_in_current_thread) {
+      JB_RETURN(ss().send_request(MessageType::ResolveExtraKlasses));
+      JB_RETURN(ss().recv_response(&resolve_extra_klasses));
+
       JB_THROW(request_missing_class_loaders(THREAD));
       JB_THROW(request_missing_klasses(THREAD));
       JB_THROW(request_methods_to_compile(&klasses_to_compile, &methods_to_compile, THREAD));
-      if (pd->using_pgo()) {
+      if (enabling_aot_pgo) {
         JB_THROW(request_methods_not_compile(&methods_not_compile, THREAD));
         JB_THROW(request_method_data(THREAD));
       }
@@ -338,7 +348,8 @@ int ServerMessageHandler::handle_lazy_aot_compilation_task(TRAPS) {
     JB_RETURN(try_to_compile_lazy_aot(&klasses_to_compile,
                                       &methods_to_compile,
                                       &methods_not_compile,
-                                      pd->using_pgo(),
+                                      enabling_aot_pgo,
+                                      resolve_extra_klasses,
                                       THREAD));
   } else {  // not compile in current thread
     if (aot_cache_state.is_being_generated()) {
@@ -358,10 +369,11 @@ int ServerMessageHandler::handle_lazy_aot_compilation_task(TRAPS) {
 int ServerMessageHandler::try_to_compile_lazy_aot(GrowableArray<InstanceKlass*>* klasses_to_compile,
                                                   GrowableArray<Method*>* methods_to_compile,
                                                   GrowableArray<Method*>* methods_not_compile,
-                                                  bool use_pgo,
+                                                  bool enabling_aot_pgo,
+                                                  bool resolve_extra_klasses,
                                                   TRAPS) {
   JClientProgramData* pd = ss().session_data()->program_data();
-  JClientCacheState& aot_cache_state = pd->aot_cache_state();
+  JClientCacheState& aot_cache_state =  enabling_aot_pgo ? pd->aot_pgo_cache_state() : pd->aot_static_cache_state();
   if (klasses_to_compile->is_empty()) {
     // the expected path without plugin
     aot_cache_state.set_not_generated();
@@ -376,17 +388,17 @@ int ServerMessageHandler::try_to_compile_lazy_aot(GrowableArray<InstanceKlass*>*
 
   ThreadInVMfromNative tiv(THREAD);
   if (methods_to_compile->is_empty()) {
-    successful = LazyAOT::compile_classes_by_graal(session_id, file_path, klasses_to_compile, use_pgo, THREAD);
+    successful = LazyAOT::compile_classes_by_graal(session_id, file_path, klasses_to_compile, enabling_aot_pgo, resolve_extra_klasses, THREAD);
   } else {
     successful = LazyAOT::compile_methods_by_graal(session_id, file_path, klasses_to_compile,
-                                                   methods_to_compile, methods_not_compile, use_pgo, THREAD);
+                                                   methods_to_compile, methods_not_compile, enabling_aot_pgo, resolve_extra_klasses, THREAD);
   }
 
   if (successful) {
     guarantee(!HAS_PENDING_EXCEPTION, "sanity");
     chmod(file_path, S_IREAD);
     aot_cache_state.set_generated();
-    log_info(jbooster, compilation)("Successfully comiled %d classes. session_id=%u.",
+    log_info(jbooster, compilation)("Successfully compiled %d classes. session_id=%u.",
                                     klasses_to_compile->length(),
                                     ss().session_id());
   } else if (HAS_PENDING_EXCEPTION) {

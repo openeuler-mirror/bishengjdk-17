@@ -31,6 +31,9 @@
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/ostream.hpp"
 #include "utilities/powerOfTwo.hpp"
+#if INCLUDE_JBOOSTER || INCLUDE_JBOLT
+#include "utilities/sizes.hpp"
+#endif // INCLUDE_JBOOSTER || INCLUDE_JBOLT
 
 // A growable array.
 
@@ -129,7 +132,7 @@ protected:
 
 public:
   const static GrowableArrayView EMPTY;
-#if INCLUDE_JBOOSTER
+#if INCLUDE_JBOOSTER || INCLUDE_JBOLT
   static ByteSize data_offset()  { return byte_offset_of(GrowableArrayView, _data); }
 #endif // INCLUDE_JBOOSTER
 

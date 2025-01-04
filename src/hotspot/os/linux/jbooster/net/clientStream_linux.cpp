@@ -28,7 +28,9 @@
 
 #include "jbooster/net/clientStream.hpp"
 #include "jbooster/net/errorCode.hpp"
+#include "jbooster/net/sslUtils.hpp"
 #include "logging/log.hpp"
+#include "runtime/java.hpp"
 #include "runtime/os.hpp"
 
 #define LOG_INNER(socket_fd, address, port, err_code, format, args...)                                \
@@ -141,4 +143,56 @@ int ClientStream::try_to_connect_once(int* res_fd, const char* address, const ch
   if (res_err == 0) res_err = JBErr::UNKNOWN;
   *res_fd = -1;
   return res_err;
+}
+
+int ClientStream::try_to_ssl_connect(SSL** res_ssl, int conn_fd) {
+  errno = 0;
+
+  SSL* ssl = nullptr;
+  do {
+    SSL* ssl = SSLUtils::ssl_new(_client_ssl_ctx);
+    if (ssl == nullptr) {
+      log_error(jbooster, rpc)("Failed to get SSL.");
+      break;
+    }
+
+    int ret = 0;
+    if (ret = SSLUtils::ssl_set_fd(ssl, conn_fd) != 1) {
+      SSLUtils::handle_ssl_error(ssl, ret, "Failed to set SSL file descriptor");
+      break;
+    }
+
+    if (ret = SSLUtils::ssl_connect(ssl) != 1) {
+      SSLUtils::handle_ssl_error(ssl, ret, "Failed to build SSL connection");
+      break;
+    }
+
+    if (!verify_cert(ssl)) {
+      break;
+    }
+
+    // success
+    assert(errno == 0, "why errno=%s", JBErr::err_name(errno));
+    *res_ssl = ssl;
+    return 0;
+  } while (false);
+
+  // fail
+  int res_err = JBErr::BAD_SSL;
+  SSLUtils::shutdown_and_free_ssl(ssl);
+  return res_err;
+}
+
+bool ClientStream::verify_cert(SSL* ssl) {
+  X509* cert = SSLUtils::ssl_get_peer_certificate(ssl);
+  if ((cert == nullptr)) {
+    log_error(jbooster, rpc)("Server cert unspecified.");
+    return false;
+  }
+  int res = SSLUtils::ssl_get_verify_result(ssl);
+  if (res != X509_V_OK) {
+    log_error(jbooster, rpc)("Failed to verify server cert.");
+    return false;
+  }
+  return true;
 }

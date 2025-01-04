@@ -168,8 +168,8 @@ inline V* ConcurrentHashMap<K, V, F, Events>::get(const K& key, Thread* thread) 
   V* res = nullptr;
 
   if (_table.get(thread, lookup, get, &grow_hint)) {
-    KVNode& kv_node = *get.res();
-    res = &kv_node.value();
+    assert(get.res() != nullptr, "sanity");
+    res = &(get.res()->value());
   }
 
   return res;
@@ -184,18 +184,10 @@ inline V* ConcurrentHashMap<K, V, F, Events>::put_if_absent(const K& key, V& val
 
   V* res = nullptr;
 
-  do {
-    if (_table.insert(thread, lookup, KVNode(key, value), &grow_hint, &clean_hint)) {
-      res = &value;
-      break;
-    }
-
-    if (_table.get(thread, lookup, get, &grow_hint)) {
-      KVNode& kv_node = *get.res();
-      res = &kv_node.value();
-      break;
-    }
-  } while (true);
+  KVNode kv_node(key, value);
+  bool success = _table.insert_get(thread, lookup, kv_node, get, &grow_hint, &clean_hint);
+  assert(get.res() != nullptr, "sanity");
+  res = &(get.res()->value());
 
   if (grow_hint) {
     grow_if_needed(thread);

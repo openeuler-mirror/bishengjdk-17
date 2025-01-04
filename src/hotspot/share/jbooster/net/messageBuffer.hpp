@@ -56,7 +56,7 @@ public:
   void assert_can_deserialize() const NOT_DEBUG_RETURN;
 };
 
-class MessageBuffer final: public StackObj {
+class MessageBuffer: public StackObj {
   friend class Message;
 
 private:
@@ -64,13 +64,22 @@ private:
 
   SerializationMode _smode;
   uint32_t _buf_size;
-  char* _buf;
+  char* _buf_obj; // malloced buf object
+  char* _buf;     // 8-byte aligned buf start
   uint32_t _cur_offset;
   CommunicationStream* const _stream;
 
 private:
-  static uint32_t calc_new_buf_size(uint32_t required_size);
+  static char* alloc_buf_obj(uint32_t new_buf_size);
+  static void del_buf_obj(char* buf_obj);
+
   void expand_buf(uint32_t required_size, uint32_t copy_size);
+
+protected: // for gtest
+  template <typename Arg>
+  static uint32_t calc_padding(uint32_t offset);
+  static char* calc_buf_start(char* buf_obj);
+  static uint32_t calc_new_buf_size(uint32_t required_size);
 
 public:
   MessageBuffer(SerializationMode smode, CommunicationStream* stream = nullptr);
@@ -95,6 +104,8 @@ public:
   }
 
   // serializers
+  template <typename Arg>
+  int serialize_base(Arg v);
   int serialize_memcpy(const void* from, uint32_t arg_size);
   template <typename Arg>
   int serialize_no_meta(const Arg& arg);
@@ -102,6 +113,8 @@ public:
   int serialize_with_meta(const Arg* arg_ptr);
 
   // deserializers
+  template <typename Arg>
+  int deserialize_base(Arg& to);
   int deserialize_memcpy(void* to, uint32_t arg_size);
   template <typename Arg>
   int deserialize_ref_no_meta(Arg& arg);

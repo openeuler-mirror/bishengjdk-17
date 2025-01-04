@@ -100,6 +100,9 @@
 #if INCLUDE_AOT
 #include "aot/aotLoader.hpp"
 #endif
+#if INCLUDE_JBOLT
+#include "jbolt/jBoltManager.hpp"
+#endif
 
 GrowableArray<Method*>* collected_profiled_methods;
 
@@ -523,7 +526,7 @@ void before_exit(JavaThread* thread, bool halt) {
   os::terminate_signal_thread();
 
 #if INCLUDE_CDS
-  if (DynamicDumpSharedSpaces JBOOSTER_ONLY(&& !(UseJBooster && ClientDataManager::get().is_cds_allowed()))) {
+  if (DynamicDumpSharedSpaces JBOOSTER_ONLY(&& !(UseJBooster && ClientDataManager::get().boost_level().is_cds_allowed()))) {
     ExceptionMark em(thread);
     DynamicArchive::dump();
     if (thread->has_pending_exception()) {
@@ -543,6 +546,12 @@ void before_exit(JavaThread* thread, bool halt) {
     ClientMessageHandler::trigger_cache_generation_tasks(ClientMessageHandler::TriggerTaskPhase::ON_SHUTDOWN, thread);
   }
 #endif // INCLUDE_JBOOSTER
+
+#if INCLUDE_JBOLT
+  if (UseJBolt && JBoltDumpMode) {
+    JBoltManager::dump_order_in_manual();
+  }
+#endif
 
   print_statistics();
   Universe::heap()->print_tracing_info();
@@ -678,6 +687,12 @@ void vm_exit_during_cds_dumping(const char* error, const char* message) {
   vm_notify_during_cds_dumping(error, message);
 
   // Failure during CDS dumping, we don't want to dump core
+  vm_abort(false);
+}
+
+void vm_exit_during_prim_collection_loading() {
+  tty->print_cr("Error occurred during loading prim collection classes: must load all or none from primcollection.jar");
+  // no need to dump core
   vm_abort(false);
 }
 

@@ -30,16 +30,16 @@
 #include "runtime/thread.hpp"
 #include "runtime/timerTrace.hpp"
 
-ServerStream::ServerStream(int conn_fd):
+ServerStream::ServerStream(int conn_fd, SSL* ssl):
                            CommunicationStream(Thread::current_or_null()),
                            _session_data(nullptr) {
-  init_stream(conn_fd);
+  init_stream(conn_fd, ssl);
 }
 
-ServerStream::ServerStream(int conn_fd, Thread* thread):
+ServerStream::ServerStream(int conn_fd, SSL* ssl, Thread* thread):
                            CommunicationStream(thread),
                            _session_data(nullptr) {
-  init_stream(conn_fd);
+  init_stream(conn_fd, ssl);
 }
 
 ServerStream::~ServerStream() {
@@ -52,8 +52,8 @@ uint32_t ServerStream::session_id() {
 
 void ServerStream::set_session_data(JClientSessionData* sd) {
   JClientSessionData* old_sd = _session_data;
-  if (sd == old_sd) return;
-  // Do not call sd->ref_cnt().inc() here as it has been inc when obtained.
+  // Do not let `sd` increase 1 here as it has been increased when obtained.
+  // But let `old_sd` decrease 1 even if `sd == old_sd` for the same reason.
   if (old_sd != nullptr) {
     old_sd->ref_cnt().dec_and_update_time();
   }
@@ -105,7 +105,8 @@ int ServerStream::sync_session_meta__server() {
   RpcCompatibility comp;
   uint64_t client_random_id;
   JClientArguments program_args(false);    // on-stack allocation to prevent memory leakage
-  JB_RETURN(parse_request(&comp, &client_random_id, &program_args));
+  JClientBoostLevel boost_level;
+  JB_RETURN(parse_request(&comp, &client_random_id, &program_args, &boost_level));
 
   const char* unsupport_reason = nullptr;
   if (!program_args.check_compatibility_with_server(&unsupport_reason)) {
@@ -115,7 +116,7 @@ int ServerStream::sync_session_meta__server() {
     JB_RETURN(JBErr::ABORT_CUR_PHRASE);
   }
 
-  JClientSessionData* sd = sdm.create_session(client_random_id, &program_args, Thread::current());
+  JClientSessionData* sd = sdm.create_session(client_random_id, &program_args, boost_level, Thread::current());
   JClientProgramData* pd = sd->program_data();
   set_session_data(sd);
 
@@ -123,8 +124,8 @@ int ServerStream::sync_session_meta__server() {
   uint32_t session_id = sd->session_id();
   uint32_t program_id = pd->program_id();
   bool has_remote_clr = pd->clr_cache_state().is_cached();
-  bool has_remote_cds = pd->cds_cache_state().is_cached();
-  bool has_remote_aot = pd->aot_cache_state().is_cached();
+  bool has_remote_cds = boost_level.is_cds_agg_enabled() ? pd->agg_cds_cache_state().is_cached() : pd->dy_cds_cache_state().is_cached();
+  bool has_remote_aot = boost_level.is_aot_pgo_enabled() ? pd->aot_pgo_cache_state().is_cached() : pd->aot_static_cache_state().is_cached();
   JB_RETURN(send_response(stream_id_addr(), &server_random_id, &session_id, &program_id,
                           &has_remote_clr, &has_remote_cds, &has_remote_aot));
   log_info(jbooster, rpc)("New client: session_id=%u, program_id=%u, "
@@ -138,10 +139,10 @@ int ServerStream::sync_session_meta__server() {
                           BOOL_TO_STR(has_remote_aot),
                           stream_id());
 
-  return handle_sync_requests(pd);
+  return handle_sync_requests(pd, boost_level.is_cds_agg_enabled(), boost_level.is_aot_pgo_enabled());
 }
 
-int ServerStream::handle_sync_requests(JClientProgramData* pd) {
+int ServerStream::handle_sync_requests(JClientProgramData* pd, bool enable_cds_agg, bool enable_aot_pgo) {
   bool not_end = true;
   do {
     MessageType type;
@@ -155,13 +156,15 @@ int ServerStream::handle_sync_requests(JClientProgramData* pd) {
     }
     case MessageType::GetAggressiveCDSCache: {
       TraceTime tt("Send cds", TRACETIME_LOG(Info, jbooster));
-      FileWrapper file(pd->cds_cache_state().file_path(), SerializationMode::SERIALIZE);
+      const char* cds_file_path = enable_cds_agg ? pd->agg_cds_cache_state().file_path() : pd->dy_cds_cache_state().file_path();
+      FileWrapper file(cds_file_path, SerializationMode::SERIALIZE);
       JB_RETURN(file.send_file(this));
       break;
     }
     case MessageType::GetLazyAOTCache: {
       TraceTime tt("Send aot", TRACETIME_LOG(Info, jbooster));
-      FileWrapper file(pd->aot_cache_state().file_path(), SerializationMode::SERIALIZE);
+      const char* aot_file_path = enable_aot_pgo ? pd->aot_pgo_cache_state().file_path() : pd->aot_static_cache_state().file_path();
+      FileWrapper file(aot_file_path, SerializationMode::SERIALIZE);
       JB_RETURN(file.send_file(this));
       break;
     }

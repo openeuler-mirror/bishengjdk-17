@@ -131,7 +131,7 @@ void NativePltCall::set_stub_to_clean() {
   NativeLoadGot* method_loader = nativeLoadGot_at(plt_c2i_stub());
   NativeGotJump* jump          = nativeGotJump_at(method_loader->next_instruction_address());
   method_loader->set_data(0);
-  jump->set_jump_destination((address)-1);
+  jump->set_jump_destination((address)Universe::non_oop_word());
 }
 
 void NativePltCall::verify() const {

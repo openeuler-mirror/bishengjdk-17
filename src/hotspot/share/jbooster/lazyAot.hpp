@@ -112,6 +112,7 @@ public:
                                        const char* file_path,
                                        GrowableArray<InstanceKlass*>* klasses,
                                        bool use_pgo,
+                                       bool resolve_extra_klasses,
                                        TRAPS);
   static bool compile_methods_by_graal(int session_id,
                                        const char* file_path,
@@ -119,6 +120,7 @@ public:
                                        GrowableArray<Method*>* methods_to_compile,
                                        GrowableArray<Method*>* methods_not_compile,
                                        bool use_pgo,
+                                       bool resolve_extra_klasses,
                                        TRAPS);
 };
 

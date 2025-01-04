@@ -26,13 +26,18 @@
 
 #if INCLUDE_JBOOSTER
 
+#include "common.hpp"
+
+#include "jbooster/jClientArguments.hpp"
 #include "jbooster/net/message.inline.hpp"
 #include "jbooster/net/messageBuffer.inline.hpp"
 #include "jbooster/net/serializationWrappers.inline.hpp"
 #include "jbooster/utilities/fileUtils.hpp"
+#include "memory/resourceArea.hpp"
 #include "runtime/os.inline.hpp"
 #include "utilities/globalDefinitions.hpp"
 #include "utilities/growableArray.hpp"
+
 #include "unittest.hpp"
 
 static int try_catch_func(int i) {
@@ -105,6 +110,47 @@ static void copy_message_buffer(MessageBuffer& to, MessageBuffer& from) {
   memcpy(to.buf(), from.buf(), from.cur_offset());
 }
 
+class MockMessageBuffer: public MessageBuffer {
+public:
+  static bool test() {
+    // calc_padding<char[6]>(0); // should not pass the compilation
+    EXPECT_EQ(calc_padding<char>(123), 0u);
+    EXPECT_EQ(calc_padding<char>(124), 0u);
+    EXPECT_EQ(calc_padding<short>(123), 1u);
+    EXPECT_EQ(calc_padding<short>(120), 0u);
+    EXPECT_EQ(calc_padding<int>(0), 0u);
+    EXPECT_EQ(calc_padding<int>(1), 3u);
+    EXPECT_EQ(calc_padding<int>(2), 2u);
+    EXPECT_EQ(calc_padding<int>(3), 1u);
+    EXPECT_EQ(calc_padding<int>(4), 0u);
+    EXPECT_EQ(calc_padding<int>(400), 0u);
+    EXPECT_EQ(calc_padding<uint64_t>(1), 7u);
+    EXPECT_EQ(calc_padding<uint64_t>(3), 5u);
+    EXPECT_EQ(calc_padding<uint64_t>(12), 4u);
+    EXPECT_EQ(calc_padding<uint64_t>(7), 1u);
+
+    EXPECT_EQ(calc_buf_start(reinterpret_cast<char*>(7)), reinterpret_cast<char*>(8));
+    EXPECT_EQ(calc_buf_start(reinterpret_cast<char*>(9)), reinterpret_cast<char*>(16));
+    EXPECT_EQ(calc_buf_start(reinterpret_cast<char*>(12)), reinterpret_cast<char*>(16));
+    EXPECT_EQ(calc_buf_start(reinterpret_cast<char*>(65535)), reinterpret_cast<char*>(65536));
+    EXPECT_EQ(calc_buf_start(reinterpret_cast<char*>(65536)), reinterpret_cast<char*>(65536));
+
+    EXPECT_EQ(calc_new_buf_size(0), 0u);
+    EXPECT_EQ(calc_new_buf_size(1), 1u);
+    EXPECT_EQ(calc_new_buf_size(2), 2u);
+    EXPECT_EQ(calc_new_buf_size(3), 4u);
+    EXPECT_EQ(calc_new_buf_size(65535), 65536u);
+    EXPECT_EQ(calc_new_buf_size(65536), 65536u);
+    EXPECT_EQ(calc_new_buf_size(65537), 131072u);
+
+    return true;
+  }
+};
+
+TEST(JBoosterNet, padding) {
+  ASSERT_TRUE(MockMessageBuffer::test());
+}
+
 TEST(JBoosterNet, try_catch) {
   int i;
   for (i = 0; i < 9; ++i) {
@@ -145,24 +191,25 @@ TEST(JBoosterNet, serializationn_basics) {
     int     i1 = 1234;
     int64_t l1 = 900000000000000ll;
     EXPECT_EQ(buf.serialize_no_meta(c1), 0);
-    EXPECT_EQ(buf.cur_offset(), 1u);
+    EXPECT_EQ(buf.cur_offset(), 1u);  // 1 (char)
     EXPECT_EQ(buf.serialize_no_meta(i1), 0);
-    EXPECT_EQ(buf.cur_offset(), 5u);
+    EXPECT_EQ(buf.cur_offset(), 8u);  // 1 (last) + 3 (padding) + 4 (int32)
     EXPECT_EQ(buf.serialize_no_meta(l1), 0);
-    EXPECT_EQ(buf.cur_offset(), 13u);
+    EXPECT_EQ(buf.cur_offset(), 16u); // 8 (last) + 8 (int64)
 
     uint32_t u1 = 2468;
     const char* s1 = nullptr;
     const char* s2 = "hello";
     const char* s3 = "world!";
     EXPECT_EQ(buf.serialize_with_meta(&u1), 0);
-    EXPECT_EQ(buf.cur_offset(), 21u);
+    EXPECT_EQ(buf.cur_offset(), 24u); // 16 (last) + 4 (int32) + 4 (int32)
     EXPECT_EQ(buf.serialize_with_meta(&s1), 0);
-    EXPECT_EQ(buf.cur_offset(), 29u);
+    EXPECT_EQ(buf.cur_offset(), 32u); // 24 (last) + 4 (int32) + 4 (int32)
     EXPECT_EQ(buf.serialize_with_meta(&s2), 0);
-    EXPECT_EQ(buf.cur_offset(), 42u);
+    EXPECT_EQ(buf.cur_offset(), 45u); // 32 (last) + 4 (int32) + 4 (int32) + 5 (strlen)
     EXPECT_EQ(buf.serialize_with_meta(&s3), 0);
-    EXPECT_EQ(buf.cur_offset(), 56u);
+    EXPECT_EQ(buf.cur_offset(), 62u); // 45 (last) + 3 (padding) + 4 (int32) + 4 (int32) + 6 (strlen)
+    EXPECT_EQ((int) (reinterpret_cast<uintptr_t>(buf.buf())) & 7, 0);  // 8-byte aligned
 
     cache_size = buf.cur_offset();
     memcpy(cache, buf.buf(), cache_size);
@@ -177,9 +224,9 @@ TEST(JBoosterNet, serializationn_basics) {
     EXPECT_EQ(buf.deserialize_ref_no_meta(c1), 0);
     EXPECT_EQ(buf.cur_offset(), 1u);
     EXPECT_EQ(buf.deserialize_ref_no_meta(i1), 0);
-    EXPECT_EQ(buf.cur_offset(), 5u);
+    EXPECT_EQ(buf.cur_offset(), 8u);
     EXPECT_EQ(buf.deserialize_ref_no_meta(l1), 0);
-    EXPECT_EQ(buf.cur_offset(), 13u);
+    EXPECT_EQ(buf.cur_offset(), 16u);
     EXPECT_EQ(c1, '6');
     EXPECT_EQ(i1, 1234);
     EXPECT_EQ(l1, 900000000000000ll);
@@ -189,13 +236,15 @@ TEST(JBoosterNet, serializationn_basics) {
     char s2[6];
     StringWrapper s3;
     EXPECT_EQ(buf.deserialize_with_meta(&u1), 0);
-    EXPECT_EQ(buf.cur_offset(), 21u);
+    EXPECT_EQ(buf.cur_offset(), 24u);
     EXPECT_EQ(buf.deserialize_with_meta(&s1), 0);
-    EXPECT_EQ(buf.cur_offset(), 29u);
+    EXPECT_EQ(buf.cur_offset(), 32u);
     EXPECT_EQ(buf.deserialize_with_meta(&s2), 0);
-    EXPECT_EQ(buf.cur_offset(), 42u);
+    EXPECT_EQ(buf.cur_offset(), 45u);
     EXPECT_EQ(buf.deserialize_with_meta(&s3), 0);
-    EXPECT_EQ(buf.cur_offset(), 56u);
+    EXPECT_EQ(buf.cur_offset(), 62u);
+    EXPECT_EQ(((int) reinterpret_cast<uintptr_t>(buf.buf())) & 7, 0);
+
     EXPECT_EQ(u1, 2468u);
     EXPECT_STREQ(s1, nullptr);
     EXPECT_STREQ(s2, "hello");
@@ -229,16 +278,9 @@ TEST_VM(JBoosterNet, serializationn_string) {
 
   { MessageBuffer buf(SerializationMode::DESERIALIZE);
     copy_message_buffer(buf, buf0);
-    char s1[1];
-    ASSERT_DEATH(buf.deserialize_with_meta(&s1), "");
-  }
-
-  { MessageBuffer buf(SerializationMode::DESERIALIZE);
-    copy_message_buffer(buf, buf0);
     char s1[64];
     EXPECT_EQ(buf.deserialize_with_meta(&s1), 0);
     EXPECT_STREQ(ss1, s1);
-    ASSERT_DEATH(buf.deserialize_with_meta(&s1), "");
   }
 
   { MessageBuffer buf(SerializationMode::DESERIALIZE);
@@ -269,8 +311,20 @@ TEST_VM(JBoosterNet, serializationn_string) {
   }
 }
 
-TEST(JBoosterNet, serializationn_crash) {
-  int err;
+#ifdef ASSERT
+
+TEST_VM_ASSERT_MSG(JBoosterNet, serializationn_string_crash_null, ".*cannot set array to null") {
+  MessageBuffer buf(SerializationMode::BOTH);
+  const char* s = nullptr;
+  EXPECT_EQ(buf.serialize_with_meta(&s), 0);
+
+  char s1[8];
+  buf.reset_cur_offset();
+  buf.deserialize_with_meta(&s1); // should crash here
+  ASSERT_TRUE(false);
+}
+
+TEST_VM_ASSERT_MSG(JBoosterNet, serializationn_string_crash_arr_too_small, ".*array index out of bounds") {
   MessageBuffer buf(SerializationMode::BOTH);
   const char* s = "hello";
   EXPECT_EQ(buf.serialize_with_meta(&s), 0);
@@ -282,11 +336,11 @@ TEST(JBoosterNet, serializationn_crash) {
 
   char s2[5];
   buf.reset_cur_offset();
-  bool old = SuppressFatalErrorMessage;
-  SuppressFatalErrorMessage = true;
-  ASSERT_DEATH(buf.deserialize_with_meta(&s2), "");
-  SuppressFatalErrorMessage = old;
+  buf.deserialize_with_meta(&s2); // should crash here
+  ASSERT_TRUE(false);
 }
+
+#endif // ASSERT
 
 TEST(JBoosterNet, serializationn_wrappers) {
   MessageBuffer buf(SerializationMode::BOTH);
@@ -303,7 +357,7 @@ TEST(JBoosterNet, serializationn_wrappers) {
     ga.append(&s4);
     ArrayWrapper<StringWrapper> aw(&ga);
     EXPECT_EQ(buf.serialize_with_meta(&aw), 0);
-    EXPECT_EQ(buf.cur_offset(), 0u + (4 + 4) + (1 + 2 + 3 + 4 + 4 * (4 + 4)));
+    EXPECT_EQ(buf.cur_offset(), 0u + (4 + 4) + ((1 + 3) + (2 + 2) + (3 + 1) + 4 + 4 * (4 + 4)));
 
     char* mem = NEW_C_HEAP_ARRAY(char, mem_size, mtJBooster);
     memset(mem, 0x68, mem_size);
@@ -380,9 +434,33 @@ TEST(JBoosterNet, serializationn_file_wrapper) {
     }
     EXPECT_EQ(times, 3);
   }
-  EXPECT_TRUE(FileUtils::is_same(file_name1, file_name2));
+  EXPECT_TRUE(TestUtils::is_same(file_name1, file_name2));
   FileUtils::remove(file_name1);
   FileUtils::remove(file_name2);
+}
+
+TEST(JBoosterNet, serializationn_others) {
+  MessageBuffer buf(SerializationMode::BOTH);
+
+  {
+    JClientBoostLevel lvl;
+    lvl.set_allow_clr(true);
+    lvl.set_allow_aot(true);
+    lvl.set_enable_cds_agg(true);
+    EXPECT_EQ(buf.serialize_with_meta(&lvl), 0);
+  }
+
+  buf.reset_cur_offset();
+
+  {
+    JClientBoostLevel lvl;
+    EXPECT_EQ(buf.deserialize_with_meta(&lvl), 0);
+    EXPECT_EQ(lvl.is_clr_allowed(),     true);
+    EXPECT_EQ(lvl.is_cds_allowed(),     false);
+    EXPECT_EQ(lvl.is_aot_allowed(),     true);
+    EXPECT_EQ(lvl.is_aot_pgo_enabled(), false);
+    EXPECT_EQ(lvl.is_cds_agg_enabled(), true);
+  }
 }
 
 TEST(JBoosterNet, expansion_of_message_buffer) {

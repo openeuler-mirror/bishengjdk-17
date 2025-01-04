@@ -142,6 +142,11 @@ public:
   static int cpu_variant()                    { return _variant; }
   static int cpu_revision()                   { return _revision; }
 
+  static bool is_hisi_enabled() {
+    return (_cpu == CPU_HISILICON &&
+            (_model == 0xd01 || _model == 0xd02 || _model == 0xd22 || _model == 0xd45));
+  }
+
   static bool model_is(int cpu_model) {
     return _model == cpu_model || _model2 == cpu_model;
   }

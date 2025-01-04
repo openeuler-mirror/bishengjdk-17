@@ -468,8 +468,6 @@ class Arguments : AllStatic {
                                          char** base_archive_path,
                                          char** top_archive_path) NOT_CDS_RETURN;
 
-  static char* _heap_dump_redact_auth;
-
  public:
   // Parses the arguments, first phase
   static jint parse(const JavaVMInitArgs* args);
@@ -554,9 +552,6 @@ class Arguments : AllStatic {
   static size_t default_SharedBaseAddress() { return _default_SharedBaseAddress; }
   // Java launcher properties
   static void process_sun_java_launcher_properties(JavaVMInitArgs* args);
-
-  // heap dump redact password
-  static const char* get_heap_dump_redact_auth() { return _heap_dump_redact_auth; }
 
   // System properties
   static void init_system_properties();

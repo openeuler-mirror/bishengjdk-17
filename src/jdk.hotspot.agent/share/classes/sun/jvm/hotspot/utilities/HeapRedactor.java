@@ -30,6 +30,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.CharBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -51,7 +52,7 @@ public class HeapRedactor {
     private HeapDumpRedactLevel redactLevel;
     private Map<String, String> redactNameTable;
     private Map<String, Map<String, String>> redactClassTable;
-    private  String redactClassFullName = null;
+    private String redactClassFullName = null;
     private Map<Long, String> redactValueTable;
     private RedactVectorNode headerNode;
     private RedactVectorNode currentNode;
@@ -62,6 +63,7 @@ public class HeapRedactor {
     public static final String REDACT_MAP_PREFIX = "RedactMap=";
     public static final String REDACT_MAP_FILE_PREFIX = "RedactMapFile=";
     public static final String REDACT_CLASS_PATH_PREFIX = "RedactClassPath=";
+    public static final String REDACT_PASSWORD_PREFIX = "RedactPassword=";
 
     public static final String REDACT_UNKNOWN_STR = "UNKNOWN";
     public static final String REDACT_OFF_STR = "OFF";
@@ -81,14 +83,6 @@ public class HeapRedactor {
 
     public static final int PATH_MAX = 4096;
     public static final int REDACT_VECTOR_SIZE = 1024;
-
-    public HeapRedactor(String options) {
-        redactLevel = HeapDumpRedactLevel.REDACT_UNKNOWN;
-        redactNameTable = null;
-        redactClassTable = null;
-        redactValueTable = null;
-        init(options);
-    }
 
     public HeapRedactor(RedactParams redactParams) {
         this.redactParams = redactParams;
@@ -167,6 +161,10 @@ public class HeapRedactor {
         return redactParams.getRedactClassPath();
     }
 
+    public CharBuffer getRedactPassword(){
+        return redactParams.getRedactPassword();
+    }
+
     public Optional<Map<String, String>> getRedactRulesTable(String key) {
         return Optional.ofNullable(redactClassTable == null ? null: redactClassTable.get(key));
     }
@@ -218,7 +216,7 @@ public class HeapRedactor {
     }
 
     private RedactParams parseRedactOptions(String optionStr) {
-        RedactParams params = new RedactParams(REDACT_OFF_OPTION, null, null, null);
+        RedactParams params = new RedactParams(REDACT_OFF_OPTION, null, null, null, null);
         if (optionStr != null) {
             String[] options = optionStr.split(",");
             for (String option : options) {
@@ -321,16 +319,18 @@ public class HeapRedactor {
         private String redactMap;
         private String redactMapFile;
         private String redactClassPath;
+        private CharBuffer redactPassword;
         private boolean enableRedact = false;
 
         public RedactParams() {
         }
 
-        public RedactParams(String heapDumpRedact, String redactMap, String redactMapFile, String redactClassPath) {
+        public RedactParams(String heapDumpRedact, String redactMap, String redactMapFile, String redactClassPath, CharBuffer redactPassword) {
             this.heapDumpRedact = heapDumpRedact;
             this.redactMap = redactMap;
             this.redactMapFile = redactMapFile;
             this.redactClassPath = redactClassPath;
+            this.redactPassword = redactPassword;
         }
 
         @Override
@@ -393,6 +393,14 @@ public class HeapRedactor {
 
         public void setRedactClassPath(String redactClassPath) {
             this.redactClassPath = redactClassPath;
+        }
+
+        public CharBuffer getRedactPassword() {
+            return redactPassword;
+        }
+
+        public void setRedactPassword(CharBuffer redactPassword) {
+            this.redactPassword = redactPassword;
         }
 
         public static boolean checkLauncherHeapdumpRedactSupport(String value) {

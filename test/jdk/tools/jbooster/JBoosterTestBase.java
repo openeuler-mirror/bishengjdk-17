@@ -44,11 +44,12 @@ import jdk.test.lib.Utils;
  * @see JcmdBase
  */
 public class JBoosterTestBase {
-    public static final int WAIT_START_TIME = 2;
+    public static final int WAIT_START_TIME = 128;
     public static final int WAIT_SHORT_TIME = 8;
     public static final int WAIT_EXIT_TIME = 64;
 
     public static final int SERVER_PORT = 41567;
+    public static final int SERVER_CONNECTION_TIMEOUT = 256 * 1000;
     public static final String SERVER_PORT_STR = "41567";
 
     public static final String CLIENT_CACHE_PATH = "jbooster-cache-client";
@@ -67,6 +68,9 @@ public class JBoosterTestBase {
             "SimpleClient"
     );
 
+    public static final List<String> CLIENT_STANDARD_ARGS_WITHOUT_LEVEL = CLIENT_STANDARD_ARGS.stream()
+            .filter(s -> !"-XX:BoostStopAtLevel=4".equals(s)).toList();
+
     public static final List<String> CLIENT_OFFLINE_ARGS = List.of(
             "-XX:+UnlockExperimentalVMOptions",
             "-XX:+UseJBooster",
@@ -77,14 +81,15 @@ public class JBoosterTestBase {
 
     public static final List<String> SERVER_STANDARD_ARGS = List.of(
             "--server-port=" + SERVER_PORT_STR,
-            "--cache-path=" + SERVER_CACHE_PATH
+            "--cache-path=" + SERVER_CACHE_PATH,
+            "--connection-timeout=" + SERVER_CONNECTION_TIMEOUT
     );
 
     private static final ProcessBuilder processBuilder = new ProcessBuilder();
 
     public static Process jbooster(TestContext ctx, List<String> vmArgs, List<String> jboosterArgs) throws Exception {
         JDKToolLauncher launcher = JDKToolLauncher.createUsingTestJDK("jbooster");
-        launcher.addVMArgs(Utils.getTestJavaOpts());
+        // launcher.addVMArgs(Utils.getTestJavaOpts());
         if (vmArgs != null) {
             for (String vmArg : vmArgs) {
                 launcher.addVMArg(vmArg);
@@ -151,6 +156,7 @@ public class JBoosterTestBase {
         } finally {
             for (Process p : ctx.getProcesses()) {
                 if (p.isAlive()) {
+                    p.waitFor(WAIT_SHORT_TIME, TimeUnit.SECONDS);
                     p.destroyForcibly();
                 }
             }

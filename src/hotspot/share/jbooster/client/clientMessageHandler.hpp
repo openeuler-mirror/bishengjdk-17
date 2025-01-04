@@ -38,6 +38,7 @@
   F(MethodLocators          )             \
   F(Profilinginfo           )             \
   F(ArrayKlasses            )             \
+  F(ResolveExtraKlasses   )               \
 
 class ArrayKlass;
 class ClassLoaderData;

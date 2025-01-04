@@ -44,14 +44,13 @@ public:
   static bool exists(const char* path);
   static bool is_file(const char* path);
   static bool is_dir(const char* path);
+  static int64_t file_size(const char* path);
   static uint64_t modify_time(const char* path);
   static bool mkdir(const char* path);
   static bool mkdirs(const char* path);
   static bool rename(const char* path_from, const char* path_to);
   static bool move(const char* path_from, const char* path_to);
   static bool remove(const char* path);
-  static bool is_same(const char* path1, const char* path2);
-  static bool is_same(const char* path, const char* content, int64_t size);
 
   class ListDir: public StackObj {
     const char* _path;

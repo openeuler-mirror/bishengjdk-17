@@ -52,6 +52,17 @@ class JfrStackFrame {
   void write(JfrCheckpointWriter& cpw) const;
   void resolve_lineno() const;
 
+#if INCLUDE_JBOLT
+  const InstanceKlass* get_klass() const { return _klass; }
+  traceid get_methodId() const { return _methodid; }
+  int get_byteCodeIndex() const { return _bci; }
+  u1 get_type() const { return _type; }
+
+  static ByteSize klass_offset()                 { return byte_offset_of(JfrStackFrame, _klass         ); }
+  static ByteSize methodid_offset()              { return byte_offset_of(JfrStackFrame, _methodid      ); }
+  static ByteSize bci_offset()                   { return byte_offset_of(JfrStackFrame, _bci           ); }
+  static ByteSize type_offset()                  { return byte_offset_of(JfrStackFrame, _type          ); }
+#endif
   enum {
     FRAME_INTERPRETER = 0,
     FRAME_JIT,
@@ -68,6 +79,10 @@ class JfrStackTrace : public JfrCHeapObj {
   friend class ObjectSampler;
   friend class OSThreadSampler;
   friend class StackTraceResolver;
+#if INCLUDE_JBOLT
+  friend class JBoltManager;
+#endif
+
  private:
   const JfrStackTrace* _next;
   JfrStackFrame* _frames;
@@ -79,6 +94,9 @@ class JfrStackTrace : public JfrCHeapObj {
   bool _reached_root;
   mutable bool _lineno;
   mutable bool _written;
+#if INCLUDE_JBOLT
+  u4 _hotcount;
+#endif
 
   const JfrStackTrace* next() const { return _next; }
 
@@ -106,6 +124,17 @@ class JfrStackTrace : public JfrCHeapObj {
  public:
   unsigned int hash() const { return _hash; }
   traceid id() const { return _id; }
+#if INCLUDE_JBOLT
+  u4 hotcount() const { return _hotcount; }
+  const JfrStackFrame* get_frames() const { return _frames; }
+  u4 get_framesCount() const { return _nr_of_frames; }
+
+  static ByteSize hash_offset()                 { return byte_offset_of(JfrStackTrace, _hash         ); }
+  static ByteSize id_offset()                   { return byte_offset_of(JfrStackTrace, _id           ); }
+  static ByteSize hotcount_offset()             { return byte_offset_of(JfrStackTrace, _hotcount     ); }
+  static ByteSize frames_offset()               { return byte_offset_of(JfrStackTrace, _frames       ); }
+  static ByteSize frames_count_offset()         { return byte_offset_of(JfrStackTrace, _nr_of_frames ); }
+#endif
 };
 
 #endif // SHARE_JFR_RECORDER_STACKTRACE_JFRSTACKTRACE_HPP

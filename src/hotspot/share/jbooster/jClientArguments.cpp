@@ -34,6 +34,27 @@
 #include "runtime/arguments.hpp"
 #include "utilities/stringUtils.hpp"
 
+int JClientBoostLevel::serialize(MessageBuffer& buf) const {
+  uint8_t v = (_allow_clr       ? (1 << 0) : 0)
+            | (_allow_cds       ? (1 << 1) : 0)
+            | (_allow_aot       ? (1 << 2) : 0)
+            | (_enable_aot_pgo  ? (1 << 3) : 0)
+            | (_enable_cds_agg  ? (1 << 4) : 0);
+  return buf.serialize_no_meta(v);
+}
+
+int JClientBoostLevel::deserialize(MessageBuffer& buf) {
+  uint8_t v = 0b10000000;
+  JB_RETURN(buf.deserialize_ref_no_meta(v));
+  assert((v & 0b10000000) == 0, "sanity");
+  _allow_clr      = (v & (1 << 0));
+  _allow_cds      = (v & (1 << 1));
+  _allow_aot      = (v & (1 << 2));
+  _enable_aot_pgo = (v & (1 << 3));
+  _enable_cds_agg = (v & (1 << 4));
+  return 0;
+}
+
 static JClientArguments::CpuArch calc_cpu() {
 #ifdef X86
   return JClientArguments::CpuArch::CPU_X86;
@@ -150,6 +171,14 @@ const char* calc_java_commands_by_class(const char* full_cmd, int full_cmd_len) 
   return StringUtils::copy_to_heap(start, mtJBooster);
 }
 
+static int64_t calc_cds_file_size() {
+  char* default_archive_path = Arguments::get_default_shared_archive_path();
+  if (default_archive_path == nullptr) { return -1; }
+  int64_t cds_file_size = FileUtils::file_size(default_archive_path);
+  StringUtils::free_from_heap(default_archive_path);
+  return cds_file_size;
+}
+
 JClientArguments::JClientArguments(bool is_client) {
   if (is_client) {
     init_for_client();
@@ -203,16 +232,13 @@ void JClientArguments::init_for_client() {
   _classpath_name_hash = calc_classpath_name_hash(app_cp, app_cp_len);
   _classpath_timestamp_hash = calc_classpath_timestamp_hash(app_cp, app_cp_len);
   _agent_name_hash = calc_agent_name_hash();
+  _cds_file_size = calc_cds_file_size();
   if (JBoosterClientStrictMatch) {
     _java_commands = is_jar ? calc_java_commands_by_jar(full_cmd, app_cp_len)
                             : calc_java_commands_by_class(full_cmd, full_cmd_len);
   } else {
     _java_commands = StringUtils::copy_to_heap("<ignored>", mtJBooster);
   }
-  _jbooster_allow_clr = ClientDataManager::get().is_clr_allowed();
-  _jbooster_allow_cds = ClientDataManager::get().is_cds_allowed();
-  _jbooster_allow_aot = ClientDataManager::get().is_aot_allowed();
-  _jbooster_allow_pgo = ClientDataManager::get().is_pgo_allowed();
   _related_flags = new JClientVMFlags(true);
 
   _hash = calc_hash();
@@ -231,12 +257,9 @@ uint32_t JClientArguments::calc_hash() {
   result = calc_new_hash(result, _classpath_name_hash);
   result = calc_new_hash(result, _classpath_timestamp_hash);
   result = calc_new_hash(result, _agent_name_hash);
+  result = calc_new_hash(result, _cds_file_size);
   result = calc_new_hash(result, StringUtils::hash_code(_java_commands));
-  result = calc_new_hash(result, primitive_hash(_jbooster_allow_clr));
-  result = calc_new_hash(result, primitive_hash(_jbooster_allow_cds));
-  result = calc_new_hash(result, primitive_hash(_jbooster_allow_aot));
-  result = calc_new_hash(result, primitive_hash(_jbooster_allow_pgo));
-  result = calc_new_hash(result, _related_flags->hash(_jbooster_allow_clr, _jbooster_allow_cds, _jbooster_allow_aot));
+  result = calc_new_hash(result, _related_flags->hash());
 
   return result;
 }
@@ -254,15 +277,9 @@ bool JClientArguments::equals(const JClientArguments* that) const {
   if (this->_classpath_name_hash      != that->_classpath_name_hash) return false;
   if (this->_classpath_timestamp_hash != that->_classpath_timestamp_hash) return false;
   if (this->_agent_name_hash          != that->_agent_name_hash) return false;
+  if (this->_cds_file_size            != that->_cds_file_size) return false;
   if (StringUtils::compare(this->_java_commands, that->_java_commands) != 0) return false;
-  if (this->_jbooster_allow_clr       != that->_jbooster_allow_clr) return false;
-  if (this->_jbooster_allow_cds       != that->_jbooster_allow_cds) return false;
-  if (this->_jbooster_allow_aot       != that->_jbooster_allow_aot) return false;
-  if (this->_jbooster_allow_pgo       != that->_jbooster_allow_pgo) return false;
-  if (!this->_related_flags->equals(that->_related_flags,
-                                    _jbooster_allow_clr,
-                                    _jbooster_allow_cds,
-                                    _jbooster_allow_aot)) return false;
+  if (!this->_related_flags->equals(that->_related_flags)) return false;
   return true;
 }
 
@@ -278,15 +295,10 @@ void JClientArguments::print_args(outputStream* st) const {
   st->print_cr("  classpath_name_hash:      %x",      _classpath_name_hash);
   st->print_cr("  classpath_timestamp_hash: %x",      _classpath_timestamp_hash);
   st->print_cr("  agent_name_hash:          %x",      _agent_name_hash);
+  st->print_cr("  cds_file_size:            %lu",     _cds_file_size);
   st->print_cr("  java_commands:            \"%s\"",  _java_commands);
-  st->print_cr("  allow_clr:                %s",      BOOL_TO_STR(_jbooster_allow_clr));
-  st->print_cr("  allow_cds:                %s",      BOOL_TO_STR(_jbooster_allow_cds));
-  st->print_cr("  allow_aot:                %s",      BOOL_TO_STR(_jbooster_allow_aot));
-  st->print_cr("  allow_pgo:                %s",      BOOL_TO_STR(_jbooster_allow_pgo));
   st->print_cr("  vm_flags:");
-  st->print_cr("    hash: %u", _related_flags->hash(_jbooster_allow_clr,
-                                                     _jbooster_allow_cds,
-                                                     _jbooster_allow_aot));
+  st->print_cr("    hash: %u", _related_flags->hash());
   _related_flags->print_flags(st);
 }
 
@@ -307,11 +319,8 @@ int JClientArguments::serialize(MessageBuffer& buf) const {
   JB_RETURN(buf.serialize_no_meta(_classpath_name_hash));
   JB_RETURN(buf.serialize_no_meta(_classpath_timestamp_hash));
   JB_RETURN(buf.serialize_no_meta(_agent_name_hash));
+  JB_RETURN(buf.serialize_no_meta(_cds_file_size));
   JB_RETURN(buf.serialize_with_meta(&_java_commands));
-  JB_RETURN(buf.serialize_no_meta(_jbooster_allow_clr));
-  JB_RETURN(buf.serialize_no_meta(_jbooster_allow_cds));
-  JB_RETURN(buf.serialize_no_meta(_jbooster_allow_aot));
-  JB_RETURN(buf.serialize_no_meta(_jbooster_allow_pgo));
   JB_RETURN(buf.serialize_with_meta(_related_flags));
 
   JB_RETURN(buf.serialize_no_meta(_hash));
@@ -347,14 +356,11 @@ int JClientArguments::deserialize(MessageBuffer& buf) {
 
   JB_RETURN(buf.deserialize_ref_no_meta(_agent_name_hash));
 
+  JB_RETURN(buf.deserialize_ref_no_meta(_cds_file_size));
+
   StringWrapper sw_java_commands;
   JB_RETURN(buf.deserialize_with_meta(&sw_java_commands));
   _java_commands = sw_java_commands.export_string();
-
-  JB_RETURN(buf.deserialize_ref_no_meta(_jbooster_allow_clr));
-  JB_RETURN(buf.deserialize_ref_no_meta(_jbooster_allow_cds));
-  JB_RETURN(buf.deserialize_ref_no_meta(_jbooster_allow_aot));
-  JB_RETURN(buf.deserialize_ref_no_meta(_jbooster_allow_pgo));
 
   _related_flags = new JClientVMFlags(false);
   JB_RETURN(buf.deserialize_with_meta(_related_flags));

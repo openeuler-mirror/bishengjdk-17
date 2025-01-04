@@ -40,11 +40,11 @@ private:
   int sync_stream_meta__server();
   int resync_session_and_stream_meta__server();
 
-  int handle_sync_requests(JClientProgramData* pd);
+  int handle_sync_requests(JClientProgramData* pd, bool enable_cds_agg, bool enable_aot_pgo);
 
 public:
-  ServerStream(int conn_fd);
-  ServerStream(int conn_fd, Thread* thread);
+  ServerStream(int conn_fd, SSL* ssl);
+  ServerStream(int conn_fd, SSL* ssl, Thread* thread);
   ~ServerStream();
 
   void handle_meta_request(uint32_t stream_id);

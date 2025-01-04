@@ -93,19 +93,20 @@ public:
   bool operator () (ServerDataManager::JClientProgramDataMap::KVNode* kv_node) {
     JClientProgramData* pd = kv_node->value();
     JClientCacheState& clr = pd->clr_cache_state();
-    JClientCacheState& cds = pd->cds_cache_state();
-    JClientCacheState& aot = pd->aot_cache_state();
-    const char* clr_stat = (clr.is_cached() ? "generated" : (clr.is_being_generated() ? "generating" : "none"));
-    const char* cds_stat = (cds.is_cached() ? "generated" : (cds.is_being_generated() ? "generating" : "none"));
-    const char* aot_stat = (aot.is_cached() ? "generated" : (aot.is_being_generated() ? "generating" : "none"));
+    JClientCacheState& agg_cds = pd->agg_cds_cache_state();
+    JClientCacheState& dy_cds = pd->dy_cds_cache_state();
+    JClientCacheState& aot_static = pd->aot_static_cache_state();
+    JClientCacheState& aot_pgo = pd->aot_pgo_cache_state();
     OUT_1("-");
     OUT_2("program_id: %u", pd->program_id());
     OUT_2("program_name: %s", pd->program_args()->program_name());
     OUT_2("program_hash: %x", pd->program_args()->hash());
     OUT_2("ref_cnt: %d", pd->ref_cnt().get());
-    OUT_2("clr_cache: %s", clr_stat);
-    OUT_2("cds_cache: %s", cds_stat);
-    OUT_2("aot_cache: %s", aot_stat);
+    OUT_2("clr_cache: %s", clr.cache_state_str());
+    OUT_2("dy_cds_cache: %s", dy_cds.cache_state_str());
+    OUT_2("agg_cds_cache: %s", agg_cds.cache_state_str());
+    OUT_2("aot_static_cache: %s", aot_static.cache_state_str());
+    OUT_2("aot_pgo_cache: %s", aot_pgo.cache_state_str());
     OUT_2("class_loader_size: " SIZE_FORMAT, pd->class_loaders()->size());
     if (pd->class_loaders()->size() > 0) {
       OUT_2("class_loaders:");

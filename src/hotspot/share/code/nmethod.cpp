@@ -79,6 +79,9 @@
 #if INCLUDE_JVMCI
 #include "jvmci/jvmciRuntime.hpp"
 #endif
+#if INCLUDE_JBOLT
+#include "jbolt/jBoltManager.hpp"
+#endif
 
 #ifdef DTRACE_ENABLED
 
@@ -554,6 +557,9 @@ nmethod* nmethod::new_nmethod(const methodHandle& method,
   const char* nmethod_mirror_name,
   FailedSpeculation** failed_speculations
 #endif
+#if INCLUDE_JBOLT
+  , int code_blob_type  // for jbolt
+#endif // INCLUDE_JBOLT
 )
 {
   assert(debug_info->oop_recorder() == code_buffer->oop_recorder(), "shared OR");
@@ -577,7 +583,11 @@ nmethod* nmethod::new_nmethod(const methodHandle& method,
 #endif
       + align_up(debug_info->data_size()           , oopSize);
 
+#if INCLUDE_JBOLT
+    nm = new (nmethod_size, comp_level, code_blob_type)
+#else // INCLUDE_JBOLT
     nm = new (nmethod_size, comp_level)
+#endif // INCLUDE_JBOLT
     nmethod(method(), compiler->type(), nmethod_size, compile_id, entry_bci, offsets,
             orig_pc_offset, debug_info, dependencies, code_buffer, frame_size,
             oop_maps,
@@ -761,6 +771,15 @@ void* nmethod::operator new(size_t size, int nmethod_size, bool allow_NonNMethod
   // Try NonNMethod or give up.
   return CodeCache::allocate(nmethod_size, CodeBlobType::NonNMethod);
 }
+
+#if INCLUDE_JBOLT
+void* nmethod::operator new(size_t size, int nmethod_size, int comp_level, int code_blob_type) throw () {
+  if (code_blob_type < CodeBlobType::All) {
+    return CodeCache::allocate(nmethod_size, code_blob_type);
+  }
+  return CodeCache::allocate(nmethod_size, CodeCache::get_code_blob_type(comp_level));
+}
+#endif // INCLUDE_JBOLT
 
 nmethod::nmethod(
   Method* method,

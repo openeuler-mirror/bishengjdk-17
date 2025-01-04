@@ -68,12 +68,12 @@ public class CodeCacheCLITestCase {
          * Verifies that in interpreted mode PrintCodeCache output contains
          * the whole code cache. Int mode disables SegmentedCodeCache with a warning.
          */
-        INT_MODE(ONLY_SEGMENTED, EnumSet.of(BlobType.All), USE_INT_MODE),
+        INT_MODE(ONLY_SEGMENTED, EnumSet.copyOf(CodeCacheOptions.NON_SEGMENTED_HEAPS), USE_INT_MODE),
         /**
          * Verifies that with disabled SegmentedCodeCache PrintCodeCache output
          * contains only CodeCache's entry.
          */
-        NON_SEGMENTED(options -> !options.segmented, EnumSet.of(BlobType.All),
+        NON_SEGMENTED(options -> !options.segmented, EnumSet.copyOf(CodeCacheOptions.NON_SEGMENTED_HEAPS),
                 CommandLineOptionTest.prepareBooleanFlag(SEGMENTED_CODE_CACHE,
                         false)),
         /**
@@ -82,7 +82,7 @@ public class CodeCacheCLITestCase {
          * profiled-nmethods heap and non-segmented CodeCache.
          */
         NON_TIERED(ONLY_SEGMENTED,
-                EnumSet.of(BlobType.NonNMethod, BlobType.MethodNonProfiled),
+                EnumSet.copyOf(CodeCacheOptions.SEGMENTED_HEAPS_WO_PROFILED),
                 CommandLineOptionTest.prepareBooleanFlag(TIERED_COMPILATION,
                         false)),
         /**
@@ -91,7 +91,7 @@ public class CodeCacheCLITestCase {
          * heaps only.
          */
         TIERED_LEVEL_0(SEGMENTED_SERVER,
-                EnumSet.of(BlobType.All),
+                EnumSet.copyOf(CodeCacheOptions.NON_SEGMENTED_HEAPS),
                 CommandLineOptionTest.prepareBooleanFlag(TIERED_COMPILATION,
                         true),
                 CommandLineOptionTest.prepareNumericFlag(TIERED_STOP_AT, 0)),
@@ -101,7 +101,7 @@ public class CodeCacheCLITestCase {
          * heaps only.
          */
         TIERED_LEVEL_1(SEGMENTED_SERVER,
-                EnumSet.of(BlobType.NonNMethod, BlobType.MethodNonProfiled),
+                EnumSet.copyOf(CodeCacheOptions.SEGMENTED_HEAPS_WO_PROFILED),
                 CommandLineOptionTest.prepareBooleanFlag(TIERED_COMPILATION,
                         true),
                 CommandLineOptionTest.prepareNumericFlag(TIERED_STOP_AT, 1)),
@@ -110,7 +110,7 @@ public class CodeCacheCLITestCase {
          * contain information about all three code heaps.
          */
         TIERED_LEVEL_4(SEGMENTED_SERVER,
-                EnumSet.complementOf(EnumSet.of(BlobType.All)),
+                EnumSet.copyOf(CodeCacheOptions.ALL_SEGMENTED_HEAPS),
                 CommandLineOptionTest.prepareBooleanFlag(TIERED_COMPILATION,
                         true),
                 CommandLineOptionTest.prepareNumericFlag(TIERED_STOP_AT, 4));

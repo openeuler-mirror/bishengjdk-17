@@ -568,7 +568,7 @@ const intx ObjectAlignmentInBytes = 8;
          "verify authority for operating heapDump redact feature")          \
                                                                             \
   product(ccstr, RedactPassword, NULL,                                      \
-         "authority for operating heapDump redact feature")                 \
+         "authority for operating heapDump redact feature, format {password,salt}, salt length >= 8")                 \
                                                                             \
   product(ccstr, NativeMemoryTracking, DEBUG_ONLY("summary") NOT_DEBUG("off"), \
           "Native memory tracking options")                                 \
@@ -2128,6 +2128,12 @@ const intx ObjectAlignmentInBytes = 8;
                                                                             \
   JFR_ONLY(product(ccstr, StartFlightRecording, NULL,                       \
           "Start flight recording with options"))                           \
+                                                                            \
+  product(bool, UsePrimHashMap, false, EXPERIMENTAL,                        \
+          "The Prim HashMap is a specialized version for long key. "        \
+          "Long-Key HashMap can benefit from this in most scenarios."       \
+          "Note: The debugging of HashMap.java is inaccurate"               \
+          " when UsePrimHashMap is enabled.")                               \
                                                                             \
   product(bool, UseFastSerializer, false, EXPERIMENTAL,                     \
           "Cache-based serialization.It is extremely fast, but it"          \

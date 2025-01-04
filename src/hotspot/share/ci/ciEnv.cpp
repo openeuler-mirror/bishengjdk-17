@@ -79,6 +79,9 @@
 #ifdef COMPILER2
 #include "opto/runtime.hpp"
 #endif
+#if INCLUDE_JBOLT
+#include "jbolt/jBoltManager.hpp"
+#endif
 
 // ciEnv
 //
@@ -1024,16 +1027,35 @@ void ciEnv::register_method(ciMethod* target,
     assert(offsets->value(CodeOffsets::Deopt) != -1, "must have deopt entry");
     assert(offsets->value(CodeOffsets::Exceptions) != -1, "must have exception entry");
 
-    nm =  nmethod::new_nmethod(method,
-                               compile_id(),
-                               entry_bci,
-                               offsets,
-                               orig_pc_offset,
-                               debug_info(), dependencies(), code_buffer,
-                               frame_words, oop_map_set,
-                               handler_table, inc_table,
-                               compiler, task()->comp_level(),
-                               native_invokers);
+#if INCLUDE_JBOLT
+    if (UseJBolt && JBoltManager::reorder_phase_is_collecting_or_reordering()) {
+      int code_blob_type = JBoltManager::calc_code_blob_type(method(), task(), THREAD);
+      nm =  nmethod::new_nmethod(method,
+                                compile_id(),
+                                entry_bci,
+                                offsets,
+                                orig_pc_offset,
+                                debug_info(), dependencies(), code_buffer,
+                                frame_words, oop_map_set,
+                                handler_table, inc_table,
+                                compiler, task()->comp_level(),
+                                native_invokers,
+                                NULL, 0, -1, NULL, NULL,
+                                code_blob_type);
+    } else
+#endif // INCLUDE_JBOLT
+    {
+      nm =  nmethod::new_nmethod(method,
+                                compile_id(),
+                                entry_bci,
+                                offsets,
+                                orig_pc_offset,
+                                debug_info(), dependencies(), code_buffer,
+                                frame_words, oop_map_set,
+                                handler_table, inc_table,
+                                compiler, task()->comp_level(),
+                                native_invokers);
+    }
 
     // Free codeBlobs
     code_buffer->free_blob();

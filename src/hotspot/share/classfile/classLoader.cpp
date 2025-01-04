@@ -142,6 +142,9 @@ ClassPathEntry* ClassLoader::_jrt_entry = NULL;
 
 ClassPathEntry* volatile ClassLoader::_first_append_entry_list = NULL;
 ClassPathEntry* volatile ClassLoader::_last_append_entry  = NULL;
+
+ClassPathEntry* ClassLoader::_prim_collection_entry = NULL;
+
 #if INCLUDE_CDS
 ClassPathEntry* ClassLoader::_app_classpath_entries = NULL;
 ClassPathEntry* ClassLoader::_last_app_classpath_entry = NULL;
@@ -628,6 +631,36 @@ bool ClassLoader::is_in_patch_mod_entries(Symbol* module_name) {
   return false;
 }
 
+// Set up the _prim_collection_entry if UsePrimHashMap
+void ClassLoader::set_prim_collection_path(JavaThread *current) {
+  if (!UsePrimHashMap) {
+    return;
+  }
+  const char *prim_collection_jar = "primcollection.jar";
+  char jvm_path[JVM_MAXPATHLEN];
+  os::jvm_path(jvm_path, sizeof(jvm_path));
+  const int trunc_times = 2; // set path/lib/server/libjvm.so to path/lib
+  for (int i = 0; i < trunc_times; ++i) {
+    char *end = strrchr(jvm_path, *os::file_separator());
+    if (end != NULL) *end = '\0';
+  }
+
+  size_t jvm_path_len = strlen(jvm_path);
+  if (jvm_path_len < JVM_MAXPATHLEN - strlen(os::file_separator()) - strlen(prim_collection_jar)) {
+    jio_snprintf(jvm_path + jvm_path_len,
+                 JVM_MAXPATHLEN - jvm_path_len,
+                 "%s%s", os::file_separator(), prim_collection_jar);
+  }
+  char* error_msg = NULL;
+  jzfile* zip = open_zip_file(jvm_path, &error_msg, current);
+  if (zip != NULL && error_msg == NULL) {
+    _prim_collection_entry = new ClassPathZipEntry(zip, jvm_path, false, false);
+    log_info(class, load)("primcollection path: %s", jvm_path);
+  } else {
+    UsePrimHashMap = false;
+  }
+}
+
 // Set up the _jrt_entry if present and boot append path
 void ClassLoader::setup_bootstrap_search_path_impl(JavaThread* current, const char *class_path) {
   ResourceMark rm(current);
@@ -677,6 +710,8 @@ void ClassLoader::setup_bootstrap_search_path_impl(JavaThread* current, const ch
       update_class_path_entry_list(current, path, false, true, false);
     }
   }
+
+  set_prim_collection_path(current);
 }
 
 // During an exploded modules build, each module defined to the boot loader
@@ -1181,6 +1216,22 @@ InstanceKlass* ClassLoader::load_class(Symbol* name, bool search_append_only, TR
     assert(!DynamicDumpSharedSpaces, "sanity");
     if (!DumpSharedSpaces) {
       stream = search_module_entries(THREAD, _patch_mod_entries, class_name, file_name);
+    }
+  }
+  // Load Attempt: primcollection.jar for PrimHashMapRelatedClass
+  if (UsePrimHashMap && (NULL == stream) && name->is_primhashmap_related_class()) {
+    static bool is_first_loading = true;
+    static bool is_first_loading_succeeded = false;
+    stream = _prim_collection_entry->open_stream(THREAD, file_name);
+    if (!is_first_loading) {
+      // exit when some loads succeed while some fail
+      if ((is_first_loading_succeeded && stream == nullptr) ||
+          (!is_first_loading_succeeded && stream != nullptr)) {
+        vm_exit_during_prim_collection_loading();
+      }
+    } else {
+      is_first_loading = false;
+      is_first_loading_succeeded = (stream != nullptr);
     }
   }
 

@@ -72,6 +72,9 @@
 #if INCLUDE_SHENANDOAHGC
 #include "gc/shenandoah/shenandoahJfrSupport.hpp"
 #endif
+#if INCLUDE_JBOLT
+#include "jbolt/jbolt_globals.hpp"
+#endif // INCLUDE_JBOLT
 /**
  *  JfrPeriodic class
  *  Implementation of declarations in
@@ -610,6 +613,8 @@ TRACE_REQUEST_FUNC(CodeCacheConfiguration) {
   event.set_nonNMethodSize(NonNMethodCodeHeapSize);
   event.set_profiledSize(ProfiledCodeHeapSize);
   event.set_nonProfiledSize(NonProfiledCodeHeapSize);
+  event.set_jboltHotSize(JBoltCodeHeapSize);
+  event.set_jboltTmpSize(JBoltCodeHeapSize);
   event.set_expansionSize(CodeCacheExpansionSize);
   event.set_minBlockLength(CodeCacheMinBlockLength);
   event.set_startAddress((u8)CodeCache::low_bound());

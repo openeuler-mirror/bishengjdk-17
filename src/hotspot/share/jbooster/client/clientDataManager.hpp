@@ -39,15 +39,11 @@ class ClientDataManager: public CHeapObj<mtJBooster> {
   const char* _program_str_id;
   const char* _cache_dir_path;
 
-  bool _allow_clr;
-  bool _allow_cds;
-  bool _allow_aot;
-  bool _allow_pgo;
+  JClientBoostLevel _boost_level;
 
   bool _using_clr;
   bool _using_cds;
   bool _using_aot;
-  bool _using_pgo;
 
   const char* _cache_clr_path;
   const char* _cache_cds_path;
@@ -102,21 +98,17 @@ public:
   // $HOME/.jbooster/client
   const char* cache_dir_path() { return _cache_dir_path; }
 
-  bool is_clr_allowed() { return _allow_clr; }
-  bool is_cds_allowed() { return _allow_cds; }
-  bool is_aot_allowed() { return _allow_aot; }
-  bool is_pgo_allowed() { return _allow_pgo; }
+  JClientBoostLevel& boost_level() { return _boost_level; }
 
   bool is_clr_being_used() { return _using_clr; }
   bool is_cds_being_used() { return _using_cds; }
   bool is_aot_being_used() { return _using_aot; }
-  bool is_pgo_being_used() { return _using_pgo; }
 
   // <cache_dir>/client/cache-<parogram_str_id>-clr.log
   const char* cache_clr_path() { return _cache_clr_path; }
-  // <cache_dir>/client/cache-<parogram_str_id>-cds.jsa
+  // <cache_dir>/client/cache-<parogram_str_id>-cds-[dy|agg].jsa
   const char* cache_cds_path() { return _cache_cds_path; }
-  // <cache_dir>/client/cache-<parogram_str_id>-aot[-pgo].so
+  // <cache_dir>/client/cache-<parogram_str_id>-aot-[static|pgo].so
   const char* cache_aot_path() { return _cache_aot_path; }
 
   uint32_t session_id() { return _session_id; }

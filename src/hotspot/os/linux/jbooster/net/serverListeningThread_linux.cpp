@@ -28,8 +28,10 @@
 
 #include "jbooster/net/errorCode.hpp"
 #include "jbooster/net/serverListeningThread.hpp"
+#include "jbooster/net/sslUtils.hpp"
 #include "logging/log.hpp"
 #include "runtime/interfaceSupport.inline.hpp"
+#include "runtime/java.hpp"
 
 static int init_server_socket_opts(int socket_fd) {
   // enable reuse of address
@@ -105,6 +107,56 @@ static int bind_address(const char* address, uint16_t port) {
   return socket_fd;
 }
 
+static SSL* try_to_ssl_connect(int conn_fd, SSL_CTX* ssl_ctx) {
+  SSL* ssl = SSLUtils::ssl_new(ssl_ctx);
+  if (ssl == nullptr) {
+    log_error(jbooster, rpc)("Failed to get SSL.");
+    os::close(conn_fd);
+    return nullptr;
+  }
+
+  int ret = 0;
+  const char* error_description = nullptr;
+  if (ret = SSLUtils::ssl_set_fd(ssl, conn_fd) != 1) {
+    error_description = "Failed to set SSL file descriptor";
+  } else if (ret = SSLUtils::ssl_accept(ssl) != 1) {
+    error_description = "Failed to accept SSL connection";
+  }
+
+  if (error_description != nullptr) {
+    SSLUtils::handle_ssl_error(ssl, ret, error_description);
+    SSLUtils::shutdown_and_free_ssl(ssl);
+    os::close(conn_fd);
+    return nullptr;
+  }
+
+  log_info(jbooster, rpc)("Succeeded to build SSL connection.");
+  return ssl;
+}
+
+bool ServerListeningThread::prepare_and_handle_new_connection(int server_fd, sockaddr_in* acc_addr, socklen_t* acc_addrlen, TRAPS) {
+  int conn_fd = accept(server_fd, (sockaddr*)acc_addr, acc_addrlen);
+  if (conn_fd < 0) {
+    if (errno != EAGAIN && errno != EWOULDBLOCK) {
+      log_error(jbooster, rpc)("Failed to accept: %s.", strerror(errno));
+    }
+    return false;
+  }
+  if (init_accepted_socket_opts(conn_fd, _timeout_ms) < 0) {
+    return false;
+  }
+
+  SSL* ssl = nullptr;
+  if (_server_ssl_ctx != nullptr) {
+    ssl = try_to_ssl_connect(conn_fd, _server_ssl_ctx);
+    if (ssl == nullptr) {
+      return false;
+    }
+  }
+  handle_new_connection(conn_fd, ssl, THREAD);
+  return true;
+}
+
 /**
  * Keep listening for client requests.
  */
@@ -138,19 +190,15 @@ int ServerListeningThread::run_listener(TRAPS) {
     }
 
     while (!get_exit_flag()) {
-      int conn_fd = accept(server_fd, (sockaddr*)&acc_addr, &acc_addrlen);
-      if (conn_fd < 0) {
-        if (errno != EAGAIN && errno != EWOULDBLOCK) {
-          log_error(jbooster, rpc)("Failed to accept: %s.", strerror(errno));
-        }
+      if (!prepare_and_handle_new_connection(server_fd, &acc_addr, &acc_addrlen, THREAD)) {
         break;
       }
-      if (init_accepted_socket_opts(conn_fd, _timeout_ms) < 0) break;
-
-      handle_new_connection(conn_fd, THREAD);
     }
   }
 
+  if (_server_ssl_ctx != nullptr) {
+    SSLUtils::ssl_ctx_free(_server_ssl_ctx);
+  }
   close(server_fd);
   log_debug(jbooster, rpc)("The JBooster server listener thread stopped.");
   return 0;
