@@ -26,6 +26,7 @@
 
 #include "aot/aotCompiledMethod.hpp"
 #include "classfile/symbolTable.hpp"
+//#include "metaprogramming/integralConstant.hpp"
 #include "oops/metadata.hpp"
 #include "oops/method.hpp"
 

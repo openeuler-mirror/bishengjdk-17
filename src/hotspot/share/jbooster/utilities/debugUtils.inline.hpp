@@ -37,7 +37,7 @@
  * Attention: the type name string is allocated on the heap!
  */
 template <typename T>
-const char* DebugUtils::type_name() {
+  const char* DebugUtils::type_name() {
   const char* sig = PLATFORM_FUNC_SIG;
   const int sig_len = strlen(sig);
   const int res_len = sig_len - _func_sig_prefix_len - _func_sig_suffix_len;
@@ -47,9 +47,8 @@ const char* DebugUtils::type_name() {
   return res;
 }
 
-template <LogLevelType level, LogTagType T0, LogTagType T1 = LogTag::__NO_TAG, LogTagType T2 = LogTag::__NO_TAG,
-          LogTagType T3 = LogTag::__NO_TAG, LogTagType T4 = LogTag::__NO_TAG, LogTagType GuardTag = LogTag::__NO_TAG>
-void DebugUtils::clear_java_exception_and_print_stack_trace(LogTargetImpl<level, T0, T1, T2, T3, T4, GuardTag>& lt, TRAPS) {
+template <LogLevelType level, LogTagType T0, LogTagType T1, LogTagType T2, LogTagType T3, LogTagType T4, LogTagType GuardTag>
+  void DebugUtils::clear_java_exception_and_print_stack_trace(LogTargetImpl<level, T0, T1, T2, T3, T4, GuardTag>& lt, TRAPS) {
   if (!HAS_PENDING_EXCEPTION) return;
 
   if (lt.is_enabled()) {
