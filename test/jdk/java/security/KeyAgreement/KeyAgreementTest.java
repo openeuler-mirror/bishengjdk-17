@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2018, 2024, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -52,7 +52,7 @@ public class KeyAgreementTest {
 
         String kaAlgo = args[0];
         String kpgAlgo = args[1];
-        String provider = args[2];
+        String provider = System.getProperty("test.provider.name", args[2]);
         System.out.println("Testing " + kaAlgo);
         AlgoSpec aSpec;
         if (Security.getProperty("security.provider.1").equals("KAEProvider") &&

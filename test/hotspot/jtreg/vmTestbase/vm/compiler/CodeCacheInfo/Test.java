@@ -78,7 +78,7 @@ public class Test {
     public static void main(String[] args) throws Exception {
         {
             System.out.println("SegmentedCodeCache is enabled");
-            var pb = ProcessTools.createTestJvm(
+            var pb = ProcessTools.createTestJavaProcessBuilder(
                     "-XX:+SegmentedCodeCache",
                     "-XX:+PrintCodeCache",
                     "-version");
@@ -88,7 +88,7 @@ public class Test {
         }
         {
             System.out.println("SegmentedCodeCache is disabled");
-            var pb = ProcessTools.createTestJvm(
+            var pb = ProcessTools.createTestJavaProcessBuilder(
                     "-XX:-SegmentedCodeCache",
                     "-XX:+PrintCodeCache",
                     "-version");
