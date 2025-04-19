@@ -297,6 +297,9 @@
 #define JFR_ONLY(code)
 #define NOT_JFR_RETURN()      {}
 #define NOT_JFR_RETURN_(code) { return code; }
+#if INCLUDE_JBOLT
+#define INCLUDE_JBOLT 0 // INCLUDE_JBOLT depends on INCLUDE_JFR
+#endif
 #endif
 
 #ifndef INCLUDE_JVMCI

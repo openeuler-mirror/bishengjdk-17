@@ -1040,7 +1040,9 @@ void ciEnv::register_method(ciMethod* target,
                                 handler_table, inc_table,
                                 compiler, task()->comp_level(),
                                 native_invokers,
+#if INCLUDE_JVMCI
                                 NULL, 0, -1, NULL, NULL,
+#endif
                                 code_blob_type);
     } else
 #endif // INCLUDE_JBOLT

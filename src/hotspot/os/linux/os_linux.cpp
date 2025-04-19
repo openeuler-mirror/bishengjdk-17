@@ -4686,6 +4686,10 @@ void os::Linux::load_plugin_library() {
     }
 #endif // INCLUDE_JBOLT
   }
+
+  JBOLT_ONLY(log_debug(jbolt)("Plugin library for JBolt: %s %s %s", BOOL_TO_STR(_jboltLog_precalc != nullptr),
+                                                                    BOOL_TO_STR(_jboltLog_do != nullptr),
+                                                                    BOOL_TO_STR(_jboltMerge_judge != nullptr));)
 }
 
 // this is called _after_ the global arguments have been parsed
