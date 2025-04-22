@@ -24,6 +24,7 @@
 #include "jbolt/jBoltDcmds.hpp"
 #include "jbolt/jBoltControlThread.hpp"
 #include "jbolt/jBoltManager.hpp"
+#include "runtime/os.hpp"
 
 bool register_jbolt_dcmds() {
   uint32_t full_export = DCmd_Source_Internal | DCmd_Source_AttachAPI | DCmd_Source_MBean;
@@ -198,8 +199,12 @@ void JBoltDumpDCmd::execute(DCmdSource source, TRAPS) {
       output()->print_cr("Failed: File open error or NULL: %s", path);
       break;
     case JBoltOK:
-      rp = realpath(path, buffer);
+#ifdef  __linux__
+      rp = os::Posix::realpath(path, buffer, sizeof(buffer));
       output()->print_cr("Successful: Dump to %s", buffer);
+#else
+      output()->print_cr("Successful: Dump to %s", path);
+#endif
       break;
     default:
       ShouldNotReachHere();

@@ -613,8 +613,10 @@ TRACE_REQUEST_FUNC(CodeCacheConfiguration) {
   event.set_nonNMethodSize(NonNMethodCodeHeapSize);
   event.set_profiledSize(ProfiledCodeHeapSize);
   event.set_nonProfiledSize(NonProfiledCodeHeapSize);
+#if INCLUDE_JBOLT
   event.set_jboltHotSize(JBoltCodeHeapSize);
   event.set_jboltTmpSize(JBoltCodeHeapSize);
+#endif
   event.set_expansionSize(CodeCacheExpansionSize);
   event.set_minBlockLength(CodeCacheMinBlockLength);
   event.set_startAddress((u8)CodeCache::low_bound());
