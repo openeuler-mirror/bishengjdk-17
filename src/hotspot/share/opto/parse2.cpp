@@ -25,6 +25,7 @@
 #include "precompiled.hpp"
 #include "jvm_io.h"
 #include "ci/ciMethodData.hpp"
+#include "ci/ciUtilities.inline.hpp"
 #include "classfile/vmSymbols.hpp"
 #include "compiler/compileLog.hpp"
 #include "interpreter/linkResolver.hpp"
@@ -1300,6 +1301,12 @@ float Parse::branch_prediction(float& cnt,
                                BoolTest::mask btest,
                                int target_bci,
                                Node* test) {
+  {
+    VM_ENTRY_MARK
+    methodHandle mh(THREAD, _method->get_Method());
+    if (CompilerOracle::should_not_prediction(mh)) return PROB_FAIR;
+  }
+
   float prob = dynamic_branch_prediction(cnt, btest, test);
   // If prob is unknown, switch to static prediction
   if (prob != PROB_UNKNOWN)  return prob;

@@ -109,6 +109,7 @@ public final class RecordingStream implements AutoCloseable, EventStream {
         AccessControlContext acc = AccessController.getContext();
         this.recording = new Recording();
         this.creationTime = Instant.now();
+        this.recording.setPreRecord(-1);
         this.recording.setName("Recording Stream: " + creationTime);
         try {
             PlatformRecording pr = PrivateAccess.getInstance().getPlatformRecording(recording);
