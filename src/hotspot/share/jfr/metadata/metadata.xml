@@ -899,6 +899,7 @@
     <Field type="int" name="bailoutCount" label="Bailouts" />
     <Field type="int" name="invalidatedCount" label="Invalidated Compilations" />
     <Field type="int" name="osrCompileCount" label="OSR Compilations" />
+    <Field type="int" name="deoptimizationCount" label="Deoptimizations" />
     <Field type="int" name="standardCompileCount" label="Standard Compilations" />
     <Field type="ulong" contentType="bytes" name="osrBytesCompiled" label="OSR Bytes Compiled" />
     <Field type="ulong" contentType="bytes" name="standardBytesCompiled" label="Standard Bytes Compiled" />
