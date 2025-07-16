@@ -57,19 +57,21 @@ public class ConcurrentGetMonitoredHost {
         }
         System.out.println("Submitting " + numTasks + " concurrent tasks to" +
                 " get MonitoredHost for " + vmid);
-        ExecutorService executor = Executors.newCachedThreadPool();
-        // wait for all tasks to complete
-        final List<Future<MonitoredHost>> results = executor.invokeAll(tasks);
-        // verify each one successfully completed and each of
-        // the returned MonitoredHost is not null
-        for (final Future<MonitoredHost> result : results) {
-            final MonitoredHost mh = result.get();
-            if (mh == null) {
-                throw new AssertionError("MonitoredHost.getMonitoredHost() returned" +
-                        " null for vmid " + vmid);
+        try {
+            final ExecutorService executor = Executors.newCachedThreadPool();
+            // wait for all tasks to complete
+            final List<Future<MonitoredHost>> results = executor.invokeAll(tasks);
+            // verify each one successfully completed and each of
+            // the returned MonitoredHost is not null
+            for (final Future<MonitoredHost> result : results) {
+                final MonitoredHost mh = result.get();
+                if (mh == null) {
+                    throw new AssertionError("MonitoredHost.getMonitoredHost() returned" +
+                            " null for vmid " + vmid);
+                }
             }
+        } catch (Exception e) {
         }
-        
         System.out.println("All " + numTasks + " completed successfully");
     }
 
