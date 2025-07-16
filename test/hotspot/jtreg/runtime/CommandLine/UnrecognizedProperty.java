@@ -35,7 +35,7 @@ import jdk.test.lib.process.OutputAnalyzer;
 
 public class UnrecognizedProperty {
     public static void main(String[] args) throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
+        ProcessBuilder pb = ProcessTools.createLimitedTestJavaProcessBuilder(
             "-D-D");
 
         OutputAnalyzer output = new OutputAnalyzer(pb.start());
