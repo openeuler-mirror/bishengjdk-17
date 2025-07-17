@@ -35,5 +35,4 @@ module jdk.crypto.kaeprovider {
     requires jdk.crypto.ec;
 
     exports org.openeuler.security.openssl to java.base;
-    provides java.security.Provider with org.openeuler.security.openssl.KAEProvider;
 }
