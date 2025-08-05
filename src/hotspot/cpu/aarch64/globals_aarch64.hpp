@@ -122,7 +122,12 @@ define_pd_global(intx, InlineSmallCode,          1000);
           range(1, 99)                                                  \
   product(bool, UseTBI, false, EXPERIMENTAL,                            \
           "Use the \"Top Byte Ignore\" feature for ZGC."                \
-          "And use 64 bit literal addresses instead of 48 bit.")
+          "And use 64 bit literal addresses instead of 48 bit.")        \
+  product(ccstr, AutoSharedArchivePath, NULL,                           \
+          "Auto enable the AppCDS feature"                              \
+          "the path save classlist and jsa file")                       \
+  product(bool, PrintAutoAppCDS, false,                                 \
+          "Print path and some information about AutoSharedArchivePath")
 
 // end of ARCH_FLAGS
 
