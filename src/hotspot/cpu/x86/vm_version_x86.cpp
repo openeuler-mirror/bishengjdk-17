@@ -999,6 +999,13 @@ void VM_Version::get_processor_features() {
   }
 
 #ifdef _LP64
+  if (NUMANodesRandom != 0) {
+    FLAG_SET_DEFAULT(NUMANodesRandom, 0);
+    warning("NUMANodesRandom is not supported in this VM.");
+  }
+#endif
+
+#ifdef _LP64
   // These are only supported on 64-bit
   if (UseSHA && supports_avx2() && supports_bmi2()) {
     if (FLAG_IS_DEFAULT(UseSHA512Intrinsics)) {

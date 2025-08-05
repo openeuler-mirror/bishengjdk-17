@@ -139,6 +139,7 @@ class Linux {
   static void load_plugin_library();
   static void libpthread_init();
   static void sched_getcpu_init();
+  static void parse_numa_nodes();
   static bool libnuma_init();
   static void* libnuma_dlsym(void* handle, const char* name);
   // libnuma v2 (libnuma_1.2) symbols
@@ -209,6 +210,11 @@ class Linux {
   typedef struct bitmask* (*numa_get_interleave_mask_func_t)(void);
   typedef long (*numa_move_pages_func_t)(int pid, unsigned long count, void **pages, const int *nodes, int *status, int flags);
   typedef void (*numa_set_preferred_func_t)(int node);
+  typedef struct bitmask* (*numa_parse_nodestring_all_func_t)(const char*);
+  typedef int (*numa_run_on_node_mask_func_t)(struct bitmask* mask);
+  typedef void (*numa_set_membind_func_t)(struct bitmask* mask);
+  typedef int (*numa_bitmask_equal_func_t)(struct bitmask* mask, struct bitmask* mask1);
+  typedef void (*numa_bitmask_free_func_t)(struct bitmask* mask);
   typedef void (*numa_set_bind_policy_func_t)(int policy);
   typedef int (*numa_bitmask_isbitset_func_t)(struct bitmask *bmp, unsigned int n);
   typedef int (*numa_distance_func_t)(int node1, int node2);
@@ -257,6 +263,11 @@ class Linux {
   static numa_get_interleave_mask_func_t _numa_get_interleave_mask;
   static numa_move_pages_func_t _numa_move_pages;
   static numa_set_preferred_func_t _numa_set_preferred;
+  static numa_parse_nodestring_all_func_t _numa_parse_nodestring_all;
+  static numa_run_on_node_mask_func_t _numa_run_on_node_mask;
+  static numa_bitmask_equal_func_t _numa_bitmask_equal;
+  static numa_set_membind_func_t _numa_set_membind;
+  static numa_bitmask_free_func_t _numa_bitmask_free;
   static unsigned long* _numa_all_nodes;
   static struct bitmask* _numa_all_nodes_ptr;
   static struct bitmask* _numa_nodes_ptr;
@@ -279,6 +290,11 @@ class Linux {
   static void set_numa_get_interleave_mask(numa_get_interleave_mask_func_t func) { _numa_get_interleave_mask = func; }
   static void set_numa_move_pages(numa_move_pages_func_t func) { _numa_move_pages = func; }
   static void set_numa_set_preferred(numa_set_preferred_func_t func) { _numa_set_preferred = func; }
+  static void set_numa_parse_nodestring_all(numa_parse_nodestring_all_func_t func) { _numa_parse_nodestring_all = func; }
+  static void set_numa_run_on_node_mask(numa_run_on_node_mask_func_t func) { _numa_run_on_node_mask = func; }
+  static void set_numa_bitmask_equal(numa_bitmask_equal_func_t func) { _numa_bitmask_equal = func; }
+  static void set_numa_set_membind(numa_set_membind_func_t func) { _numa_set_membind = func; }
+  static void set_numa_bitmask_free(numa_bitmask_free_func_t func) { _numa_bitmask_free = func; }
   static void set_numa_all_nodes(unsigned long* ptr) { _numa_all_nodes = ptr; }
   static void set_numa_all_nodes_ptr(struct bitmask **ptr) { _numa_all_nodes_ptr = (ptr == NULL ? NULL : *ptr); }
   static void set_numa_nodes_ptr(struct bitmask **ptr) { _numa_nodes_ptr = (ptr == NULL ? NULL : *ptr); }
@@ -491,6 +507,42 @@ class Linux {
       if(_heap_vector_free != NULL) {
           _heap_vector_free(heap_vector);
       }
+  }
+
+  static bool isbound_to_all_node() {
+    if (_numa_membind_bitmask != NULL && _numa_max_node != NULL && _numa_bitmask_isbitset != NULL) {
+      unsigned int highest_node_number = _numa_max_node();
+      for (unsigned int node = 0; node <= highest_node_number; node++) {
+        if (!_numa_bitmask_isbitset(_numa_membind_bitmask, node)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  static bitmask* numa_parse_nodestring_all(const char* s) {
+    return _numa_parse_nodestring_all != NULL ? _numa_parse_nodestring_all(s) : NULL;
+  }
+
+  static int numa_run_on_node_mask(bitmask* bitmask) {
+    return _numa_run_on_node_mask != NULL ? _numa_run_on_node_mask(bitmask) : -1;
+  }
+
+  static int numa_bitmask_equal(bitmask* bitmask, struct bitmask* bitmask1) {
+    return _numa_bitmask_equal != NULL ? _numa_bitmask_equal(bitmask, bitmask1) : 1;
+  }
+
+  static void numa_set_membind(bitmask* bitmask) {
+    if (_numa_set_membind != NULL) {
+      _numa_set_membind(bitmask);
+    }
+  }
+
+  static void numa_bitmask_free(bitmask* bitmask) {
+    if (_numa_bitmask_free != NULL) {
+      _numa_bitmask_free(bitmask);
+    }
   }
 
 #if INCLUDE_AGGRESSIVE_CDS

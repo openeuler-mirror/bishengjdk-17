@@ -161,6 +161,10 @@ void VM_Version::initialize() {
     FLAG_SET_DEFAULT(UsePopCountInstruction, false);
   }
 
+  if (NUMANodesRandom != 0) {
+    FLAG_SET_DEFAULT(NUMANodesRandom, 0);
+    warning("NUMANodesRandom is not supported in this VM.");
+  }
 #ifdef COMPILER2
   c2_initialize();
 #endif // COMPILER2
