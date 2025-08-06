@@ -49,4 +49,6 @@ public:
 
   static Thread *aarch64_get_thread_helper();
 
+  static void handle_appcds_for_executor(const JavaVMInitArgs* args);
+
 #endif // OS_CPU_LINUX_AARCH64_THREAD_LINUX_AARCH64_HPP

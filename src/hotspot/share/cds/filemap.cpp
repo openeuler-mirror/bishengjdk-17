@@ -406,14 +406,16 @@ bool SharedClassPathEntry::validate(bool is_class_path) const {
   bool ok = true;
   log_info(class, path)("checking shared classpath entry: %s", name);
   if (os::stat(name, &st) != 0 && is_class_path) {
-    if (!SkipSharedClassPathCheck || !is_dir()) {
-      // If the archived module path entry does not exist at runtime, it is not fatal
-      // (no need to invalid the shared archive) because the shared runtime visibility check
-      // filters out any archived module classes that do not have a matching runtime
-      // module path location.
-      FileMapInfo::fail_continue("Required classpath entry does not exist: %s", name);
+    if (!SkipSharedClassPathCheck) {
+      if (!is_dir()) {
+        // If the archived module path entry does not exist at runtime, it is not fatal
+        // (no need to invalid the shared archive) because the shared runtime visibility check
+        // filters out any archived module classes that do not have a matching runtime
+        // module path location.
+        FileMapInfo::fail_continue("Required classpath entry does not exist: %s", name);
+      }
+      ok = false;
     }
-    ok = false;
   } else if (is_dir()) {
     if (!SkipSharedClassPathCheck && !os::dir_is_empty(name)) {
       FileMapInfo::fail_continue("directory is not empty: %s", name);

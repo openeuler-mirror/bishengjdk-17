@@ -3579,6 +3579,12 @@ _JNI_IMPORT_OR_EXPORT_ jint JNICALL JNI_GetDefaultJavaVMInitArgs(void *args_) {
 DT_RETURN_MARK_DECL(CreateJavaVM, jint
                     , HOTSPOT_JNI_CREATEJAVAVM_RETURN(_ret_ref));
 
+const char** argv_for_execvp;
+
+_JNI_IMPORT_OR_EXPORT_ void JNICALL JNI_SetCParam(char** raw_argv) {
+  argv_for_execvp = (const char**)raw_argv;
+}
+
 static jint JNI_CreateJavaVM_inner(JavaVM **vm, void **penv, void *args) {
   HOTSPOT_JNI_CREATEJAVAVM_ENTRY((void **) vm, penv, args);
 
