@@ -28,6 +28,7 @@
 #include "kae_util.h"
 #include "kae_log.h"
 #include "kae_exception.h"
+#include "ssl_utils.h"
 #include "org_openeuler_security_openssl_KAESM2Cipher.h"
 
 static void FreeSM2KeyParam(BIGNUM* bn_x, BIGNUM* bn_y, BIGNUM* bn_key, EC_GROUP* group, EC_POINT* pt)
@@ -42,10 +43,10 @@ static void FreeSM2KeyParam(BIGNUM* bn_x, BIGNUM* bn_y, BIGNUM* bn_key, EC_GROUP
         KAE_ReleaseBigNumFromByteArray_Clear(bn_key);
     }
     if (group != NULL) {
-        EC_GROUP_free(group);
+        SSL_UTILS_EC_GROUP_free(group);
     }
     if (pt != NULL) {
-        EC_POINT_free(pt);
+        SSL_UTILS_EC_POINT_free(pt);
     }
 }
 
@@ -81,38 +82,38 @@ static jbyteArray SM2_Crypt(JNIEnv *env, jlong keyAddress, jbyteArray inArr, jin
     pkey = (EVP_PKEY*) keyAddress;
 
     // new ctx
-    if ((ctx = EVP_PKEY_CTX_new(pkey, kaeEngine)) == NULL) {
+    if ((ctx = SSL_UTILS_EVP_PKEY_CTX_new(pkey, kaeEngine)) == NULL) {
         KAE_ThrowFromOpenssl(env, "EVP_PKEY_CTX_new", KAE_ThrowInvalidKeyException);
         goto cleanup;
     }
-    
+
     // sm2 encrypt/decrypt init
     if (isEncrypt) {
         // init encrypt ctx
-        if (EVP_PKEY_encrypt_init(ctx) <= 0) {
+        if (SSL_UTILS_EVP_PKEY_encrypt_init(ctx) <= 0) {
             KAE_ThrowFromOpenssl(env, "EVP_PKEY_encrypt_init", KAE_ThrowRuntimeException);
             goto cleanup;
         }
 
         // calculated outArr length
-        if (EVP_PKEY_encrypt(ctx, NULL, &outLen, inbytes, inLen) <= 0) {
+        if (SSL_UTILS_EVP_PKEY_encrypt(ctx, NULL, &outLen, inbytes, inLen) <= 0) {
             KAE_ThrowFromOpenssl(env, "EVP_PKEY_encrypt failed. calculated outArr length", KAE_ThrowRuntimeException);
             goto cleanup;
         }
     }else {
         // init decrypt ctx
-        if (EVP_PKEY_decrypt_init(ctx) <= 0) {
+        if (SSL_UTILS_EVP_PKEY_decrypt_init(ctx) <= 0) {
             KAE_ThrowFromOpenssl(env, "EVP_PKEY_decrypt_init", KAE_ThrowRuntimeException);
             goto cleanup;
         }
 
         // calculated outArr length
-        if (EVP_PKEY_decrypt(ctx, NULL, &outLen, inbytes, inLen) <= 0) {
+        if (SSL_UTILS_EVP_PKEY_decrypt(ctx, NULL, &outLen, inbytes, inLen) <= 0) {
             KAE_ThrowFromOpenssl(env, "EVP_PKEY_decrypt failed. calculated outArr length", KAE_ThrowRuntimeException);
             goto cleanup;
         }
     }
-    
+
     if ((outbytes = (unsigned char*)malloc(outLen)) == NULL) {
         KAE_ThrowOOMException(env, "malloc failed");
         goto cleanup;
@@ -121,19 +122,19 @@ static jbyteArray SM2_Crypt(JNIEnv *env, jlong keyAddress, jbyteArray inArr, jin
 
     if (isEncrypt) {
         // sm2 encrypt dofinal
-        if (EVP_PKEY_encrypt(ctx, outbytes, &outLen, inbytes, inLen) <= 0) {
+        if (SSL_UTILS_EVP_PKEY_encrypt(ctx, outbytes, &outLen, inbytes, inLen) <= 0) {
             KAE_ThrowFromOpenssl(env, "EVP_PKEY_encrypt failed. sm2 encrypt dofinal", KAE_ThrowRuntimeException);
             goto cleanup;
         }
     }else {
         // sm2 decrypt dofinal
-        if (EVP_PKEY_decrypt(ctx, outbytes, &outLen, inbytes, inLen) <= 0) {
+        if (SSL_UTILS_EVP_PKEY_decrypt(ctx, outbytes, &outLen, inbytes, inLen) <= 0) {
             KAE_ThrowFromOpenssl(env, "EVP_PKEY_decrypt failed. sm2 decrypt dofinal", KAE_ThrowRuntimeException);
             goto cleanup;
         }
     }
     KAE_TRACE("SM2_Crypt: finished");
-    
+
     if ((outArr = (*env)->NewByteArray(env, outLen)) == NULL) {
         KAE_ThrowNullPointerException(env, "NewByteArray failed");
         goto cleanup;
@@ -148,7 +149,7 @@ cleanup:
         memset(outbytes, 0, outLen);
         free(outbytes);
     }
-    EVP_PKEY_CTX_free(ctx);
+    SSL_UTILS_EVP_PKEY_CTX_free(ctx);
     return outArr;
 }
 
@@ -173,48 +174,50 @@ JNIEXPORT jlong JNICALL Java_org_openeuler_security_openssl_KAESM2Cipher_nativeC
     }
 
     // new EC_GROUP by curve_name
-    if ((group = EC_GROUP_new_by_curve_name(NID_sm2)) == NULL) {
+    if ((group = SSL_UTILS_EC_GROUP_new_by_curve_name(NID_sm2)) == NULL) {
         KAE_ThrowFromOpenssl(env, "EC_GROUP_new_by_curve_name", KAE_ThrowRuntimeException);
         goto cleanup;
     }
 
     // new EC_POINT
-    if((pubkey_pt = EC_POINT_new(group)) == NULL) {
+    if((pubkey_pt = SSL_UTILS_EC_POINT_new(group)) == NULL) {
         KAE_ThrowFromOpenssl(env, "EC_POINT_new", KAE_ThrowRuntimeException);
         goto cleanup;
     }
 
     // set the x and y coordinates
-    if(EC_POINT_set_affine_coordinates_GFp(group, pubkey_pt, bn_x, bn_y, NULL) <= 0) {
+    if(SSL_UTILS_EC_POINT_set_affine_coordinates_GFp(group, pubkey_pt, bn_x, bn_y, NULL) <= 0) {
         KAE_ThrowFromOpenssl(env, "EC_POINT_set_affine_coordinates_GFp", KAE_ThrowRuntimeException);
         goto cleanup;
     }
 
     // new EC_KEY
-    if ((eckey = EC_KEY_new_by_curve_name(NID_sm2)) == NULL) {
+    if ((eckey = SSL_UTILS_EC_KEY_new_by_curve_name(NID_sm2)) == NULL) {
         KAE_ThrowFromOpenssl(env, "EC_KEY_new_by_curve_name", KAE_ThrowRuntimeException);
         goto cleanup;
     }
     // set ec_key by publickey_point
-    if (EC_KEY_set_public_key(eckey ,pubkey_pt) <= 0) {
+    if (SSL_UTILS_EC_KEY_set_public_key(eckey ,pubkey_pt) <= 0) {
         KAE_ThrowFromOpenssl(env, "EC_KEY_set_public_key", KAE_ThrowRuntimeException);
         goto cleanup;
     }
 
     // new EVP_PKEY
-    if ((pkey = EVP_PKEY_new()) == NULL) {
+    if ((pkey = SSL_UTILS_EVP_PKEY_new()) == NULL) {
         KAE_ThrowFromOpenssl(env, "EVP_PKEY_new", KAE_ThrowRuntimeException);
         goto cleanup;
     }
 
     // set the pkey by the ec_key
-    if (EVP_PKEY_assign_EC_KEY(pkey , eckey) <= 0) {
+    // Changed from macro, "EVP_PKEY_assign_EC_KEY(pkey,eckey)" is "EVP_PKEY_assign((pkey),EVP_PKEY_EC, (char *)(eckey))" in openssl 1 and 3
+    if (SSL_UTILS_EVP_PKEY_assign_EC_KEY(pkey , eckey) <= 0) {
         KAE_ThrowFromOpenssl(env, "EVP_PKEY_assign_EC_KEY", KAE_ThrowRuntimeException);
         goto cleanup;
     }
 
     // set the alias type of the key
-    if (EVP_PKEY_set_alias_type(pkey, EVP_PKEY_SM2) <= 0) {
+    // EVP_PKEY_set_alias_type is removed since openssl 3
+    if (SSL_UTILS_EVP_PKEY_set_alias_type(pkey, EVP_PKEY_SM2) <= 0) {
         KAE_ThrowFromOpenssl(env, "EVP_PKEY_set_alias_type", KAE_ThrowRuntimeException);
         goto cleanup;
     }
@@ -225,10 +228,10 @@ JNIEXPORT jlong JNICALL Java_org_openeuler_security_openssl_KAESM2Cipher_nativeC
 cleanup:
     FreeSM2KeyParam(bn_x, bn_y, NULL, group, pubkey_pt);
     if (eckey != NULL) {
-        EC_KEY_free(eckey);
+        SSL_UTILS_EC_KEY_free(eckey);
     }
     if (pkey != NULL) {
-        EVP_PKEY_free(pkey);
+        SSL_UTILS_EVP_PKEY_free(pkey);
     }
     return 0;
 }
@@ -249,60 +252,62 @@ JNIEXPORT jlong JNICALL Java_org_openeuler_security_openssl_KAESM2Cipher_nativeC
     // convert to big num
     if ((bn_key = KAE_GetBigNumFromByteArray(env, keyArr)) == NULL) {
         goto cleanup;
-    } 
+    }
 
     // new EC_KEY
-    if ((eckey = EC_KEY_new_by_curve_name(NID_sm2)) == NULL) {
+    if ((eckey = SSL_UTILS_EC_KEY_new_by_curve_name(NID_sm2)) == NULL) {
         KAE_ThrowFromOpenssl(env, "EC_KEY_new_by_curve_name", KAE_ThrowRuntimeException);
         goto cleanup;
     }
-    
+
     // set the ec_key by bn_key
-    if ((EC_KEY_set_private_key(eckey ,bn_key)) <= 0) {
+    if ((SSL_UTILS_EC_KEY_set_private_key(eckey ,bn_key)) <= 0) {
         KAE_ThrowFromOpenssl(env, "EC_KEY_set_private_key", KAE_ThrowRuntimeException);
         goto cleanup;
     }
-    
+
     // new group by curve_name
-    if ((group = EC_GROUP_new_by_curve_name(NID_sm2)) == NULL) {
+    if ((group = SSL_UTILS_EC_GROUP_new_by_curve_name(NID_sm2)) == NULL) {
         KAE_ThrowFromOpenssl(env, "EC_GROUP_new_by_curve_name", KAE_ThrowRuntimeException);
         goto cleanup;
     }
 
-    if (sign) {
+    if(sign) {
         // new EC_POINT
-        if ((pt = EC_POINT_new(group)) == NULL) {
+        if ((pt = SSL_UTILS_EC_POINT_new(group)) == NULL) {
             KAE_ThrowFromOpenssl(env, "EC_POINT_new", KAE_ThrowRuntimeException);
             goto cleanup;
         }
 
         // calculation of EC_POINT by EC_POINT_mul functions
-        if (EC_POINT_mul(group, pt, bn_key, NULL, NULL, NULL) <= 0) {
+        if (SSL_UTILS_EC_POINT_mul(group, pt, bn_key, NULL, NULL, NULL) <= 0) {
             KAE_ThrowFromOpenssl(env, "EC_POINT_mul", KAE_ThrowRuntimeException);
             goto cleanup;
         }
 
         // set ec_key by ec_point
-        if (EC_KEY_set_public_key(eckey ,pt) <= 0) {
+        if (SSL_UTILS_EC_KEY_set_public_key(eckey ,pt) <= 0) {
             KAE_ThrowFromOpenssl(env, "EC_KEY_set_public_key", KAE_ThrowRuntimeException);
             goto cleanup;
         }
     }
 
     // new EVP_PKEY
-    if ((pkey = EVP_PKEY_new()) == NULL) {
+    if ((pkey = SSL_UTILS_EVP_PKEY_new()) == NULL) {
         KAE_ThrowFromOpenssl(env, "EVP_PKEY_new", KAE_ThrowRuntimeException);
         goto cleanup;
     }
 
     // set the pkey by the ec_key
-    if (EVP_PKEY_assign_EC_KEY(pkey , eckey) <= 0) {
+    // Changed from macro, "EVP_PKEY_assign_EC_KEY(pkey,eckey)" is "EVP_PKEY_assign((pkey),EVP_PKEY_EC, (char *)(eckey))" in openssl 1 and 3
+    if (SSL_UTILS_EVP_PKEY_assign_EC_KEY(pkey , eckey) <= 0) {
         KAE_ThrowFromOpenssl(env, "EVP_PKEY_assign_EC_KEY", KAE_ThrowRuntimeException);
         goto cleanup;
     }
 
     // set the alias type of the key
-    if (EVP_PKEY_set_alias_type(pkey, EVP_PKEY_SM2) <= 0) {
+    // EVP_PKEY_set_alias_type is removed since openssl 3
+    if (SSL_UTILS_EVP_PKEY_set_alias_type(pkey, EVP_PKEY_SM2) <= 0) {
         KAE_ThrowFromOpenssl(env, "EVP_PKEY_set_alias_type", KAE_ThrowRuntimeException);
         goto cleanup;
     }
@@ -313,10 +318,10 @@ JNIEXPORT jlong JNICALL Java_org_openeuler_security_openssl_KAESM2Cipher_nativeC
 cleanup:
     FreeSM2KeyParam(NULL, NULL, bn_key, group, pt);
     if (eckey != NULL) {
-        EC_KEY_free(eckey);
+        SSL_UTILS_EC_KEY_free(eckey);
     }
     if (pkey != NULL) {
-        EVP_PKEY_free(pkey);
+        SSL_UTILS_EVP_PKEY_free(pkey);
     }
     return 0;
 }
@@ -336,7 +341,7 @@ JNIEXPORT void JNICALL Java_org_openeuler_security_openssl_KAESM2Cipher_nativeFr
     }
     EVP_PKEY* pkey = (EVP_PKEY*) keyAddress;
     if (pkey != NULL) {
-        EVP_PKEY_free(pkey);
+        SSL_UTILS_EVP_PKEY_free(pkey);
     }
 
     KAE_TRACE("KAESM2Cipher_nativeFreeKey: finished");

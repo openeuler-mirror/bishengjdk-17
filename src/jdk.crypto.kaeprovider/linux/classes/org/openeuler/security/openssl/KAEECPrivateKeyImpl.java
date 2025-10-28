@@ -132,7 +132,7 @@ public final class KAEECPrivateKeyImpl extends PKCS8Key implements ECPrivateKey 
             int outPos = Math.max(sOctets.length - sArr.length, 0);
             int length = Math.min(sArr.length, sOctets.length);
             System.arraycopy(sArr, inPos, sOctets, outPos, length);
-
+            Arrays.fill(sArr, (byte)0);
             DerOutputStream out = new DerOutputStream();
             out.putInteger(1); // version 1
             out.putOctetString(sOctets);

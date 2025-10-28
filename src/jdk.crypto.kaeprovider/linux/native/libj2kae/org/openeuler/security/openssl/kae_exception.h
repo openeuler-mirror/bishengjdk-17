@@ -43,6 +43,8 @@ void KAE_ThrowRuntimeException(JNIEnv* env, const char* msg);
 
 void KAE_ThrowBadPaddingException(JNIEnv* env, const char* msg);
 
+void KAE_ThrowExceptionInInitializerError(JNIEnv* env, const char* msg);
+
 /* Throw InvalidKeyException */
 void KAE_ThrowInvalidKeyException(JNIEnv* env, const char* msg);
 

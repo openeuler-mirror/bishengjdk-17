@@ -52,6 +52,7 @@ public class KAEConfig {
           "kae.rsa",
           "kae.dh",
           "kae.ec",
+          // sm2 divide into two parts, be careful with offset when adding new algorithms
           "kae.sm2.cipher",
           "kae.sm2.signature"
   };
@@ -67,6 +68,13 @@ public class KAEConfig {
           "kae.ec.useKaeEngine",
           "kae.sm2.useKaeEngine"
   };
+
+  // digestOffset is [kae.md5, kae.sha256, kae.sha384, kae.sm3].length - [kae.digest.useKaeEngine].length
+  private static int digestOffset = 3;
+
+  // digestAlgorithmLen is [kae.md5, kae.sha256, kae.sha384, kae.sm3].length
+  private static int digestAlgorithmLen = 4;
+
 
   // algorithm names
   private static final String[] algorithmNames = new String[]{
@@ -205,16 +213,20 @@ public class KAEConfig {
       }
       useKaeProviderCategoryMap.put(useKaeProviderPropertyNames[i], categoryFlagsForProvider[i]);
     }
-    int offset = useKaeProviderPropertyNames.length - useKaeEnginePropertyNames.length;
-    int digestAlgorithmLen = offset + 1;
+
     // digest
     System.arraycopy(categoryFlagsForProvider, 0, useKaeProviderFlags, 0, digestAlgorithmLen);
 
     // non-digest
     for (int i = digestAlgorithmLen; i < useKaeProviderFlags.length; i++) {
       Integer algorithmCategoryIndex = algorithmNameCategoryMap.get(algorithmNames[i]);
-      if (categoryFlagsForProvider[algorithmCategoryIndex + offset]) {
-        useKaeProviderFlags[i] = true;
+      // sm2 special treatment
+      if (algorithmNames[i] == "sm2") {
+        // cipher || signature
+        useKaeProviderFlags[i] = categoryFlagsForProvider[algorithmCategoryIndex + digestOffset] || categoryFlagsForProvider[algorithmCategoryIndex + digestOffset + 1];
+      }
+      else {
+        useKaeProviderFlags[i] = categoryFlagsForProvider[algorithmCategoryIndex + digestOffset];
       }
     }
 
