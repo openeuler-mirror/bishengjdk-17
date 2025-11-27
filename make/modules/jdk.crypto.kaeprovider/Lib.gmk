@@ -36,7 +36,7 @@ ifeq ($(ENABLE_KAE), true)
         CXXFLAGS := $(CXXFLAGS_JDKLIB), \
         LDFLAGS := $(LDFLAGS_JDKLIB) \
             $(call SET_SHARED_LIBRARY_ORIGIN), \
-        LIBS_unix := $(LIBDL) -lssl -lcrypto, \
+        LIBS_unix := $(LIBDL) -lm -pthread, \
     ))
 
     TARGETS += $(BUILD_LIBJ2KAE)

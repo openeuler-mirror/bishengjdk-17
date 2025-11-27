@@ -21,22 +21,18 @@
  * questions.
  */
 
+import org.openeuler.security.openssl.KAEECPrivateKeyImpl;
+import org.openeuler.security.openssl.KAEECPublicKeyImpl;
 import org.openeuler.security.openssl.KAEProvider;
-import sun.security.ec.ECPrivateKeyImpl;
-import sun.security.ec.ECPublicKeyImpl;
 
 import javax.crypto.KeyAgreement;
 import java.math.BigInteger;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.Provider;
-import java.security.Security;
+import java.security.*;
 import java.security.spec.ECFieldFp;
 import java.security.spec.ECParameterSpec;
 import java.security.spec.ECPoint;
 import java.security.spec.EllipticCurve;
 import java.util.Arrays;
-import java.nio.charset.StandardCharsets;
 import java.security.spec.*;
 import java.security.KeyFactory;
 import java.security.interfaces.ECPrivateKey;
@@ -78,31 +74,30 @@ public class ECDHTest {
 
         KeyFactory keyFactory = KeyFactory.getInstance("EC");
         ECPrivateKeySpec privateKeySpec = new ECPrivateKeySpec(new BigInteger("20135071615800221517902437867016717688420688735490569283842831828983"), PARAMS);
-        ECPrivateKeyImpl ecPrivKey = (ECPrivateKeyImpl)keyFactory.generatePrivate(privateKeySpec);
-
+        ECPrivateKey ecPrivKey = (ECPrivateKey) keyFactory.generatePrivate(privateKeySpec);
         ECPoint ecPoint = new ECPoint(new BigInteger("9490267631555585552004372465967099662885480699902812460349461311384"), new BigInteger("1974573604976093871117393045089050409882519645527397292712281520811"));
         ECPublicKeySpec publicKeySpec = new ECPublicKeySpec(ecPoint,PARAMS);
-        ECPublicKeyImpl ecPublicKey = (ECPublicKeyImpl)keyFactory.generatePublic(publicKeySpec);
-        testKeyAgreement(ecPrivKey, ecPublicKey, new byte[]{-88, -65, 43, -84, 26, 43, 46, 106, 20, 39, -76, 30, -71, 72, -102, 120, 108, -92, -86, -14, -96, -42, 93, -40, -43, -25, 15, -62});
+        ECPublicKey ecPublicKey = (ECPublicKey)keyFactory.generatePublic(publicKeySpec);
+        testKeyAgreement((KAEECPrivateKeyImpl) ecPrivKey, (KAEECPublicKeyImpl) ecPublicKey, new byte[]{-88, -65, 43, -84, 26, 43, 46, 106, 20, 39, -76, 30, -71, 72, -102, 120, 108, -92, -86, -14, -96, -42, 93, -40, -43, -25, 15, -62});
     }
 
     public static void testKeyPairByParam(ECParameterSpec PARAMS) throws Exception {
         keyPairGenerator = KeyPairGenerator.getInstance(algorithm);
         keyPairGenerator.initialize(PARAMS);
         KeyPair keyPair = keyPairGenerator.generateKeyPair();
-        ECPrivateKeyImpl ecPrivKey = (ECPrivateKeyImpl) keyPair.getPrivate();
-        ECPublicKeyImpl ecPublicKey = (ECPublicKeyImpl) keyPair.getPublic();
+        PrivateKey ecPriKey = keyPair.getPrivate();
+        PublicKey ecPublicKey = keyPair.getPublic();
     }
 
     public static void testKeyPairByKeySize(int keySize) throws Exception {
         keyPairGenerator = KeyPairGenerator.getInstance(algorithm);
         keyPairGenerator.initialize(keySize);
         KeyPair keyPair = keyPairGenerator.generateKeyPair();
-        ECPrivateKeyImpl ecPrivKey = (ECPrivateKeyImpl) keyPair.getPrivate();
-        ECPublicKeyImpl ecPublicKey = (ECPublicKeyImpl) keyPair.getPublic();
+        PrivateKey ecPriKey = keyPair.getPrivate();
+        PublicKey ecPublicKey = keyPair.getPublic();
     }
 
-    public static void testKeyAgreement(ECPrivateKeyImpl ecPrivKey, ECPublicKeyImpl ecPublicKey, byte[] expectRes) throws Exception {
+    public static void testKeyAgreement(KAEECPrivateKeyImpl ecPrivKey, KAEECPublicKeyImpl ecPublicKey, byte[] expectRes) throws Exception {
         KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH");
         keyAgreement.init(ecPrivKey);
         keyAgreement.doPhase(ecPublicKey, true);
