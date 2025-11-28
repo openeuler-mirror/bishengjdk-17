@@ -27,6 +27,7 @@
 #include "kae_log.h"
 #include "kae_exception.h"
 #include "openssl_ad.h"
+#include "ssl_utils.h"
 
 void KAE_ThrowByName(JNIEnv* env, const char* name, const char* msg) {
     jclass cls = (*env)->FindClass(env, name);
@@ -77,6 +78,10 @@ void KAE_ThrowBadPaddingException(JNIEnv* env, const char* msg) {
     KAE_ThrowByName(env, "javax/crypto/BadPaddingException", msg);
 }
 
+void KAE_ThrowExceptionInInitializerError(JNIEnv* env, const char* msg) {
+    KAE_ThrowByName(env, "java/lang/ExceptionInInitializerError", msg);
+}
+
 void KAE_ThrowInvalidKeyException(JNIEnv* env, const char* msg) {
     KAE_ThrowByName(env, "java/security/InvalidKeyException", msg);
 }
@@ -93,7 +98,7 @@ void KAE_ThrowFromOpenssl(JNIEnv* env, const char* msg, void (* defaultException
     unsigned long err;
     static const int ESTRING_SIZE = 256;
 
-    err = ERR_get_error_line_data(&file, &line, &data, &flags);
+    err = SSL_UTILS_ERR_get_error_line_data(&file, &line, &data, &flags);
     if (err == 0) {
         defaultException(env, msg);
         return;
@@ -101,10 +106,11 @@ void KAE_ThrowFromOpenssl(JNIEnv* env, const char* msg, void (* defaultException
 
     if (!(*env)->ExceptionCheck(env)) {
         char estring[ESTRING_SIZE];
-        ERR_error_string_n(err, estring, ESTRING_SIZE);
-        int lib = ERR_GET_LIB(err);
-        int func = ERR_GET_FUNC(err);
-        int reason = ERR_GET_REASON(err);
+        SSL_UTILS_ERR_error_string_n(err, estring, ESTRING_SIZE);
+        // Those functions below are macros
+        int lib = SSL_UTILS_ERR_GET_LIB(err);
+        int func = SSL_UTILS_ERR_GET_FUNC(err);
+        int reason = SSL_UTILS_ERR_GET_REASON(err);
         KAE_TRACE("OpenSSL error in %s: err=%lx, lib=%x, func=%x, reason=%x, file=%s, line=%d, estring=%s, data=%s", msg, err,
                   lib, func, reason, file, line, estring, (flags & ERR_TXT_STRING) ? data : "(no data)");
         // Ignore exceptions in RSA_verify_PKCS1_PSS_mgf1 function
@@ -119,7 +125,7 @@ void KAE_ThrowFromOpenssl(JNIEnv* env, const char* msg, void (* defaultException
         }
     }
 
-    ERR_clear_error();
+    SSL_UTILS_ERR_clear_error();
 }
 
 void KAE_ThrowAEADBadTagException(JNIEnv *env, const char *msg) {
