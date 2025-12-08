@@ -1323,7 +1323,6 @@ void *open_ssl_lib(JNIEnv *env, jint useOpensslVersion, jboolean *init_result)
         lib_name = "libssl.so.1.1";
         res = dlopen(lib_name, RTLD_NOW | RTLD_GLOBAL);
     }
-
     if (res == NULL) {
         *init_result = JNI_FALSE;
         char* prefix = "OpenSSL error while opening openssl lib, no matching libssl found: ";
@@ -1331,6 +1330,7 @@ void *open_ssl_lib(JNIEnv *env, jint useOpensslVersion, jboolean *init_result)
         strcpy(msg, prefix);
         strcat(msg, lib_name);
         KAE_ThrowExceptionInInitializerError(env, msg);
+        free(msg);
         return res;
     }
 
