@@ -1538,6 +1538,9 @@ public:
 class BranchData : public JumpData {
   friend class VMStructs;
   friend class JVMCIVMStructs;
+#ifdef AARCH64
+  friend class ciMethodData;
+#endif
 protected:
   enum {
     not_taken_off_set = jump_cell_count,
