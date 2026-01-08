@@ -54,6 +54,9 @@ class CompileTask : public CHeapObj<mtCompiler> {
       Reason_Whitebox,         // Whitebox API
       Reason_MustBeCompiled,   // Used for -Xcomp or AlwaysCompileLoopMethods (see CompilationPolicy::must_be_compiled())
       Reason_Bootstrap,        // JVMCI bootstrap
+#ifdef AARCH64
+      Reason_JitProfile,        // JitProfil trigger
+#endif
 #if INCLUDE_JBOLT
       Reason_Reorder,          // JBolt reorder
 #endif
@@ -70,6 +73,9 @@ class CompileTask : public CHeapObj<mtCompiler> {
       "whitebox",
       "must_be_compiled",
       "bootstrap",
+#ifdef AARCH64
+      "jitprofile",
+#endif
 #if INCLUDE_JBOLT
       "reorder"
 #endif
@@ -107,6 +113,10 @@ class CompileTask : public CHeapObj<mtCompiler> {
   const char*  _failure_reason;
   // Specifies if _failure_reason is on the C heap.
   bool         _failure_reason_on_C_heap;
+#ifdef AARCH64
+  // compile task triggered by jitprofile
+  bool         _is_jprofilecache_compilation;
+#endif
 
  public:
   CompileTask() : _failure_reason(NULL), _failure_reason_on_C_heap(false) {
@@ -127,6 +137,10 @@ class CompileTask : public CHeapObj<mtCompiler> {
   bool         is_complete() const               { return _is_complete; }
   bool         is_blocking() const               { return _is_blocking; }
   bool         is_success() const                { return _is_success; }
+#ifdef AARCH64
+  bool         is_jprofilecache_compilation() const     { return _is_jprofilecache_compilation; }
+  void         mark_jprofilecache_compilation()         { _is_jprofilecache_compilation = true; }
+#endif
   bool         can_become_stale() const          {
     switch (_compile_reason) {
       case Reason_BackedgeCount:

@@ -120,6 +120,11 @@ void CompileTask::initialize(int compile_id,
   _failure_reason = NULL;
   _failure_reason_on_C_heap = false;
 
+#ifdef AARCH64
+  // compileTask start by jitprofile
+  _is_jprofilecache_compilation = false;
+#endif
+
   if (LogCompilation) {
     if (hot_method.not_null()) {
       if (hot_method == method) {

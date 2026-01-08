@@ -87,6 +87,12 @@ ifneq ($(call check-jvm-feature, jvmti), true)
       jvmtiClassFileReconstituter.cpp jvmtiTagMapTable.cpp
 endif
 
+ifneq ($(call check-jvm-feature, jprofilecache), true)
+  JVM_CFLAGS_FEATURES += -DINCLUDE_JPROFILECACHE=0
+  JVM_EXCLUDES += jprofilecache
+  JVM_EXCLUDE_PATTERNS += jprofilecache/
+endif
+
 ifneq ($(call check-jvm-feature, jvmci), true)
   JVM_CFLAGS_FEATURES += -DINCLUDE_JVMCI=0
   JVM_EXCLUDES += jvmci

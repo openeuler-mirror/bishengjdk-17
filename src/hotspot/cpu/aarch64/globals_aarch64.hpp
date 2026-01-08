@@ -108,6 +108,49 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "Minimum size in bytes when block zeroing will be used")      \
           range(wordSize, max_jint)                                     \
   product(bool, TraceTraps, false, "Trace all traps the signal handler")\
+                                                                        \
+  product(bool, ExitVMProfileCacheFlush, false, EXPERIMENTAL,           \
+          "ExitVMProfileCacheFlush")                                    \
+                                                                        \
+  product(bool, JProfilingCacheRecording, false, EXPERIMENTAL,          \
+          "Collect profiling information for JProfilingCache")          \
+                                                                        \
+  product(bool, JProfilingCacheCompileAdvance, false, EXPERIMENTAL,     \
+          "Enable JProfilingCacheCompileAdvance from a log file")       \
+                                                                        \
+  product(ccstr, CompilationProfileCacheExclude, nullptr, EXPERIMENTAL, \
+          "JProfilingCacheCompileAdvance excluding list ")              \
+                                                                        \
+  product(bool,  UseJProfilingCacheSystemBlackList, true, EXPERIMENTAL, \
+          "Block Some System Classes loaded by jprofilecache")          \
+                                                                        \
+  product(uintx, JProfilingCacheDelayLoadTime, 1000, EXPERIMENTAL,      \
+          "Sleep time (in milliseconds) before JProfileCache loads "    \
+          "classes and methods profile ")                               \
+          range(0, 3600000)                                             \
+                                                                        \
+  develop(bool, CompilationProfileCacheResolveClassEagerly, true,       \
+          "resolve class from constant pool eagerly")                   \
+                                                                        \
+  product(ccstr, ProfilingCacheFile, nullptr, EXPERIMENTAL,             \
+          "Log file name for JProfilingCache")                          \
+                                                                        \
+  product(uintx, CompilationProfileCacheAppID, 0, EXPERIMENTAL,         \
+          "Application ID written in log file for verification ")       \
+                                                                        \
+  product(ccstr, JProfilingCacheAutoArchiveDir, nullptr, EXPERIMENTAL,  \
+          "Specify JProfilingCache directory under which the "          \
+          "jprofilecache file will be auto generated and replayed")     \
+                                                                        \
+  product(int, JProfilingCacheMaxTierLimit, 3, EXPERIMENTAL,            \
+          "If compile_level is higher than the option, method will "    \
+          "will be precmopiled by the option level")                    \
+          range(1, 4)                                                   \
+                                                                        \
+  product(bool, JProfilingCacheReplayProfileData, false, EXPERIMENTAL,  \
+          "Load method data with dumped ProfileData in the "            \
+          "jprofilecache file if exists")                               \
+                                                                        \
   product(int, SoftwarePrefetchHintDistance, -1,                        \
           "Use prfm hint with specified distance in compiled code."     \
           "Value -1 means off.")                                        \

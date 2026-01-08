@@ -63,6 +63,10 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#ifdef AARCH64
+#include "jprofilecache/jitProfileRecord.hpp"
+#include <sys/file.h>
+#endif
 #if INCLUDE_JBOOSTER
 #include "jbooster/jBoosterManager.hpp"
 #endif // INCLUDE_JBOOSTER
@@ -3194,6 +3198,101 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
 #ifndef CAN_SHOW_REGISTERS_ON_ASSERT
   UNSUPPORTED_OPTION(ShowRegistersOnAssert);
 #endif // CAN_SHOW_REGISTERS_ON_ASSERT
+
+#ifdef AARCH64
+  if (JProfilingCacheAutoArchiveDir != nullptr) {
+    if (FLAG_IS_CMDLINE(JProfilingCacheRecording) || FLAG_IS_CMDLINE(JProfilingCacheCompileAdvance)) {
+      warning("Profile cache file will be dumpped automatically. No need to set JProfilingCacheRecording/JProfilingCacheCompileAdvance");
+      JProfilingCacheRecording = false;
+      JProfilingCacheCompileAdvance = false;
+    }
+
+    if (FLAG_IS_CMDLINE(ProfilingCacheFile)) {
+      warning("ProfilingCacheFile will be ignored");
+    }
+
+    DIR* dir = os::opendir(JProfilingCacheAutoArchiveDir);
+    if (dir == nullptr) {
+      int err_code = errno;
+      switch (err_code) {
+        case ENOENT:
+          if (::mkdir(JProfilingCacheAutoArchiveDir, 0755) == OS_ERR) {
+            if (errno == EEXIST) break;
+            else {
+              jio_fprintf(defaultStream::error_stream(),
+                      "Fail to create JProfilingCacheAutoArchiveDir directory '%s'\n",
+                      JProfilingCacheAutoArchiveDir);
+              return JNI_ERR;
+            }
+          }
+          break;
+        case EACCES:
+          jio_fprintf(defaultStream::error_stream(),
+                      "Permission denied to open JProfilingCacheAutoArchiveDir directory '%s'\n",
+                      JProfilingCacheAutoArchiveDir);
+          return JNI_ERR;
+        case ENOTDIR:
+          jio_fprintf(defaultStream::error_stream(),
+                      "JProfilingCacheAutoArchiveDir '%s' is not a directory\n",
+                      JProfilingCacheAutoArchiveDir);
+          return JNI_ERR;
+        default:
+          jio_fprintf(defaultStream::error_stream(),
+                      "Couldn't open JProfilingCacheAutoArchiveDir directory '%s'\n",
+                      JProfilingCacheAutoArchiveDir);
+          return JNI_ERR;
+      }
+    } else {
+      os::closedir(dir);
+    }
+
+    const char* jpc_path = JitProfileRecorder::auto_jpcfile_name();
+    const char* jpc_tmp_path = JitProfileRecorder::auto_temp_jpcfile_name();
+    struct stat st;
+    if (os::stat(jpc_tmp_path, &st) == 0) { // recording jprofile by other JVM
+      //Test temp file is still valid
+      int jpc_tmp_fd = os::open(jpc_tmp_path, O_RDWR, 0644);
+      if (jpc_tmp_fd != -1) {
+        if (flock(jpc_tmp_fd, LOCK_EX | LOCK_NB) == 0) {
+          ::unlink(jpc_tmp_path);
+          flock(jpc_tmp_fd, LOCK_UN);
+        }
+        os::close(jpc_tmp_fd);
+      }
+    } else {
+      if (os::stat(jpc_path, &st) == 0) {   // jprofilecache file exists, replay profile data
+        JProfilingCacheCompileAdvance = true;
+      } else {
+        int jpc_fd = os::open(jpc_tmp_path, O_RDWR | O_CREAT, 0644);
+        if (jpc_fd == -1) {
+          jio_fprintf(defaultStream::error_stream(),
+                "Could not open/create jprofile cache file under JProfilingCacheAutoArchiveDir '%s'\n",
+                dir);
+        } else {
+          if (flock(jpc_fd, LOCK_EX | LOCK_NB) == 0) {  // lock the jprofile file and prepare to generate
+            FILE* jpc_file = ::fdopen(jpc_fd, "wb+");
+            if (jpc_file == nullptr) {
+              jio_fprintf(defaultStream::error_stream(),
+                  "Could not open/create jprofile cache file under JProfilingCacheAutoArchiveDir '%s'\n",
+                   dir);
+            } else {
+              log_info(jprofilecache)("AutoJProfileCache use Record Mode");
+              JitProfileRecorder::set_jpcfile_filepointer(jpc_file);
+              JProfilingCacheRecording = true;
+              ClassUnloading = false;
+              ExitVMProfileCacheFlush = true;
+              if (NUMANodesRandom != 0) {
+                NUMANodesRandom = 0;
+              }
+            }
+          } else {
+            os::close(jpc_fd);
+          }
+        }
+      }
+    }
+  }
+#endif
 
   return JNI_OK;
 }
