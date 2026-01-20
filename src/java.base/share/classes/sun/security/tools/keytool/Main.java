@@ -63,6 +63,9 @@ import java.security.cert.X509CRLSelector;
 import javax.security.auth.x500.X500Principal;
 import java.util.Base64;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Array;
+
 import sun.security.pkcs12.PKCS12KeyStore;
 import sun.security.provider.certpath.CertPathConstraintsParameters;
 import sun.security.util.ECKeySizeParameterSpec;
@@ -3567,6 +3570,34 @@ public final class Main {
             if (paramSpec instanceof NamedCurve) {
                 NamedCurve nc = (NamedCurve)paramSpec;
                 result += " (" + nc.getNameAndAliases()[0] + ")";
+            } else if (paramSpec.getClass().getSimpleName().equals("KAENamedCurve")) {
+                try {
+                    Field na = paramSpec.getClass().getDeclaredField("nameAndAliases");
+                    na.setAccessible(true);
+                    result += " (" + (String)Array.get(na.get(paramSpec), 0) + ") ";
+                } catch (NoSuchFieldException | IllegalAccessException e) {
+                    MessageFormat form = new MessageFormat(rb.getString
+                            ("can.not.get.field"));
+                    Object[] source = {"KAENamedCurveException"};
+                    System.out.println(form.format(source));
+                }
+            } else if (paramSpec instanceof ECParameterSpec && key.getClass().getSimpleName().equals(
+                    "KAEECPrivateKeyImpl")) {
+                if (keysize == -1) {
+                    result += " (secp256r1)";
+                } else {
+                    try {
+                        AlgorithmParameters ap = AlgorithmParameters.getInstance("EC");
+                        ap.init(new ECKeySizeParameterSpec(keysize));
+                        // The following line assumes the toString value is "name (oid)"
+                        result += " (" + ap.toString().split(" ")[0] + ")";
+                    } catch (Exception e) {
+                        MessageFormat form = new MessageFormat(rb.getString
+                                ("can.not.get.param"));
+                        Object[] source = {"KAEECPrivateKeyImplException"};
+                        System.out.println(form.format(source));
+                    }
+                }
             }
         } else if (key instanceof EdECKey) {
             result = ((EdECKey) key).getParams().getName();
