@@ -167,7 +167,8 @@ static void create_jsa(const char* class_list_path, const char* appcds_path, con
     args[idx++] = os::strdup("-classpath");
     args[idx++] = os::strdup(classpath);
     for (int i = 0; i < arg_count; i++) {
-      if (vm_args[i] != NULL && strstr(vm_args[i], "AutoSharedArchivePath") == NULL) {
+      if (vm_args[i] != NULL && strstr(vm_args[i], "AutoSharedArchivePath") == NULL
+                             && strstr(vm_args[i], "JProfilingCacheAutoArchiveDir") == NULL) {
         args[idx++] = os::strdup(vm_args[i]);
       }
     }

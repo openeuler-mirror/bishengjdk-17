@@ -60,11 +60,22 @@
 #include "runtime/thread.inline.hpp"
 #include "runtime/vframe.inline.hpp"
 #include "utilities/copy.hpp"
+#ifdef AARCH64
+#include "jprofilecache/jitProfileCache.hpp"
+#endif
 
 ConstantPool* ConstantPool::allocate(ClassLoaderData* loader_data, int length, TRAPS) {
   Array<u1>* tags = MetadataFactory::new_array<u1>(loader_data, length, 0, CHECK_NULL);
   int size = ConstantPool::size(length);
-  return new (loader_data, size, MetaspaceObj::ConstantPoolType, THREAD) ConstantPool(tags);
+#ifdef AARCH64
+  if (JProfilingCacheCompileAdvance) {
+    Array<u1>* jpc_tags = MetadataFactory::new_array<u1>(loader_data, length, 0, CHECK_NULL);
+    return new (loader_data, size, MetaspaceObj::ConstantPoolType, THREAD) ConstantPool(tags, jpc_tags);
+  } else
+#endif
+  {
+    return new (loader_data, size, MetaspaceObj::ConstantPoolType, THREAD) ConstantPool(tags);
+  }
 }
 
 void ConstantPool::copy_fields(const ConstantPool* orig) {
@@ -99,15 +110,40 @@ static bool tag_array_is_zero_initialized(Array<u1>* tags) {
 
 ConstantPool::ConstantPool(Array<u1>* tags) :
   _tags(tags),
+#ifdef AARCH64
+  _jpc_tags(nullptr),
+#endif
   _length(tags->length()) {
-
-    assert(_tags != NULL, "invariant");
+    assert(_tags != nullptr, "invariant");
     assert(tags->length() == _length, "invariant");
     assert(tag_array_is_zero_initialized(tags), "invariant");
     assert(0 == flags(), "invariant");
     assert(0 == version(), "invariant");
-    assert(NULL == _pool_holder, "invariant");
+    assert(nullptr == _pool_holder, "invariant");
 }
+
+#ifdef AARCH64
+ConstantPool::ConstantPool(Array<u1>* tags, Array<u1>* jpt_markers):
+  _tags(tags),
+  _jpc_tags(nullptr),
+  _length(tags->length()) {
+
+    assert(JProfilingCacheCompileAdvance, "must in JProfilingCacheCompileAdvance");
+    assert(jpt_markers != nullptr, "invariant");
+    assert(jpt_markers->length() == tags->length(), "invariant");
+    assert(_tags != nullptr, "invariant");
+    assert(tags->length() == _length, "invariant");
+    assert(tag_array_is_zero_initialized(tags), "invariant");
+    assert(0 == flags(), "invariant");
+    assert(0 == version(), "invariant");
+    assert(nullptr == _pool_holder, "invariant");
+
+    for (int i = 0; i < jpt_markers->length(); i++) {
+      jpt_markers->at_put(i, _jwp_has_not_been_traversed);
+    }
+    set_jpc_tags(jpt_markers);
+}
+#endif
 
 void ConstantPool::deallocate_contents(ClassLoaderData* loader_data) {
   if (cache() != NULL) {
@@ -2230,6 +2266,90 @@ void ConstantPool::set_on_stack(const bool value) {
     }
   }
 }
+
+#ifdef AARCH64
+void ConstantPool::preload_jprofilecache_classes(TRAPS) {
+  constantPoolHandle cp(THREAD, this);
+  guarantee(cp->pool_holder() != nullptr, "must be fully loaded");
+  if (THREAD->is_eager_class_loading_active()) {
+    return;
+  }
+  THREAD->set_is_eager_class_loading_active(true);
+  Stack<InstanceKlass*, mtClass> s;
+  s.push(cp->pool_holder());
+  preload_classes_for_jprofilecache(s, THREAD);
+  THREAD->set_is_eager_class_loading_active(false);
+}
+
+Klass* ConstantPool::resolve_class_at_index(int constant_pool_index, TRAPS) {
+  assert(THREAD->is_Java_thread(), "must be a Java thread");
+  if (CompilationProfileCacheResolveClassEagerly) {
+    Klass* k = klass_at(constant_pool_index, CHECK_NULL);
+    return k;
+  } else {
+    Handle mirror_handle;
+    constantPoolHandle current_pool(THREAD, this);
+    Symbol* name = nullptr;
+    Handle  loader;
+    {
+      if (current_pool->tag_at(constant_pool_index).is_unresolved_klass()) {
+        if (current_pool->tag_at(constant_pool_index).is_unresolved_klass_in_error()) {
+          return nullptr;
+        } else {
+          name   = current_pool->klass_name_at(constant_pool_index);
+          loader = Handle(THREAD, current_pool->pool_holder()->class_loader());
+        }
+      }
+    }
+    oop protection_domain = current_pool->pool_holder()->protection_domain();
+    Handle protection_domain_handle (THREAD, protection_domain);
+    Klass* loaded_oop = SystemDictionary::resolve_or_fail(name, loader, protection_domain_handle, true, THREAD);
+    return loaded_oop;
+  }
+}
+
+void ConstantPool::preload_classes_for_jprofilecache(Stack<InstanceKlass*, mtClass>& class_processing_stack,
+                                                  TRAPS) {
+  JitProfileCache* jprofilecache = JitProfileCache::instance();
+  while (!class_processing_stack.is_empty()) {
+    InstanceKlass* ik = class_processing_stack.pop();
+    constantPoolHandle current_constant_pool(THREAD, ik->constants());
+    for (int i = 0; i< current_constant_pool->length();  i++) {
+      bool is_unresolved = false;
+      Symbol* name = nullptr;
+      {
+        if (current_constant_pool->tag_at(i).is_unresolved_klass()) {
+          if (ik->is_shared()) {
+            name = current_constant_pool->klass_name_at(i);
+            is_unresolved = true;
+          } else if (!current_constant_pool->jprofilecache_traversed_at(i)) {
+            name = current_constant_pool->klass_name_at(i);
+            is_unresolved = true;
+            current_constant_pool->jprofilecache_has_traversed_at(i);
+          }
+        }
+      }
+      if (is_unresolved) {
+        if (name != nullptr && !jprofilecache->preloader()->should_preload_class(name)) {
+          continue;
+        }
+        Klass* klass = current_constant_pool->resolve_class_at_index(i, THREAD);
+        if (HAS_PENDING_EXCEPTION) {
+          ResourceMark rm;
+          log_debug(jprofilecache)("[JitProfileCache] WARNING : resolve %s from constant pool failed",
+                        name->as_C_string());
+          if (PENDING_EXCEPTION->is_a(vmClasses::LinkageError_klass())) {
+            CLEAR_PENDING_EXCEPTION;
+          }
+        }
+        if (klass != nullptr && klass->is_instance_klass()) {
+          class_processing_stack.push((InstanceKlass*)klass);
+        }
+      }
+    }
+  }
+}
+#endif
 
 // Printing
 

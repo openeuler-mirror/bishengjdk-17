@@ -149,6 +149,10 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#ifdef AARCH64
+#include "jprofilecache/jitProfileCache.hpp"
+#include "jprofilecache/jitProfileCacheThread.hpp"
+#endif
 #if INCLUDE_JBOOSTER
 #include "jbooster/jBoosterManager.hpp"
 #endif // INCLUDE_JBOOSTER
@@ -257,6 +261,9 @@ Thread::Thread() {
   DEBUG_ONLY(_current_resource_mark = NULL;)
   set_handle_area(new (mtThread) HandleArea(NULL));
   set_metadata_handles(new (ResourceObj::C_HEAP, mtClass) GrowableArray<Metadata*>(30, mtClass));
+#ifdef AARCH64
+  set_is_eager_class_loading_active(false);
+#endif
   set_active_handles(NULL);
   set_free_handle_block(NULL);
   set_last_handle_mark(NULL);
@@ -268,6 +275,9 @@ Thread::Thread() {
   _threads_list_ptr = NULL;
   _nested_threads_hazard_ptr_cnt = 0;
   _rcu_counter = 0;
+#ifdef AARCH64
+  _super_class_resolution_depth = 0;
+#endif
 
   // the handle mark links itself to last_handle_mark
   new HandleMark(this);
@@ -3094,6 +3104,14 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
 
   StatSampler::engage();
   if (CheckJNICalls)                  JniPeriodicChecker::engage();
+#ifdef AARCH64
+  if (JProfilingCacheCompileAdvance) {
+    JitProfileCache* jprofilecache = JitProfileCache::instance();
+    assert(jprofilecache != nullptr, "sanity check");
+    jprofilecache->preloader()->jvm_booted_is_done();
+    JitProfileCacheThread::launch_with_delay(JProfilingCacheDelayLoadTime, THREAD);
+  }
+#endif
 
   BiasedLocking::init();
 

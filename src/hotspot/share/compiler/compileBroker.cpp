@@ -1691,6 +1691,11 @@ CompileTask* CompileBroker::create_compile_task(CompileQueue*       queue,
   new_task->initialize(compile_id, method, osr_bci, comp_level,
                        hot_method, hot_count, compile_reason,
                        blocking);
+#ifdef AARCH64
+  if (compile_reason == CompileTask::CompileReason::Reason_JitProfile) {
+    new_task->mark_jprofilecache_compilation();
+  }
+#endif
   queue->add(new_task);
   return new_task;
 }

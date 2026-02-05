@@ -94,6 +94,9 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#ifdef AARCH64
+#include "jprofilecache/jitProfileCache.hpp"
+#endif
 #if INCLUDE_JBOOSTER
 #include "jbooster/client/clientDataManager.hpp"
 #include "jbooster/client/clientMessageHandler.hpp"
@@ -452,6 +455,13 @@ void before_exit(JavaThread* thread, bool halt) {
       }
     }
   }
+
+#ifdef AARCH64
+  // flush jprofilecache
+  if (JProfilingCacheRecording && ExitVMProfileCacheFlush) {
+    JitProfileCache::instance()->flush_recorder();
+  }
+#endif
 
 #if INCLUDE_JVMCI
   if (EnableJVMCI) {

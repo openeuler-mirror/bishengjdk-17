@@ -3059,9 +3059,16 @@ bool GraphKit::seems_never_null(Node* obj, ciProfileData* data, bool& speculatin
     if (speculating) {
       return true;
     }
-    if (data == nullptr)
+    if (data == nullptr) {
+#ifdef AARCH64
+        // Compiled by JitProfile
+        if (JProfilingCacheCompileAdvance && this->C->env()->task()->is_jprofilecache_compilation()) {
+          return false;
+        }
+#endif
       // Edge case:  no mature data.  Be optimistic here.
       return true;
+    }
     // If the profile has not seen a null, assume it won't happen.
     assert(java_bc() == Bytecodes::_checkcast ||
            java_bc() == Bytecodes::_instanceof ||
@@ -3190,6 +3197,13 @@ Node* GraphKit::maybe_cast_profiled_obj(Node* obj,
 
   // type is null if profiling tells us this object is always null
   if (type != nullptr) {
+#ifdef AARCH64
+    if (JProfilingCacheCompileAdvance) {
+      if (this->C->env()->task()->is_jprofilecache_compilation()) {
+        return obj;
+      }
+    }
+#endif
     Deoptimization::DeoptReason class_reason = Deoptimization::Reason_speculate_class_check;
     Deoptimization::DeoptReason null_reason = Deoptimization::Reason_speculate_null_check;
 

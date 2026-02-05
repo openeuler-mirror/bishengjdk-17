@@ -206,6 +206,23 @@ class InstanceKlass: public Klass {
   // it is stored in the instanceklass as a NULL-terminated UTF-8 string
   const char*     _source_debug_extension;
 
+#ifdef AARCH64
+  // if not using JProfileCache, default value is 0
+  unsigned int    _crc32;
+  // if not using JProfileCache, default value is 0
+  unsigned int    _class_bytes_size;
+
+  // JProfilingCacheCompileAdvance eager init support
+  bool            _is_jprofilecache_recorded;
+
+  // source file path, e.g. /home/xxx/liba.jar
+  Symbol*         _source_file_path;
+
+#ifndef PRODUCT
+  int             _initialize_order;
+#endif // PRODUCT
+#endif // AARCH64
+
   // Number of heapOopSize words used by non-static fields in this klass
   // (including inherited fields but after header_size()).
   int             _nonstatic_field_size;
@@ -720,6 +737,26 @@ public:
   // source debug extension
   const char* source_debug_extension() const { return _source_debug_extension; }
   void set_source_debug_extension(const char* array, int length);
+
+#ifdef AARCH64
+  // JProfileCache support
+  unsigned int crc32()                     { return _crc32; }
+  void set_crc32(unsigned int crc32)       { _crc32 = crc32; }
+
+  unsigned int bytes_size()                { return _class_bytes_size; }
+  void set_bytes_size(unsigned int size)   { _class_bytes_size = size; }
+
+  bool is_jprofilecache_recorded()               { return _is_jprofilecache_recorded; }
+  void set_jprofilecache_recorded(bool value)    { _is_jprofilecache_recorded = value; }
+
+  Symbol* source_file_path()               { return _source_file_path; }
+  void set_source_file_path(Symbol* value) { _source_file_path = value; }
+
+#ifndef PRODUCT
+  unsigned int initialize_order()          { return _initialize_order; }
+  void set_initialize_order(int order)     { _initialize_order = order; }
+#endif // PRODUCT
+#endif // AARCH64
 
   // nonstatic oop-map blocks
   static int nonstatic_oop_map_size(unsigned int oop_map_count) {
