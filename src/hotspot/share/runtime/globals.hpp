@@ -147,6 +147,7 @@ const size_t minimumSymbolTableSize = 1024;
                            constraint)
 const bool UseCompressedOops = false;
 const bool UseCompressedClassPointers = false;
+const bool UseCompactObjectHeaders = false;
 const intx ObjectAlignmentInBytes = 8;
 
 #endif // _LP64
@@ -2167,6 +2168,13 @@ const intx ObjectAlignmentInBytes = 8;
           false AARCH64_ONLY(DEBUG_ONLY(||true)),                           \
              "Mark all threads after a safepoint, and clear on a modify "   \
              "fence. Add cleanliness checks.")                              \
+                                                                            \
+  product(int, LockingMode, LM_LEGACY, EXPERIMENTAL,                        \
+          "Select locking mode: "                                           \
+          "0: monitors only (LM_MONITOR), "                                 \
+          "1: monitors & legacy stack-locking (LM_LEGACY, default), "       \
+          "2: monitors & new lightweight locking (LM_LIGHTWEIGHT)")         \
+          range(0, 2)                                                       \
                                                                             \
   develop(bool, TraceOptimizedUpcallStubs, false,                              \
                 "Trace optimized upcall stub generation")                      \

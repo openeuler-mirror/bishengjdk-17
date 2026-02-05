@@ -71,9 +71,13 @@ class HotSpotVMConfig extends HotSpotVMConfigAccess {
 
     final boolean useCompressedOops = getFlag("UseCompressedOops", Boolean.class);
 
+    final boolean useCompactObjectHeaders = getFlag("UseCompactObjectHeaders", Boolean.class, false);
+
     final int objectAlignment = getFlag("ObjectAlignmentInBytes", Integer.class);
 
-    final int hubOffset = getFieldOffset("oopDesc::_metadata._klass", Integer.class, "Klass*");
+    final int markOffset = getFieldOffset("oopDesc::_mark", Integer.class, "markWord");
+    final int klassShift = useCompactObjectHeaders ? getConstant("markWord::klass_shift", Integer.class) : 0;
+    final int hubOffset = useCompactObjectHeaders ? markOffset + (klassShift / 8) : getFieldOffset("oopDesc::_metadata._klass", Integer.class, "Klass*");
 
     final int prototypeMarkWordOffset = getFieldOffset("Klass::_prototype_header", Integer.class, "markWord");
     final int subklassOffset = getFieldOffset("Klass::_subklass", Integer.class, "Klass*");

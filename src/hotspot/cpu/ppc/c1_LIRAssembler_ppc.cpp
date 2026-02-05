@@ -2765,6 +2765,11 @@ void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
   }
 }
 
+void LIR_Assembler::emit_load_klass(LIR_OpLoadKlass* op) {
+  // Currently not needed.
+  Unimplemented();
+}
+
 void LIR_Assembler::emit_profile_call(LIR_OpProfileCall* op) {
   ciMethod* method = op->profiled_method();
   int bci          = op->profiled_bci();

@@ -30,6 +30,9 @@
 #include "utilities/globalDefinitions.hpp"
 
 TEST_VM(typeArrayOopDesc, bool_at_put) {
+#ifndef AARCH64
+  bool UseCompactObjectHeaders = false;
+#endif
   char mem[100];
   memset(mem, 0, ARRAY_SIZE(mem));
 
@@ -37,6 +40,11 @@ TEST_VM(typeArrayOopDesc, bool_at_put) {
 
   typeArrayOop o = (typeArrayOop) cast_to_oop(addr);
   o->set_klass(Universe::boolArrayKlassObj());
+  if (UseCompactObjectHeaders) {
+    o->set_mark(Universe::boolArrayKlassObj()->prototype_header());
+  } else {
+    o->set_klass(Universe::boolArrayKlassObj());
+  }
   o->set_length(10);
 
 

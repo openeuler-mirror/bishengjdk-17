@@ -60,6 +60,7 @@ import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.readInstanceKlassInitThread;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.readLayoutHelper;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.registerAsWord;
+import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.useCompactObjectHeaders;
 import static org.graalvm.compiler.hotspot.replacements.HotspotSnippetsOptions.ProfileAllocations;
 import static org.graalvm.compiler.hotspot.replacements.HotspotSnippetsOptions.ProfileAllocationsContext;
 import static org.graalvm.compiler.nodes.PiArrayNode.piArrayCastToSnippetReplaceeStamp;
@@ -314,6 +315,9 @@ public class HotSpotAllocationSnippets extends AllocationSnippets {
         int headerSize = (layoutHelper >> layoutHelperHeaderSizeShift(INJECTED_VMCONFIG)) & layoutHelperHeaderSizeMask(INJECTED_VMCONFIG);
         int log2ElementSize = (layoutHelper >> layoutHelperLog2ElementSizeShift(INJECTED_VMCONFIG)) & layoutHelperLog2ElementSizeMask(INJECTED_VMCONFIG);
 
+        if (useCompactObjectHeaders(INJECTED_VMCONFIG)) {
+            prototypeMarkWord = nonNullKlass.readWord(prototypeMarkWordOffset(INJECTED_VMCONFIG), PROTOTYPE_MARK_WORD_LOCATION);
+        }
         Object result = allocateArrayImpl(nonNullKlass.asWord(), prototypeMarkWord, length, headerSize, log2ElementSize, fillContents, headerSize, emitMemoryBarrier, false, supportsBulkZeroing,
                         profilingData);
         return piArrayCastToSnippetReplaceeStamp(result, length);
@@ -475,7 +479,9 @@ public class HotSpotAllocationSnippets extends AllocationSnippets {
     protected final void initializeObjectHeader(Word memory, Word hub, Word prototypeMarkWord, boolean isArray) {
         KlassPointer klassPtr = KlassPointer.fromWord(hub);
         Word markWord = prototypeMarkWord;
-        if (!isArray && HotSpotReplacementsUtil.useBiasedLocking(INJECTED_VMCONFIG)) {
+        if (useCompactObjectHeaders(INJECTED_VMCONFIG) ||
+                (!isArray && HotSpotReplacementsUtil.useBiasedLocking(INJECTED_VMCONFIG))) {
+            // COH and biased locking both require a fresh prototype header from the Klass.
             markWord = klassPtr.readWord(prototypeMarkWordOffset(INJECTED_VMCONFIG), PROTOTYPE_MARK_WORD_LOCATION);
         }
 
@@ -701,7 +707,9 @@ public class HotSpotAllocationSnippets extends AllocationSnippets {
 
             Arguments args = new Arguments(snippet, graph.getGuardsStage(), tool.getLoweringStage());
             args.add("hub", hub);
-            assert arrayType.prototypeMarkWord() == lookupArrayClass(tool, JavaKind.Object).prototypeMarkWord() : "all array types are assumed to have the same prototypeMarkWord";
+            if (!config.useCompactObjectHeaders) {
+                assert arrayType.prototypeMarkWord() == lookupArrayClass(tool, JavaKind.Object).prototypeMarkWord() : "all array types are assumed to have the same prototypeMarkWord";
+            }
             args.add("prototypeMarkWord", arrayType.prototypeMarkWord());
             ValueNode length = node.length();
             args.add("length", length.isAlive() ? length : graph.addOrUniqueWithInputs(length));

@@ -21,37 +21,12 @@
  * questions.
  *
  */
-#include "precompiled.hpp"
-#include "jfr/leakprofiler/chains/bitset.inline.hpp"
+#ifndef SHARE_JFR_LEAKPROFILER_JFRBITMAP_HPP
+#define SHARE_JFR_LEAKPROFILER_JFRBITMAP_HPP
 
-BitSet::BitMapFragment::BitMapFragment(uintptr_t granule, BitMapFragment* next) :
-    _bits(_bitmap_granularity_size >> LogMinObjAlignmentInBytes, mtTracing, true /* clear */),
-    _next(next) {
-}
+#include "memory/allocation.hpp"
+#include "utilities/objectBitSet.inline.hpp"
 
-BitSet::BitMapFragmentTable::~BitMapFragmentTable() {
-  for (int index = 0; index < table_size(); index ++) {
-    Entry* e = bucket(index);
-    while (e != nullptr) {
-      Entry* tmp = e;
-      e = e->next();
-      free_entry(tmp);
-    }
-  }
-}
+typedef ObjectBitSet<mtTracing> JFRBitSet;
 
-BitSet::BitSet() :
-    _bitmap_fragments(32),
-    _fragment_list(NULL),
-    _last_fragment_bits(NULL),
-    _last_fragment_granule(UINTPTR_MAX) {
-}
-
-BitSet::~BitSet() {
-  BitMapFragment* current = _fragment_list;
-  while (current != NULL) {
-    BitMapFragment* next = current->next();
-    delete current;
-    current = next;
-  }
-}
+#endif // SHARE_JFR_LEAKPROFILER_JFRBITMAP_HPP

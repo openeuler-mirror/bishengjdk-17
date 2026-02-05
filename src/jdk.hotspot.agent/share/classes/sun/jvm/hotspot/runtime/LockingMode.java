@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, Oracle and/or its affiliates. All rights reserved.
+ * Copyright Amazon.com Inc. or its affiliates. All Rights Reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -22,25 +22,39 @@
  *
  */
 
-#include "precompiled.hpp"
-#include "asm/macroAssembler.hpp"
-#include "opto/compile.hpp"
-#include "opto/node.hpp"
-#include "opto/output.hpp"
-#include "runtime/sharedRuntime.hpp"
+package sun.jvm.hotspot.runtime;
 
-#define __ masm.
-void C2SafepointPollStubTable::emit_stub_impl(MacroAssembler& masm, C2SafepointPollStub* entry) const {
-  assert(SharedRuntime::polling_page_return_handler_blob() != NULL,
-         "polling page return stub not created yet");
-  address stub = SharedRuntime::polling_page_return_handler_blob()->entry_point();
+import sun.jvm.hotspot.types.TypeDataBase;
 
-  RuntimeAddress callback_addr(stub);
 
-  __ bind(entry->_stub_label);
-  InternalAddress safepoint_pc(masm.pc() - masm.offset() + entry->_safepoint_offset);
-  __ adr(rscratch1, safepoint_pc);
-  __ str(rscratch1, Address(rthread, JavaThread::saved_exception_pc_offset()));
-  __ far_jump(callback_addr);
+/** Encapsulates the LockingMode enum in globalDefinitions.hpp in
+ the VM. */
+
+public class LockingMode {
+  private static int monitor;
+  private static int legacy;
+  private static int lightweight;
+
+  static {
+    VM.registerVMInitializedObserver(
+        (o, d) -> initialize(VM.getVM().getTypeDataBase()));
+  }
+
+  private static synchronized void initialize(TypeDataBase db) {
+    monitor     = db.lookupIntConstant("LM_MONITOR").intValue();
+    legacy      = db.lookupIntConstant("LM_LEGACY").intValue();
+    lightweight = db.lookupIntConstant("LM_LIGHTWEIGHT").intValue();
+  }
+
+  public static int getMonitor() {
+    return monitor;
+  }
+
+  public static int getLegacy() {
+    return legacy;
+  }
+
+  public static int getLightweight() {
+    return lightweight;
+  }
 }
-#undef __

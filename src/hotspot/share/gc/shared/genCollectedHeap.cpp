@@ -141,6 +141,8 @@ jint GenCollectedHeap::initialize() {
 
   GCInitLogger::print();
 
+  SlidingForwarding::initialize(_reserved, SpaceAlignment / HeapWordSize);
+
   return JNI_OK;
 }
 

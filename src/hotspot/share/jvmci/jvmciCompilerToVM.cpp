@@ -408,6 +408,8 @@ C2V_VMENTRY_NULL(jobject, getResolvedJavaType0, (JNIEnv* env, jobject, jobject b
   JVMCIKlassHandle klass(THREAD);
   JVMCIObject base_object = JVMCIENV->wrap(base);
   jlong base_address = 0;
+  // With compact object headers, we can test for the explicit offset within
+  // the header to figure out if compiler code is accessing the class.
   if (base_object.is_non_null() && offset == oopDesc::klass_offset_in_bytes()) {
     // klass = JVMCIENV->unhandle(base_object)->klass();
     if (JVMCIENV->isa_HotSpotObjectConstantImpl(base_object)) {
@@ -2205,7 +2207,7 @@ C2V_VMENTRY_0(jint, arrayBaseOffset, (JNIEnv* env, jobject, jobject kind))
     JVMCI_THROW_0(NullPointerException);
   }
   BasicType type = JVMCIENV->kindToBasicType(JVMCIENV->wrap(kind), JVMCI_CHECK_0);
-  return arrayOopDesc::header_size(type) * HeapWordSize;
+  return arrayOopDesc::base_offset_in_bytes(type);
 C2V_END
 
 C2V_VMENTRY_0(jint, arrayIndexScale, (JNIEnv* env, jobject, jobject kind))

@@ -56,4 +56,7 @@ public interface MachineDescription extends Serializable {
   /** Indicates whether the underlying machine supports the LP64 data
       model (currently only SPARC/64). */
   public boolean isLP64();
+
+  /** Indicates whether the underlying machine is AARCH64 platform. */
+  public boolean isAarch64();
 }

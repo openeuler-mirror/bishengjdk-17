@@ -102,6 +102,8 @@ define_pd_global(intx, InlineSmallCode,          1000);
   product(uint, UseSVE, 0,                                              \
           "Highest supported SVE instruction set version")              \
           range(0, 2)                                                   \
+  product(bool, UseCompactObjectHeaders, false, EXPERIMENTAL,           \
+          "Use compact 64-bit object headers in 64-bit VM")             \
   product(bool, UseBlockZeroing, true,                                  \
           "Use DC ZVA for block zeroing")                               \
   product(intx, BlockZeroingLowLimit, 256,                              \

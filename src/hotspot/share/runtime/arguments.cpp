@@ -2018,6 +2018,22 @@ bool Arguments::check_vm_args_consistency() {
   }
 #endif
 
+#if !defined(X86) && !defined(AARCH64)
+  if (LockingMode == LM_LIGHTWEIGHT) {
+    FLAG_SET_CMDLINE(LockingMode, LM_LEGACY);
+    warning("New lightweight locking not supported on this platform");
+  }
+#endif
+
+  if (UseHeavyMonitors) {
+    if (FLAG_IS_CMDLINE(LockingMode) && LockingMode != LM_MONITOR) {
+      jio_fprintf(defaultStream::error_stream(),
+                  "Conflicting -XX:+UseHeavyMonitors and -XX:LockingMode=%d flags", LockingMode);
+      return false;
+    }
+    FLAG_SET_CMDLINE(LockingMode, LM_MONITOR);
+  }
+
   return status;
 }
 
@@ -3294,6 +3310,29 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
   }
 #endif
 
+#ifdef AARCH64
+  if (UseCompactObjectHeaders && UseZGC) {
+    if (FLAG_IS_CMDLINE(UseCompactObjectHeaders)) {
+      warning("ZGC does not work with compact object headers, disabling UseCompactObjectHeaders");
+    }
+    FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+  }
+  if (UseCompactObjectHeaders && FLAG_IS_CMDLINE(UseCompressedClassPointers) && !UseCompressedClassPointers) {
+    // If user specifies -UseCompressedClassPointers, disable compact headers with a warning.
+    warning("Compact object headers require compressed class pointers. Disabling compact object headers.");
+    FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+  }
+  if (UseCompactObjectHeaders && LockingMode == LM_LEGACY) {
+    FLAG_SET_DEFAULT(LockingMode, LM_LIGHTWEIGHT);
+  }
+  if (UseCompactObjectHeaders && UseBiasedLocking) {
+    FLAG_SET_DEFAULT(UseBiasedLocking, false);
+  }
+  if (UseCompactObjectHeaders && !UseAltGCForwarding) {
+    FLAG_SET_DEFAULT(UseAltGCForwarding, true);
+  }
+#endif // AARCH64
+
   return JNI_OK;
 }
 
@@ -3583,13 +3622,22 @@ char* Arguments::get_default_shared_archive_path() {
   os::jvm_path(jvm_path, sizeof(jvm_path));
   char *end = strrchr(jvm_path, *os::file_separator());
   if (end != NULL) *end = '\0';
-  size_t jvm_path_len = strlen(jvm_path);
-  size_t file_sep_len = strlen(os::file_separator());
-  const size_t len = jvm_path_len + file_sep_len + 20;
-  default_archive_path = NEW_C_HEAP_ARRAY(char, len, mtArguments);
-  jio_snprintf(default_archive_path, len,
-               LP64_ONLY(!UseCompressedOops ? "%s%sclasses_nocoops.jsa":) "%s%sclasses.jsa",
-               jvm_path, os::file_separator());
+  stringStream tmp;
+  tmp.print("%s%sclasses", jvm_path, os::file_separator());
+#ifdef _LP64
+  if (!UseCompressedOops) {
+    tmp.print_raw("_nocoops");
+  }
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    // Note that generation of xxx_coh.jsa variants require
+    // --enable-cds-archive-coh at build time
+    tmp.print_raw("_coh");
+  }
+#endif // AARCH64
+#endif // _LP64
+  tmp.print_raw(".jsa");
+  default_archive_path = os::strdup(tmp.base());
   return default_archive_path;
 }
 

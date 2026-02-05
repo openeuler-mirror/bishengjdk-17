@@ -38,6 +38,7 @@ import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.HUB_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.HUB_WRITE_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.KLASS_LAYOUT_HELPER_LOCATION;
+import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.MARK_WORD_LOCATION;
 import static org.graalvm.compiler.hotspot.replacements.HotSpotReplacementsUtil.OBJ_ARRAY_KLASS_ELEMENT_KLASS_LOCATION;
 import static jdk.internal.vm.compiler.word.LocationIdentity.any;
 
@@ -50,6 +51,7 @@ import org.graalvm.compiler.core.common.spi.ForeignCallDescriptor;
 import org.graalvm.compiler.core.common.spi.ForeignCallSignature;
 import org.graalvm.compiler.core.common.spi.ForeignCallsProvider;
 import org.graalvm.compiler.core.common.spi.MetaAccessExtensionProvider;
+import org.graalvm.compiler.core.common.type.AbstractPointerStamp;
 import org.graalvm.compiler.core.common.type.ObjectStamp;
 import org.graalvm.compiler.core.common.type.Stamp;
 import org.graalvm.compiler.core.common.type.StampFactory;
@@ -97,29 +99,41 @@ import org.graalvm.compiler.hotspot.replacements.arraycopy.HotSpotArraycopySnipp
 import org.graalvm.compiler.hotspot.replacements.profiling.ProfileSnippets;
 import org.graalvm.compiler.hotspot.stubs.ForeignCallSnippets;
 import org.graalvm.compiler.hotspot.word.KlassPointer;
+import org.graalvm.compiler.hotspot.word.PointerCastNode;
 import org.graalvm.compiler.nodes.AbstractBeginNode;
 import org.graalvm.compiler.nodes.AbstractDeoptimizeNode;
+import org.graalvm.compiler.nodes.BeginNode;
 import org.graalvm.compiler.nodes.CompressionNode.CompressionOp;
 import org.graalvm.compiler.nodes.ComputeObjectAddressNode;
 import org.graalvm.compiler.nodes.ConstantNode;
+import org.graalvm.compiler.nodes.EndNode;
 import org.graalvm.compiler.nodes.FixedNode;
+import org.graalvm.compiler.nodes.FixedWithNextNode;
 import org.graalvm.compiler.nodes.GetObjectAddressNode;
+import org.graalvm.compiler.nodes.IfNode;
 import org.graalvm.compiler.nodes.Invoke;
 import org.graalvm.compiler.nodes.LogicNode;
 import org.graalvm.compiler.nodes.LoweredCallTargetNode;
+import org.graalvm.compiler.nodes.MergeNode;
 import org.graalvm.compiler.nodes.NodeView;
 import org.graalvm.compiler.nodes.ParameterNode;
+import org.graalvm.compiler.nodes.PiNode;
 import org.graalvm.compiler.nodes.SafepointNode;
 import org.graalvm.compiler.nodes.StartNode;
 import org.graalvm.compiler.nodes.StructuredGraph;
 import org.graalvm.compiler.nodes.StructuredGraph.GuardsStage;
 import org.graalvm.compiler.nodes.UnwindNode;
 import org.graalvm.compiler.nodes.ValueNode;
+import org.graalvm.compiler.nodes.ValuePhiNode;
 import org.graalvm.compiler.nodes.calc.AddNode;
+import org.graalvm.compiler.nodes.calc.AndNode;
 import org.graalvm.compiler.nodes.calc.FloatingNode;
 import org.graalvm.compiler.nodes.calc.IntegerDivRemNode;
+import org.graalvm.compiler.nodes.calc.IntegerEqualsNode;
 import org.graalvm.compiler.nodes.calc.IsNullNode;
+import org.graalvm.compiler.nodes.calc.NarrowNode;
 import org.graalvm.compiler.nodes.calc.RemNode;
+import org.graalvm.compiler.nodes.calc.UnsignedRightShiftNode;
 import org.graalvm.compiler.nodes.debug.StringToBytesNode;
 import org.graalvm.compiler.nodes.debug.VerifyHeapNode;
 import org.graalvm.compiler.nodes.extended.BytecodeExceptionNode;
@@ -127,6 +141,7 @@ import org.graalvm.compiler.nodes.extended.BytecodeExceptionNode.BytecodeExcepti
 import org.graalvm.compiler.nodes.extended.ForeignCallNode;
 import org.graalvm.compiler.nodes.extended.GetClassNode;
 import org.graalvm.compiler.nodes.extended.LoadHubNode;
+import org.graalvm.compiler.nodes.extended.LoadHubOrNullNode;
 import org.graalvm.compiler.nodes.extended.LoadMethodNode;
 import org.graalvm.compiler.nodes.extended.OSRLocalNode;
 import org.graalvm.compiler.nodes.extended.OSRLockNode;
@@ -229,7 +244,9 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
         assert target == providers.getCodeCache().getTarget();
         instanceofSnippets = new InstanceOfSnippets.Templates(options, factories, runtime, providers, target);
         allocationSnippets = new HotSpotAllocationSnippets.Templates(options, factories, runtime, providers, target, config);
-        monitorSnippets = new MonitorSnippets.Templates(options, factories, runtime, providers, target, config.useFastLocking);
+        // Fast-locking snippets rely on legacy stack locking, which is incompatible with COH.
+        boolean useFastLocking = config.useFastLocking && !config.useCompactObjectHeaders;
+        monitorSnippets = new MonitorSnippets.Templates(options, factories, runtime, providers, target, useFastLocking);
         g1WriteBarrierSnippets = new HotSpotG1WriteBarrierSnippets.Templates(options, factories, runtime, providers, target, config);
         serialWriteBarrierSnippets = new HotSpotSerialWriteBarrierSnippets.Templates(options, factories, runtime, providers, target);
         exceptionObjectSnippets = new LoadExceptionObjectSnippets.Templates(options, factories, providers, target);
@@ -767,11 +784,101 @@ public abstract class DefaultHotSpotLoweringProvider extends DefaultJavaLowering
     }
 
     @Override
+    protected void lowerLoadHubOrNullNode(LoadHubOrNullNode loadHubOrNullNode, LoweringTool tool) {
+        if (!runtime.getVMConfig().useCompactObjectHeaders) {
+            super.lowerLoadHubOrNullNode(loadHubOrNullNode, tool);
+            return;
+        }
+        StructuredGraph graph = loadHubOrNullNode.graph();
+        if (tool.getLoweringStage() != LoweringTool.StandardLoweringStage.LOW_TIER) {
+            return;
+        }
+        if (graph.getGuardsStage().allowsFloatingGuards()) {
+            return;
+        }
+        final FixedWithNextNode predecessor = tool.lastFixedNode();
+        final ValueNode value = loadHubOrNullNode.getValue();
+        AbstractPointerStamp stamp = (AbstractPointerStamp) value.stamp(NodeView.DEFAULT);
+        final LogicNode isNull = graph.addOrUniqueWithInputs(IsNullNode.create(value));
+        final EndNode nullEnd = graph.add(new EndNode());
+        final BeginNode nonNullBegin = graph.add(new BeginNode());
+        final IfNode ifNode = graph.add(new IfNode(isNull, nullEnd, nonNullBegin, 0.5));
+        final EndNode nonNullEnd = graph.add(new EndNode());
+        final MergeNode merge = graph.add(new MergeNode());
+        merge.addForwardEnd(nullEnd);
+        merge.addForwardEnd(nonNullEnd);
+        final AbstractPointerStamp hubStamp = (AbstractPointerStamp) loadHubOrNullNode.stamp(NodeView.DEFAULT);
+        ValueNode nullHub = ConstantNode.forConstant(hubStamp.asAlwaysNull(), JavaConstant.NULL_POINTER, tool.getMetaAccess(), graph);
+        final ValueNode nonNullValue = graph.addOrUniqueWithInputs(PiNode.create(value, stamp.asNonNull(), ifNode.falseSuccessor()));
+        ValueNode hub = createReadHubWithCompactHeaders(graph, nonNullValue, nonNullBegin, nonNullEnd);
+        ValueNode[] values = new ValueNode[]{nullHub, hub};
+        final ValuePhiNode hubPhi = graph.unique(new ValuePhiNode(hubStamp, merge, values));
+        final FixedNode oldNext = predecessor.next();
+        predecessor.setNext(ifNode);
+        merge.setNext(oldNext);
+        loadHubOrNullNode.replaceAtUsagesAndDelete(hubPhi);
+    }
+
+    private ValueNode createReadHubWithCompactHeaders(StructuredGraph graph, ValueNode object, FixedWithNextNode predecessor, FixedNode successor) {
+        GraalHotSpotVMConfig config = runtime.getVMConfig();
+        assert config.useCompressedClassPointers : "compact headers require compressed class pointers";
+        JavaKind wordKind = runtime.getTarget().wordJavaKind;
+        Stamp markStamp = StampFactory.forKind(wordKind);
+
+        AddressNode markAddress = createOffsetAddress(graph, object, config.markOffset);
+        ReadNode markRead = graph.add(new ReadNode(markAddress, MARK_WORD_LOCATION, markStamp, BarrierType.NONE));
+
+        int lockMaskInPlace = config.unlockedMask | config.monitorMask;
+        ValueNode lockMask = ConstantNode.forIntegerBits(wordKind.getBitCount(), lockMaskInPlace, graph);
+        ValueNode monitorMask = ConstantNode.forIntegerBits(wordKind.getBitCount(), config.monitorMask, graph);
+        ValueNode lockBits = graph.addOrUniqueWithInputs(AndNode.create(markRead, lockMask, NodeView.DEFAULT));
+        LogicNode isMonitor = graph.addOrUniqueWithInputs(IntegerEqualsNode.create(lockBits, monitorMask, NodeView.DEFAULT));
+
+        BeginNode monitorBegin = graph.add(new BeginNode());
+        BeginNode normalBegin = graph.add(new BeginNode());
+        IfNode ifNode = graph.add(new IfNode(isMonitor, monitorBegin, normalBegin, 0.5));
+        EndNode monitorEnd = graph.add(new EndNode());
+        EndNode normalEnd = graph.add(new EndNode());
+
+        AddressNode displacedAddress = createOffsetAddress(graph, markRead, config.objectMonitorHeaderOffsetNoTag);
+        ReadNode displacedHeaderRead = graph.add(new ReadNode(displacedAddress, DISPLACED_MARK_WORD_LOCATION, markStamp, BarrierType.NONE));
+        monitorBegin.setNext(displacedHeaderRead);
+        displacedHeaderRead.setNext(monitorEnd);
+        normalBegin.setNext(normalEnd);
+
+        MergeNode merge = graph.add(new MergeNode());
+        merge.addForwardEnd(monitorEnd);
+        merge.addForwardEnd(normalEnd);
+        ValueNode[] values = new ValueNode[]{displacedHeaderRead, markRead};
+        ValuePhiNode markPhi = graph.unique(new ValuePhiNode(markStamp, merge, values));
+        predecessor.setNext(markRead);
+        markRead.setNext(ifNode);
+        merge.setNext(successor);
+
+        ValueNode shift = ConstantNode.forInt(config.klassShift, graph);
+        ValueNode shifted = graph.addOrUniqueWithInputs(UnsignedRightShiftNode.create(markPhi, shift, NodeView.DEFAULT));
+        int narrowKlassBits = config.narrowKlassSize * Byte.SIZE;
+        ValueNode narrowKlass = graph.addOrUniqueWithInputs(NarrowNode.create(shifted, narrowKlassBits, NodeView.DEFAULT));
+        KlassPointerStamp compressedStamp = KlassPointerStamp.klassNonNull().compressed(config.getKlassEncoding());
+        ValueNode compressedKlass = graph.addOrUniqueWithInputs(PointerCastNode.create(compressedStamp, narrowKlass));
+        return HotSpotCompressionNode.uncompress(compressedKlass, config.getKlassEncoding());
+    }
+
+    @Override
     protected ValueNode createReadHub(StructuredGraph graph, ValueNode object, LoweringTool tool) {
         if (tool.getLoweringStage() != LoweringTool.StandardLoweringStage.LOW_TIER) {
             return graph.unique(new LoadHubNode(tool.getStampProvider(), object));
         }
         assert !object.isConstant() || object.isNullConstant();
+
+        if (runtime.getVMConfig().useCompactObjectHeaders) {
+            if (graph.getGuardsStage().allowsFloatingGuards()) {
+                return graph.unique(new LoadHubNode(tool.getStampProvider(), object));
+            }
+            FixedWithNextNode predecessor = tool.lastFixedNode();
+            FixedNode successor = predecessor.next();
+            return createReadHubWithCompactHeaders(graph, object, predecessor, successor);
+        }
 
         KlassPointerStamp hubStamp = KlassPointerStamp.klassNonNull();
         if (runtime.getVMConfig().useCompressedClassPointers) {
