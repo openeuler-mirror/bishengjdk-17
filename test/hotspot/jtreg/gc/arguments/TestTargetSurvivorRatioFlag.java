@@ -89,6 +89,22 @@ public class TestTargetSurvivorRatioFlag {
 
         LinkedList<String> options = new LinkedList<>(Arrays.asList(Utils.getTestJavaOpts()));
 
+        int numaNodesRandomCpu = options.stream().filter(s -> s.startsWith("-XX:NUMANodesRandom="))
+                                        .findFirst().map(s -> Integer.parseInt(s.substring("-XX:NUMANodesRandom=".length())))
+                                        .orElse(-1);
+
+        int numaNodesRandomMem = options.stream().filter(s -> s.startsWith("-XX:NUMAMemNodesRandom="))
+                                        .findFirst().map(s -> Integer.parseInt(s.substring("-XX:NUMAMemNodesRandom=".length())))
+                                        .orElse(-1);
+
+        boolean useNUMA = options.contains("-XX:+UseNUMA");
+
+        // Avoid this binding policy because spreading memory to nodes not bound to the CPU nodes increases PLABWastePct.
+        // Using numactl --cpunodebind=0-m --membind=0-n (m < n) with -XX:+UseNUMA will trigger the same issue.
+        if (numaNodesRandomCpu != numaNodesRandomMem && useNUMA) {
+            return;
+        }
+
         // Need to consider the effect of TargetPLABWastePct=1 for G1 GC
         if (options.contains("-XX:+UseG1GC")) {
             VARIANCE = 2;

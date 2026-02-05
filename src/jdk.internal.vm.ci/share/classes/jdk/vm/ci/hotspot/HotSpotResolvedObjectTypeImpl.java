@@ -940,7 +940,7 @@ final class HotSpotResolvedObjectTypeImpl extends HotSpotResolvedJavaType implem
     @Override
     public long prototypeMarkWord() {
         HotSpotVMConfig config = config();
-        if (isArray()) {
+        if (isArray() && !config.useCompactObjectHeaders) {
             return config.arrayPrototypeMarkWord();
         } else {
             return UNSAFE.getAddress(getMetaspaceKlass() + config.prototypeMarkWordOffset);

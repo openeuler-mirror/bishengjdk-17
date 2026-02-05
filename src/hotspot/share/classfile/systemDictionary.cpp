@@ -86,6 +86,9 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#ifdef AARCH64
+#include "jprofilecache/jitProfileCache.hpp"
+#endif
 #if INCLUDE_JBOOSTER
 #include "jbooster/client/clientStartupSignal.hpp"
 #endif // INCLUDE_JBOOSTER
@@ -341,6 +344,32 @@ static inline void log_circularity_error(Thread* thread, PlaceholderEntry* probe
   }
 }
 
+#ifdef AARCH64
+class SuperClassRecursionTracker : public StackObj {
+public:
+  SuperClassRecursionTracker() {
+    initialize(Thread::current());
+  }
+
+  SuperClassRecursionTracker(Thread* thread) {
+    initialize(thread);
+  }
+
+  ~SuperClassRecursionTracker() {
+    assert(JProfilingCacheCompileAdvance, "wrong usage");
+    _thread->super_class_depth_dec();
+  }
+protected:
+  void initialize(Thread* thread) {
+    assert(JProfilingCacheCompileAdvance, "wrong usage");
+    _thread = thread;
+    _thread->super_class_depth_add();
+  }
+private:
+  Thread* _thread;
+};
+#endif
+
 // Must be called for any superclass or superinterface resolution
 // during class definition to allow class circularity checking
 // superinterface callers:
@@ -430,11 +459,24 @@ InstanceKlass* SystemDictionary::resolve_super_or_fail(Symbol* class_name,
   }
 
   // Resolve the superclass or superinterface, check results on return
-  InstanceKlass* superk =
-    SystemDictionary::resolve_instance_class_or_null_helper(super_name,
-                                                            class_loader,
-                                                            protection_domain,
-                                                            THREAD);
+  InstanceKlass* superk = nullptr;
+#ifdef AARCH64
+  if (JProfilingCacheCompileAdvance) {
+    SuperClassRecursionTracker superClassRecursionTracker;
+    superk =
+      SystemDictionary::resolve_instance_class_or_null_helper(super_name,
+                                        class_loader,
+                                        protection_domain,
+                                        THREAD);
+  } else
+#endif
+  {
+    superk =
+      SystemDictionary::resolve_instance_class_or_null_helper(super_name,
+                                        class_loader,
+                                        protection_domain,
+                                        THREAD);
+  }
 
   // Clean up placeholder entry.
   {
@@ -750,6 +792,16 @@ InstanceKlass* SystemDictionary::resolve_instance_class_or_null(Symbol* name,
   // Make sure we have the right class in the dictionary
   DEBUG_ONLY(verify_dictionary_entry(name, loaded_class));
 
+#ifdef AARCH64
+  if (JProfilingCacheCompileAdvance) {
+    if (loaded_class != nullptr) {
+      JitProfileCache* jprofilecache = JitProfileCache::instance();
+      assert(jprofilecache != nullptr, "sanity check");
+      jprofilecache->preloader()->resolve_loaded_klass(loaded_class);
+    }
+  }
+#endif
+
   // Check if the protection domain is present it has the right access
   if (protection_domain() != NULL) {
     // Verify protection domain. If it fails an exception is thrown
@@ -956,6 +1008,14 @@ InstanceKlass* SystemDictionary::resolve_class_from_stream(
 
   // Make sure we have an entry in the SystemDictionary on success
   DEBUG_ONLY(verify_dictionary_entry(h_name, k));
+
+#ifdef AARCH64
+  if (JProfilingCacheCompileAdvance) {
+    JitProfileCache* jprofilecache = JitProfileCache::instance();
+    assert(jprofilecache != nullptr, "sanity check");
+    jprofilecache->preloader()->resolve_loaded_klass(k);
+  }
+#endif
 
   return k;
 }

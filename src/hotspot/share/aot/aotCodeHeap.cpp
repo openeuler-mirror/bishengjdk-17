@@ -184,6 +184,9 @@ void AOTLib::verify_config() {
   // Check flags
   verify_flag(_config->_useCompressedOops, UseCompressedOops, "UseCompressedOops");
   verify_flag(_config->_useCompressedClassPointers, UseCompressedClassPointers, "UseCompressedClassPointers");
+#ifdef AARCH64
+  verify_flag(_config->_useCompactObjectHeaders, UseCompactObjectHeaders, "UseCompactObjectHeaders");
+#endif
   verify_flag(_config->_useTLAB, UseTLAB, "UseTLAB");
   verify_flag(_config->_useBiasedLocking, UseBiasedLocking, "UseBiasedLocking");
   verify_flag(_config->_objectAlignment, ObjectAlignmentInBytes, "ObjectAlignmentInBytes");

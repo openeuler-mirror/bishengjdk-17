@@ -121,6 +121,8 @@ ifeq ($(BUILD_CDS_ARCHIVE), true)
   else
     CDS_ARCHIVE := lib/server/classes.jsa
     CDS_NOCOOPS_ARCHIVE := lib/server/classes_nocoops.jsa
+    CDS_ARCHIVE_COH := lib/server/classes_coh.jsa
+    CDS_NOCOOPS_ARCHIVE_COH := lib/server/classes_nocoops_coh.jsa
   endif
 
   $(eval $(call SetupExecute, gen_cds_archive_jdk, \
@@ -146,6 +148,36 @@ ifeq ($(BUILD_CDS_ARCHIVE), true)
   ))
 
   JRE_TARGETS += $(gen_cds_archive_jre)
+
+  ifeq ($(BUILD_CDS_ARCHIVE_COH), true)
+    ifeq ($(call isTargetCpuArch, aarch64), true)
+      $(eval $(call SetupExecute, gen_cds_archive_jdk_coh, \
+          WARN := Creating CDS COH archive for jdk image, \
+          DEPS := $(jlink_jdk), \
+          OUTPUT_FILE := $(JDK_IMAGE_DIR)/$(CDS_ARCHIVE_COH), \
+          SUPPORT_DIR := $(SUPPORT_OUTPUTDIR)/images/jdk, \
+          COMMAND := $(FIXPATH) $(JDK_IMAGE_DIR)/bin/java -Xshare:dump \
+              -XX:SharedArchiveFile=$(JDK_IMAGE_DIR)/$(CDS_ARCHIVE_COH) \
+              -XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders \
+              -Xmx128M -Xms128M $(LOG_INFO), \
+      ))
+
+      JDK_TARGETS += $(gen_cds_archive_jdk_coh)
+
+      $(eval $(call SetupExecute, gen_cds_archive_jre_coh, \
+          WARN := Creating CDS COH archive for jre image, \
+          DEPS := $(jlink_jre), \
+          OUTPUT_FILE := $(JRE_IMAGE_DIR)/$(CDS_ARCHIVE_COH), \
+          SUPPORT_DIR := $(SUPPORT_OUTPUTDIR)/images/jre, \
+          COMMAND := $(FIXPATH) $(JRE_IMAGE_DIR)/bin/java -Xshare:dump \
+              -XX:SharedArchiveFile=$(JRE_IMAGE_DIR)/$(CDS_ARCHIVE_COH) \
+              -XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders \
+              -Xmx128M -Xms128M $(LOG_INFO), \
+      ))
+
+      JRE_TARGETS += $(gen_cds_archive_jre_coh)
+    endif
+  endif
 
   ifeq ($(call isTargetCpuBits, 64), true)
     $(eval $(call SetupExecute, gen_cds_nocoops_archive_jdk, \
@@ -173,8 +205,39 @@ ifeq ($(BUILD_CDS_ARCHIVE), true)
     ))
 
     JRE_TARGETS += $(gen_cds_nocoops_archive_jre)
-  endif
 
+    ifeq ($(BUILD_CDS_ARCHIVE_COH), true)
+        ifeq ($(call isTargetCpuArch, aarch64), true)
+            $(eval $(call SetupExecute, gen_cds_nocoops_archive_jdk_coh, \
+                WARN := Creating CDS-NOCOOPS COH archive for jdk image, \
+                DEPS := $(jlink_jdk), \
+                OUTPUT_FILE := $(JDK_IMAGE_DIR)/$(CDS_NOCOOPS_ARCHIVE_COH), \
+                SUPPORT_DIR := $(SUPPORT_OUTPUTDIR)/images/jdk, \
+                COMMAND := $(FIXPATH) $(JDK_IMAGE_DIR)/bin/java -Xshare:dump \
+                    -XX:SharedArchiveFile=$(JDK_IMAGE_DIR)/$(CDS_NOCOOPS_ARCHIVE_COH) \
+                    -XX:-UseCompressedOops \
+                    -XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders \
+                    -Xmx128M -Xms128M $(LOG_INFO), \
+            ))
+
+            JDK_TARGETS += $(gen_cds_nocoops_archive_jdk_coh)
+
+            $(eval $(call SetupExecute, gen_cds_nocoops_archive_jre_coh, \
+                WARN := Creating CDS-NOCOOPS COH archive for jre image, \
+                DEPS := $(jlink_jre), \
+                OUTPUT_FILE := $(JRE_IMAGE_DIR)/$(CDS_NOCOOPS_ARCHIVE_COH), \
+                SUPPORT_DIR := $(SUPPORT_OUTPUTDIR)/images/jre, \
+                COMMAND := $(FIXPATH) $(JRE_IMAGE_DIR)/bin/java -Xshare:dump \
+                    -XX:SharedArchiveFile=$(JRE_IMAGE_DIR)/$(CDS_NOCOOPS_ARCHIVE_COH) \
+                    -XX:-UseCompressedOops \
+                    -XX:+UnlockExperimentalVMOptions -XX:+UseCompactObjectHeaders \
+                    -Xmx128M -Xms128M $(LOG_INFO), \
+            ))
+
+            JRE_TARGETS += $(gen_cds_nocoops_archive_jre_coh)
+        endif
+    endif
+  endif
 endif
 
 ################################################################################

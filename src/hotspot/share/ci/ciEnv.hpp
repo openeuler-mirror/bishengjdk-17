@@ -163,6 +163,10 @@ private:
                            Symbol*          sig,
                            Bytecodes::Code  bc,
                            constantTag      tag);
+#ifdef AARCH64
+  bool       is_field_resolved(ciInstanceKlass* accessor_klass,
+                                  int constant_pool_index, Bytecodes::Code bc);
+#endif
 
   // Get a ciObject from the object factory.  Ensures uniqueness
   // of ciObjects.
@@ -320,6 +324,11 @@ public:
 
   // Reason this compilation is failing, such as "too many basic blocks".
   const char* failure_reason() { return _failure_reason; }
+
+#ifdef AARCH64
+  // Check if all fields needed by this method in ConstantPool are resolved
+  bool       are_method_fields_all_resolved(ciMethod* method);
+#endif
 
   // Return state of appropriate compilability
   int compilable() { return _compilable; }

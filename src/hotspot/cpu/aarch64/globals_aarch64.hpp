@@ -102,12 +102,58 @@ define_pd_global(intx, InlineSmallCode,          1000);
   product(uint, UseSVE, 0,                                              \
           "Highest supported SVE instruction set version")              \
           range(0, 2)                                                   \
+  product(bool, UseCompactObjectHeaders, false, EXPERIMENTAL,           \
+          "Use compact 64-bit object headers in 64-bit VM")             \
   product(bool, UseBlockZeroing, true,                                  \
           "Use DC ZVA for block zeroing")                               \
   product(intx, BlockZeroingLowLimit, 256,                              \
           "Minimum size in bytes when block zeroing will be used")      \
           range(wordSize, max_jint)                                     \
   product(bool, TraceTraps, false, "Trace all traps the signal handler")\
+                                                                        \
+  product(bool, ExitVMProfileCacheFlush, false, EXPERIMENTAL,           \
+          "ExitVMProfileCacheFlush")                                    \
+                                                                        \
+  product(bool, JProfilingCacheRecording, false, EXPERIMENTAL,          \
+          "Collect profiling information for JProfilingCache")          \
+                                                                        \
+  product(bool, JProfilingCacheCompileAdvance, false, EXPERIMENTAL,     \
+          "Enable JProfilingCacheCompileAdvance from a log file")       \
+                                                                        \
+  product(ccstr, CompilationProfileCacheExclude, nullptr, EXPERIMENTAL, \
+          "JProfilingCacheCompileAdvance excluding list ")              \
+                                                                        \
+  product(bool,  UseJProfilingCacheSystemBlackList, true, EXPERIMENTAL, \
+          "Block Some System Classes loaded by jprofilecache")          \
+                                                                        \
+  product(uintx, JProfilingCacheDelayLoadTime, 1000, EXPERIMENTAL,      \
+          "Sleep time (in milliseconds) before JProfileCache loads "    \
+          "classes and methods profile ")                               \
+          range(0, 3600000)                                             \
+                                                                        \
+  develop(bool, CompilationProfileCacheResolveClassEagerly, true,       \
+          "resolve class from constant pool eagerly")                   \
+                                                                        \
+  product(ccstr, ProfilingCacheFile, nullptr, EXPERIMENTAL,             \
+          "Log file name for JProfilingCache")                          \
+                                                                        \
+  product(uintx, CompilationProfileCacheAppID, 0, EXPERIMENTAL,         \
+          "Application ID written in log file for verification ")       \
+          range(0, 4294967295)                                          \
+                                                                        \
+  product(ccstr, JProfilingCacheAutoArchiveDir, nullptr, EXPERIMENTAL,  \
+          "Specify JProfilingCache directory under which the "          \
+          "jprofilecache file will be auto generated and replayed")     \
+                                                                        \
+  product(int, JProfilingCacheMaxTierLimit, 3, EXPERIMENTAL,            \
+          "If compile_level is higher than the option, method will "    \
+          "will be precmopiled by the option level")                    \
+          range(1, 4)                                                   \
+                                                                        \
+  product(bool, JProfilingCacheReplayProfileData, false, EXPERIMENTAL,  \
+          "Load method data with dumped ProfileData in the "            \
+          "jprofilecache file if exists")                               \
+                                                                        \
   product(int, SoftwarePrefetchHintDistance, -1,                        \
           "Use prfm hint with specified distance in compiled code."     \
           "Value -1 means off.")                                        \
@@ -127,7 +173,24 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "Auto enable the AppCDS feature"                              \
           "the path save classlist and jsa file")                       \
   product(bool, PrintAutoAppCDS, false,                                 \
-          "Print path and some information about AutoSharedArchivePath")
+          "Print path and some information about AutoSharedArchivePath")\
+  product(bool, LogNUMANodes, false,                                    \
+          "Print NUMANodes")                                            \
+  product(ccstr, NUMANodes, NULL,                                       \
+          "This parameter provides the same functionality as"           \
+          "'numactl --all -N <nodes> -m <nodes>'."                      \
+          "<nodes> can be '0-2', '0,1,2', 'all' and so on.")            \
+  product(uintx, NUMANodesRandom, 0,                                    \
+          "Number of continuous nodes to bind to cpu"                   \
+          "with the first node randomly chosen."                        \
+          "If NUMANodes is set, NUMANodesRandom selects nodes randomly" \
+          "within this range.")                                         \
+  product(intx, NUMAMemNodesRandom, 0,                                  \
+          "Number of continuous nodes to bind to memory"                \
+          "with the first N nodes chosen by NUMANodesRandom.")          \
+  product(ccstr, NUMABindPolicy, NULL,                                  \
+          "Enable deterministic NUMA placement with combined Options,"  \
+          "including prefix=<id> and div=<N>.")                         \
 
 // end of ARCH_FLAGS
 

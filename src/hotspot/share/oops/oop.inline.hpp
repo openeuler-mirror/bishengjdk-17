@@ -36,6 +36,8 @@
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/globals.hpp"
+#include "runtime/safepoint.hpp"
+#include "runtime/objectMonitor.inline.hpp"
 #include "utilities/align.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/macros.hpp"
@@ -68,6 +70,10 @@ void oopDesc::release_set_mark(markWord m) {
   Atomic::release_store(&_mark, m);
 }
 
+void oopDesc::release_set_mark(HeapWord* mem, markWord m) {
+  Atomic::release_store((markWord*)(((char*)mem) + mark_offset_in_bytes()), m);
+}
+
 markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark) {
   return Atomic::cmpxchg(&_mark, old_mark, new_mark);
 }
@@ -76,37 +82,92 @@ markWord oopDesc::cas_set_mark(markWord new_mark, markWord old_mark, atomic_memo
   return Atomic::cmpxchg(&_mark, old_mark, new_mark, order);
 }
 
+markWord oopDesc::resolve_mark() const {
+  assert(LockingMode != LM_LEGACY, "Not safe with legacy stack-locking");
+  markWord m = mark();
+  if (m.has_displaced_mark_helper()) {
+    m = m.displaced_mark_helper();
+  }
+  return m;
+}
+
+markWord oopDesc::prototype_mark() const {
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    return klass()->prototype_header();
+  } else
+#endif // AARCH64
+  {
+    return markWord::prototype();
+  }
+}
+
 void oopDesc::init_mark() {
   set_mark(markWord::prototype_for_klass(klass()));
 }
 
 Klass* oopDesc::klass() const {
+#ifdef _LP64
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    assert(UseCompressedClassPointers, "only with compressed class pointers");
+    markWord m = resolve_mark();
+    return m.klass();
+  } else
+#endif // AARCH64
   if (UseCompressedClassPointers) {
     return CompressedKlassPointers::decode_not_null(_metadata._compressed_klass);
-  } else {
+  } else
+#endif // _LP64
+  {
     return _metadata._klass;
   }
 }
 
 Klass* oopDesc::klass_or_null() const {
+#ifdef _LP64
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    markWord m = resolve_mark();
+    return m.klass_or_null();
+  } else
+#endif // AARCH64
   if (UseCompressedClassPointers) {
     return CompressedKlassPointers::decode(_metadata._compressed_klass);
-  } else {
+  } else
+#endif // _LP64
+  {
     return _metadata._klass;
   }
 }
 
 Klass* oopDesc::klass_or_null_acquire() const {
+#ifdef _LP64
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    assert(UseCompressedClassPointers, "only with compressed class pointers");
+    markWord header = mark_acquire();
+    if (header.has_monitor()) {
+      header = header.monitor()->header();
+    }
+    return header.klass_or_null();
+  } else
+#endif // AARCH64
   if (UseCompressedClassPointers) {
-    narrowKlass nklass = Atomic::load_acquire(&_metadata._compressed_klass);
-    return CompressedKlassPointers::decode(nklass);
-  } else {
+     narrowKlass nklass = Atomic::load_acquire(&_metadata._compressed_klass);
+     return CompressedKlassPointers::decode(nklass);
+  } else
+#endif // _LP64
+  {
     return Atomic::load_acquire(&_metadata._klass);
   }
 }
 
 void oopDesc::set_klass(Klass* k) {
   assert(Universe::is_bootstrapping() || (k != NULL && k->is_klass()), "incorrect Klass");
+#ifdef AARCH64
+  assert(!UseCompactObjectHeaders, "don't set Klass* with compact headers");
+#endif // AARCH64
   if (UseCompressedClassPointers) {
     _metadata._compressed_klass = CompressedKlassPointers::encode_not_null(k);
   } else {
@@ -116,6 +177,9 @@ void oopDesc::set_klass(Klass* k) {
 
 void oopDesc::release_set_klass(HeapWord* mem, Klass* k) {
   assert(Universe::is_bootstrapping() || (k != NULL && k->is_klass()), "incorrect Klass");
+#ifdef AARCH64
+  assert(!UseCompactObjectHeaders, "don't set Klass* with compact headers");
+#endif // AARCH64
   char* raw_mem = ((char*)mem + klass_offset_in_bytes());
   if (UseCompressedClassPointers) {
     Atomic::release_store((narrowKlass*)raw_mem,
@@ -130,6 +194,9 @@ int oopDesc::klass_gap() const {
 }
 
 void oopDesc::set_klass_gap(HeapWord* mem, int v) {
+#ifdef AARCH64
+  assert(!UseCompactObjectHeaders, "don't set Klass* gap with compact headers");
+#endif // AARCH64
   if (UseCompressedClassPointers) {
     *(int*)(((char*)mem) + klass_gap_offset_in_bytes()) = v;
   }
@@ -203,6 +270,56 @@ int oopDesc::size_given_klass(Klass* klass)  {
   return s;
 }
 
+#ifdef AARCH64
+Klass* oopDesc::forward_safe_klass_impl(markWord m) const {
+  assert(UseCompactObjectHeaders, "Only get here with compact headers");
+  if (m.is_marked()) {
+    oop fwd = forwardee(m);
+    markWord m2 = fwd->mark();
+    assert(!m2.is_marked() || m2.self_forwarded(), "no double forwarding: this: " PTR_FORMAT " (" INTPTR_FORMAT "), fwd: " PTR_FORMAT " (" INTPTR_FORMAT ")", p2i(this), m.value(), p2i(fwd), m2.value());
+    m = m2;
+  }
+  return m.actual_mark().klass();
+}
+#endif // AARCH64
+
+Klass* oopDesc::forward_safe_klass(markWord m) const {
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    return forward_safe_klass_impl(m);
+  } else
+#endif // AARCH64
+  {
+    return klass();
+  }
+}
+
+Klass* oopDesc::forward_safe_klass() const {
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    return forward_safe_klass_impl(mark());
+  } else
+#endif // AARCH64
+  {
+    return klass();
+  }
+}
+
+size_t oopDesc::forward_safe_size() {
+  return size_given_klass(forward_safe_klass());
+}
+
+void oopDesc::forward_safe_init_mark() {
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    set_mark(forward_safe_klass()->prototype_header());
+  } else
+#endif // AARCH64
+  {
+    init_mark();
+  }
+}
+
 bool oopDesc::is_instance()  const { return klass()->is_instance_klass();  }
 bool oopDesc::is_array()     const { return klass()->is_array_klass();     }
 bool oopDesc::is_objArray()  const { return klass()->is_objArray_klass();  }
@@ -274,29 +391,81 @@ bool oopDesc::is_forwarded() const {
 
 // Used by scavengers
 void oopDesc::forward_to(oop p) {
+  assert(p != cast_to_oop(this) || !UseAltGCForwarding, "Must not be called with self-forwarding");
   verify_forwardee(p);
   markWord m = markWord::encode_pointer_as_mark(p);
-  assert(m.decode_pointer() == p, "encoding must be reversable");
+  assert(forwardee(m) == p, "encoding must be reversible");
   set_mark(m);
 }
 
-// Used by parallel scavengers
-bool oopDesc::cas_forward_to(oop p, markWord compare, atomic_memory_order order) {
-  verify_forwardee(p);
-  markWord m = markWord::encode_pointer_as_mark(p);
-  assert(m.decode_pointer() == p, "encoding must be reversable");
-  return cas_set_mark(m, compare, order) == compare;
+void oopDesc::forward_to_self() {
+#ifdef _LP64
+  if (UseAltGCForwarding) {
+    markWord m = mark();
+    // If mark is displaced, we need to preserve the real header during GC.
+    // It will be restored to the displaced header after GC.
+    assert(SafepointSynchronize::is_at_safepoint(), "we can only safely fetch the displaced header at safepoint");
+    if (m.has_displaced_mark_helper()) {
+      m = m.displaced_mark_helper();
+    }
+    m = m.set_self_forwarded();
+    assert(forwardee(m) == cast_to_oop(this), "encoding must be reversible");
+    set_mark(m);
+  } else
+#endif
+  {
+    forward_to(oop(this));
+  }
 }
 
 oop oopDesc::forward_to_atomic(oop p, markWord compare, atomic_memory_order order) {
+  assert(p != cast_to_oop(this) || !UseAltGCForwarding, "Must not be called with self-forwarding");
   verify_forwardee(p);
   markWord m = markWord::encode_pointer_as_mark(p);
-  assert(m.decode_pointer() == p, "encoding must be reversable");
+  assert(forwardee(m) == p, "encoding must be reversable");
   markWord old_mark = cas_set_mark(m, compare, order);
   if (old_mark == compare) {
     return NULL;
   } else {
-    return cast_to_oop(old_mark.decode_pointer());
+    return forwardee(old_mark);
+  }
+}
+
+oop oopDesc::forward_to_self_atomic(markWord compare, atomic_memory_order order) {
+#ifdef _LP64
+  if (UseAltGCForwarding) {
+    markWord m = compare;
+    // If mark is displaced, we need to preserve the real header during GC.
+    // It will be restored to the displaced header after GC.
+    assert(SafepointSynchronize::is_at_safepoint(), "we can only safely fetch the displaced header at safepoint");
+    if (m.has_displaced_mark_helper()) {
+      m = m.displaced_mark_helper();
+    }
+    m = m.set_self_forwarded();
+    assert(forwardee(m) == cast_to_oop(this), "encoding must be reversible");
+    markWord old_mark = cas_set_mark(m, compare, order);
+    if (old_mark == compare) {
+      return nullptr;
+    } else {
+      assert(old_mark.is_marked(), "must be marked here");
+      return forwardee(old_mark);
+    }
+  } else
+#endif
+  {
+    return forward_to_atomic(cast_to_oop(this), compare, order);
+  }
+}
+
+oop oopDesc::forwardee(markWord header) const {
+  assert(header.is_marked(), "only decode when actually forwarded");
+#ifdef _LP64
+  if (header.self_forwarded()) {
+    return cast_to_oop(this);
+  } else
+#endif
+  {
+    return cast_to_oop(header.decode_pointer());
   }
 }
 
@@ -304,7 +473,7 @@ oop oopDesc::forward_to_atomic(oop p, markWord compare, atomic_memory_order orde
 // The forwardee is used when copying during scavenge and mark-sweep.
 // It does need to clear the low two locking- and GC-related bits.
 oop oopDesc::forwardee() const {
-  return cast_to_oop(mark().decode_pointer());
+  return forwardee(mark());
 }
 
 // The following method needs to be MT safe.
@@ -359,7 +528,7 @@ void oopDesc::oop_iterate_backwards(OopClosureType* cl) {
 
 template <typename OopClosureType>
 void oopDesc::oop_iterate_backwards(OopClosureType* cl, Klass* k) {
-  assert(k == klass(), "wrong klass");
+  assert(AARCH64_ONLY(UseCompactObjectHeaders ||) k == klass(), "wrong klass");
   OopIteratorClosureDispatch::oop_oop_iterate_backwards(cl, this, k);
 }
 

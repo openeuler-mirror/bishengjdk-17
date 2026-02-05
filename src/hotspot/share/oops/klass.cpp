@@ -193,12 +193,22 @@ void* Klass::operator new(size_t size, ClassLoaderData* loader_data, size_t word
   return Metaspace::allocate(loader_data, word_size, MetaspaceObj::ClassType, THREAD);
 }
 
+static markWord make_prototype(Klass* kls) {
+  markWord prototype = markWord::prototype();
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    prototype = prototype.set_klass(kls);
+  }
+#endif // AARCH64
+  return prototype;
+}
+
 // "Normal" instantiation is preceeded by a MetaspaceObj allocation
 // which zeros out memory - calloc equivalent.
 // The constructor is also used from CppVtableCloner,
 // which doesn't zero out the memory before calling the constructor.
 Klass::Klass(KlassID id) : _id(id),
-                           _prototype_header(markWord::prototype()),
+                           _prototype_header(make_prototype(this)),
                            _shared_class_path_index(-1) {
   CDS_ONLY(_shared_class_flags = 0;)
   CDS_JAVA_HEAP_ONLY(_archived_mirror_index = -1;)

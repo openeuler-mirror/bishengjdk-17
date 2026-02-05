@@ -33,6 +33,11 @@
 #include "oops/klass.inline.hpp"
 #include "runtime/deoptimization.hpp"
 #include "utilities/copy.hpp"
+#ifdef AARCH64
+#include "compiler/compileTask.hpp"
+#include "jprofilecache/jitProfileCacheHolders.hpp"
+#include "jprofilecache/jitProfileRecord.hpp"
+#endif
 
 // ciMethodData
 
@@ -123,7 +128,7 @@ void ciMethodData::prepare_metadata() {
   }
 }
 
-void ciMethodData::load_remaining_extra_data() {
+void ciMethodData::load_remaining_extra_data(AARCH64_ONLY(bool need_load_jprofile)) {
   MethodData* mdo = get_MethodData();
   MutexLocker ml(mdo->extra_data_lock());
   // Deferred metadata cleaning due to concurrent class unloading.
@@ -158,11 +163,26 @@ void ciMethodData::load_remaining_extra_data() {
     }
     case DataLayout::bit_data_tag:
       break;
-    case DataLayout::no_tag:
     case DataLayout::arg_info_data_tag:
       // An empty slot or ArgInfoData entry marks the end of the trap data
       {
+#ifdef AARCH64
+        if (need_load_jprofile) {
+          ProfileCacheMethodHold* mh = mdo->method()->jpc_method_holder();
+          if (mh->profile_list()->length() > 0 && mh->profile_list()->first()->is_ArgInfoData()) {
+            ArgInfoData record(mh->profile_list()->first()->data_in());
+            ArgInfoData dst(dp_dst);
+            for (int i = 0; i < record.number_of_args(); i++) {
+              dst.set_arg_modified(i, record.arg_modified(i));
+            }
+          }
+        }
+#endif
         return; // Need a block to avoid SS compiler bug
+      }
+    case DataLayout::no_tag:
+      {
+        return;
       }
     default:
       fatal("bad tag = %d", tag);
@@ -234,11 +254,53 @@ bool ciMethodData::load_data() {
   ResourceMark rm;
   ciProfileData* ci_data = first_data();
   ProfileData* data = mdo->first_data();
-  while (is_valid(ci_data)) {
-    ci_data->translate_from(data);
-    ci_data = next_data(ci_data);
-    data = mdo->next_data(data);
+#ifdef AARCH64
+  int jprofile_index = 0;
+  bool need_load_jprofile = JProfilingCacheCompileAdvance && JProfilingCacheReplayProfileData &&
+                            CURRENT_ENV->task()->is_jprofilecache_compilation() &&
+                            CURRENT_ENV->task()->comp_level() == CompLevel_full_optimization &&
+                            mdo->method()->jpc_method_holder() != nullptr;
+  if (need_load_jprofile) {
+    ProfileCacheMethodHold* mh = mdo->method()->jpc_method_holder();
+
+    if (mh->profile_list()->length() > 0 && mh->profile_list()->first()->is_ArgInfoData()) {
+      jprofile_index++;
+    }
+    while (is_valid(ci_data)) {
+      bool is_translated = false;
+      if (JitProfileRecorder::is_recordable_data(data)) {
+        while (jprofile_index < mh->profile_list()->length()) {
+          BytecodeProfileRecord* jprofile = mh->profile_list()->at(jprofile_index);
+          jprofile_index++;
+          if (data->bci() ==  jprofile->bci()) {
+            ci_data->translate_from(jprofile->data_in()->data_in());
+            is_translated = true;
+            log_debug(jprofilecache)("Apply ProfileData on bytecode(%d) of method: %s",
+              ci_data->bci(), mdo->method()->name_and_sig_as_C_string());
+            break;
+          } else if (data->bci() > jprofile->bci()) {
+            jprofile_index = mh->profile_list()->length();
+            log_warning(jprofilecache)("Classfile is changed, method %s is not the same as dumping",
+                mdo->method()->name_and_sig_as_C_string());
+          }
+        }
+      }
+      if (!is_translated) {
+        ci_data->translate_from(data);
+      }
+      ci_data = next_data(ci_data);
+      data = mdo->next_data(data);
+    }
+  } else {
+#endif
+    while (is_valid(ci_data)) {
+      ci_data->translate_from(data);
+      ci_data = next_data(ci_data);
+      data = mdo->next_data(data);
+    }
+#ifdef AARCH64
   }
+#endif
   if (mdo->parameters_type_data() != NULL) {
     _parameters = data_layout_at(mdo->parameters_type_data_di());
     ciParametersTypeData* parameters = new ciParametersTypeData(_parameters);
@@ -247,7 +309,7 @@ bool ciMethodData::load_data() {
 
   assert((DataLayout*) ((address)_data + total_size - parameters_data_size) == args_data_limit(),
       "sanity - parameter data starts after the argument data of the single ArgInfoData entry");
-  load_remaining_extra_data();
+  load_remaining_extra_data(AARCH64_ONLY(need_load_jprofile));
 
   // Note:  Extra data are all BitData, and do not need translation.
   _creation_mileage = mdo->creation_mileage();

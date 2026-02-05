@@ -37,6 +37,7 @@
 #include "utilities/align.hpp"
 #include "utilities/bytes.hpp"
 #include "utilities/constantTag.hpp"
+#include "utilities/stack.inline.hpp"
 
 // A ConstantPool is an array containing class constants as described in the
 // class file.
@@ -120,6 +121,15 @@ class ConstantPool : public Metadata {
   // containing this klass, 0 if not specified.
   u2              _source_file_name_index;
 
+#ifdef AARCH64
+  enum {
+    _jwp_has_not_been_traversed = 0,
+    _jwp_has_been_traversed = 1
+  };
+
+    Array<u1>*           _jpc_tags;    // the jpc tag array records the corresponding tag whether is traversed
+#endif
+
   enum {
     _has_preresolution    = 1,       // Flags
     _on_stack             = 2,
@@ -139,6 +149,9 @@ class ConstantPool : public Metadata {
   } _saved;
 
   void set_tags(Array<u1>* tags)               { _tags = tags; }
+#ifdef AARCH64
+  void set_jpc_tags(Array<u1>* tags)           { _jpc_tags = tags; }
+#endif
   void tag_at_put(int which, jbyte t)          { tags()->at_put(which, t); }
   void release_tag_at_put(int which, jbyte t)  { tags()->release_at_put(which, t); }
 
@@ -185,6 +198,7 @@ class ConstantPool : public Metadata {
   }
 
   ConstantPool(Array<u1>* tags);
+  ConstantPool(Array<u1>* tags, Array<u1>* jpt_markers);
   ConstantPool() { assert(DumpSharedSpaces || UseSharedSpaces, "only for CDS"); }
  public:
   static ConstantPool* allocate(ClassLoaderData* loader_data, int length, TRAPS);
@@ -193,6 +207,20 @@ class ConstantPool : public Metadata {
 
   Array<u1>* tags() const                   { return _tags; }
   Array<u2>* operands() const               { return _operands; }
+
+#ifdef AARCH64
+  Array<u1>* jwp_tags() const               { return _jpc_tags; }
+
+  bool jprofilecache_traversed_at(int which) {
+    assert(0 < which && which < jwp_tags()->length(), "out of bound");
+    return jwp_tags()->at(which) == _jwp_has_been_traversed;
+  }
+
+  void jprofilecache_has_traversed_at(int which) {
+    assert(which < jwp_tags()->length(), "out of bound");
+    jwp_tags()->at_put(which, _jwp_has_been_traversed);
+  }
+#endif
 
   bool has_preresolution() const            { return (_flags & _has_preresolution) != 0; }
   void set_has_preresolution() {
@@ -931,6 +959,15 @@ class ConstantPool : public Metadata {
   void print_entry_on(int index, outputStream* st);
 
   const char* internal_name() const { return "{constant pool}"; }
+
+#ifdef AARCH64
+  void preload_jprofilecache_classes(TRAPS);
+
+  Klass* resolve_class_at_index(int constant_pool_index, TRAPS);
+
+private:
+  void preload_classes_for_jprofilecache(Stack<InstanceKlass*, mtClass>& class_processing_stack, TRAPS);
+#endif
 };
 
 class SymbolHashMapEntry : public CHeapObj<mtSymbol> {

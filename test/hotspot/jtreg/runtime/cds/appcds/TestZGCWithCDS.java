@@ -43,99 +43,202 @@ public class TestZGCWithCDS {
     public static void main(String... args) throws Exception {
          String helloJar = JarBuilder.build("hello", "Hello");
          System.out.println("0. Dump with ZGC");
-         OutputAnalyzer out = TestCommon
-                                  .dump(helloJar,
-                                        new String[] {"Hello"},
-                                        "-XX:+UseZGC",
-                                        "-Xlog:cds");
+         OutputAnalyzer out = null;
+         if (Platform.isAArch64()){
+            out = TestCommon
+                  .dump(helloJar,
+                        new String[] {"Hello"},
+                        "-XX:+UseZGC",
+                        "-XX:+UnlockExperimentalVMOptions",
+                        "-XX:-UseCompactObjectHeaders",
+                        "-Xlog:cds");
+         } else {
+            out = TestCommon
+                  .dump(helloJar,
+                        new String[] {"Hello"},
+                        "-XX:+UseZGC",
+                        "-Xlog:cds");
+         }
          out.shouldContain("Dumping shared data to file:");
          out.shouldHaveExitValue(0);
 
          System.out.println("1. Run with same args of dump");
-         out = TestCommon
-                   .exec(helloJar,
-                         "-XX:+UseZGC",
-                         "-Xlog:cds",
-                         "Hello");
+         if (Platform.isAArch64()){
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseZGC",
+                              "-XX:+UnlockExperimentalVMOptions",
+                              "-XX:-UseCompactObjectHeaders",
+                              "-Xlog:cds",
+                              "Hello");
+         } else {
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseZGC",
+                              "-Xlog:cds",
+                              "Hello");
+         }
          out.shouldContain(HELLO);
          out.shouldHaveExitValue(0);
 
          System.out.println("2. Run with +UseCompressedOops +UseCompressedClassPointers");
-         out = TestCommon
-                   .exec(helloJar,
-                         "-XX:-UseZGC",
-                         "-XX:+UseCompressedOops",           // in case turned off by vmoptions
-                         "-XX:+UseCompressedClassPointers",  // by jtreg
-                         "-Xlog:cds",
-                         "Hello");
+         if (Platform.isAArch64()){
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:-UseZGC",
+                              "-XX:+UseCompressedOops",           // in case turned off by vmoptions
+                              "-XX:+UseCompressedClassPointers",  // by jtreg
+                              "-XX:+UnlockExperimentalVMOptions",
+                              "-XX:-UseCompactObjectHeaders",
+                              "-Xlog:cds",
+                              "Hello");
+         } else {
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:-UseZGC",
+                              "-XX:+UseCompressedOops",           // in case turned off by vmoptions
+                              "-XX:+UseCompressedClassPointers",  // by jtreg
+                              "-Xlog:cds",
+                              "Hello");
+         }
          out.shouldContain(UNABLE_TO_USE_ARCHIVE);
          out.shouldContain(ERR_MSG);
          out.shouldHaveExitValue(1);
 
          System.out.println("3. Run with -UseCompressedOops -UseCompressedClassPointers");
-         out = TestCommon
-                   .exec(helloJar,
-                         "-XX:+UseSerialGC",
-                         "-XX:-UseCompressedOops",
-                         "-XX:-UseCompressedClassPointers",
-                         "-Xlog:cds",
-                         "Hello");
+         if (Platform.isAArch64()){
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseSerialGC",
+                              "-XX:-UseCompressedOops",
+                              "-XX:-UseCompressedClassPointers",
+                              "-XX:+UnlockExperimentalVMOptions",
+                              "-XX:-UseCompactObjectHeaders",
+                              "-Xlog:cds",
+                              "Hello");
+         } else {
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseSerialGC",
+                              "-XX:-UseCompressedOops",
+                              "-XX:-UseCompressedClassPointers",
+                              "-Xlog:cds",
+                              "Hello");
+         }
          out.shouldContain(UNABLE_TO_USE_ARCHIVE);
          out.shouldContain(ERR_MSG);
          out.shouldHaveExitValue(1);
 
          System.out.println("4. Run with -UseCompressedOops +UseCompressedClassPointers");
-         out = TestCommon
-                   .exec(helloJar,
-                         "-XX:+UseSerialGC",
-                         "-XX:-UseCompressedOops",
-                         "-XX:+UseCompressedClassPointers",
-                         "-Xlog:cds",
-                         "Hello");
+         if (Platform.isAArch64()){
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseSerialGC",
+                              "-XX:-UseCompressedOops",
+                              "-XX:+UseCompressedClassPointers",
+                              "-XX:+UnlockExperimentalVMOptions",
+                              "-XX:-UseCompactObjectHeaders",
+                              "-Xlog:cds",
+                              "Hello");
+         } else {
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseSerialGC",
+                              "-XX:-UseCompressedOops",
+                              "-XX:+UseCompressedClassPointers",
+                              "-Xlog:cds",
+                              "Hello");
+         }
          out.shouldContain(HELLO);
          out.shouldHaveExitValue(0);
 
          System.out.println("5. Run with +UseCompressedOops -UseCompressedClassPointers");
-         out = TestCommon
-                   .exec(helloJar,
-                         "-XX:+UseSerialGC",
-                         "-XX:+UseCompressedOops",
-                         "-XX:-UseCompressedClassPointers",
-                         "-Xlog:cds",
-                         "Hello");
+         if (Platform.isAArch64()){
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseSerialGC",
+                              "-XX:+UseCompressedOops",
+                              "-XX:-UseCompressedClassPointers",
+                              "-XX:+UnlockExperimentalVMOptions",
+                              "-XX:-UseCompactObjectHeaders",
+                              "-Xlog:cds",
+                              "Hello");
+         } else {
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseSerialGC",
+                              "-XX:+UseCompressedOops",
+                              "-XX:-UseCompressedClassPointers",
+                              "-Xlog:cds",
+                              "Hello");
+         }
          out.shouldContain(UNABLE_TO_USE_ARCHIVE);
          out.shouldContain(ERR_MSG);
          out.shouldHaveExitValue(1);
 
          System.out.println("6. Run with +UseCompressedOops +UseCompressedClassPointers");
-         out = TestCommon
-                   .exec(helloJar,
-                         "-XX:+UseSerialGC",
-                         "-XX:+UseCompressedOops",
-                         "-XX:+UseCompressedClassPointers",
-                         "-Xlog:cds",
-                         "Hello");
+         if (Platform.isAArch64()){
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseSerialGC",
+                              "-XX:+UseCompressedOops",
+                              "-XX:+UseCompressedClassPointers",
+                              "-XX:+UnlockExperimentalVMOptions",
+                              "-XX:-UseCompactObjectHeaders",
+                              "-Xlog:cds",
+                              "Hello");
+         } else {
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseSerialGC",
+                              "-XX:+UseCompressedOops",
+                              "-XX:+UseCompressedClassPointers",
+                              "-Xlog:cds",
+                              "Hello");
+         }
          out.shouldContain(UNABLE_TO_USE_ARCHIVE);
          out.shouldContain(ERR_MSG);
          out.shouldHaveExitValue(1);
 
          System.out.println("7. Dump with -UseCompressedOops -UseCompressedClassPointers");
-         out = TestCommon
-                   .dump(helloJar,
-                         new String[] {"Hello"},
-                         "-XX:+UseSerialGC",
-                         "-XX:-UseCompressedOops",
-                         "-XX:+UseCompressedClassPointers",
-                         "-Xlog:cds");
+         if (Platform.isAArch64()){
+            out = TestCommon
+                        .dump(helloJar,
+                              new String[] {"Hello"},
+                              "-XX:+UseSerialGC",
+                              "-XX:-UseCompressedOops",
+                              "-XX:+UseCompressedClassPointers",
+                              "-XX:+UnlockExperimentalVMOptions",
+                              "-XX:-UseCompactObjectHeaders",
+                              "-Xlog:cds");
+         } else {
+            out = TestCommon
+                        .dump(helloJar,
+                              new String[] {"Hello"},
+                              "-XX:+UseSerialGC",
+                              "-XX:-UseCompressedOops",
+                              "-XX:+UseCompressedClassPointers",
+                              "-Xlog:cds");
+         }
          out.shouldContain("Dumping shared data to file:");
          out.shouldHaveExitValue(0);
 
          System.out.println("8. Run with ZGC");
-         out = TestCommon
-                   .exec(helloJar,
-                         "-XX:+UseZGC",
-                         "-Xlog:cds",
-                         "Hello");
+         if (Platform.isAArch64()){
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseZGC",
+                              "-XX:+UnlockExperimentalVMOptions",
+                              "-XX:-UseCompactObjectHeaders",
+                              "-Xlog:cds",
+                              "Hello");
+         } else {
+            out = TestCommon
+                        .exec(helloJar,
+                              "-XX:+UseZGC",
+                              "-Xlog:cds",
+                              "Hello");
+         }
          out.shouldContain(HELLO);
          out.shouldHaveExitValue(0);
     }

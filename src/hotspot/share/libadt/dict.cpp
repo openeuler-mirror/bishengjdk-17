@@ -246,6 +246,32 @@ int hashstr(const void* t) {
   return (int)((sum + xsum[k]) >> 1); // Hash key, un-modulo'd table size
 }
 
+int compute_universal_hash(const char *input, int len) {
+  char current_char;
+  int32_t k = 0;
+  int32_t sum = 0;
+  int current_position = 0;
+  static short xsum_local[MAXID];
+  static bool initflag = false;       // True after 1st initialization
+
+  if( !initflag ) {
+    xsum_local[0] = (1<<shft[0])+1;
+    for(int i = 1; i < MAXID; i++) {
+      xsum_local[i] = (1<<shft[i]) + 1 + xsum_local[i-1];
+    }
+    initflag = true;
+  }
+
+  while(current_position < len) {
+    current_char = *input++;
+    current_char = (current_char<<1) + 1;
+    sum += current_char + (current_char<<shft[k++]);
+    k %= MAXID;
+    current_position++;
+  }
+  return static_cast<int>((sum + xsum_local[k]) >> 1);
+}
+
 //------------------------------hashptr--------------------------------------
 // Slimey cheap hash function; no guaranteed performance.  Better than the
 // default for pointers, especially on MS-DOS machines.

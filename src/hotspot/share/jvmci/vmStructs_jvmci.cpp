@@ -261,6 +261,7 @@
   nonstatic_field(ObjArrayKlass,               _element_klass,                                Klass*)                                \
                                                                                                                                      \
   unchecked_nonstatic_field(ObjectMonitor,     _owner,                                        sizeof(void *)) /* NOTE: no type */    \
+  volatile_nonstatic_field(ObjectMonitor,      _header,                                      markWord)                              \
   volatile_nonstatic_field(ObjectMonitor,      _recursions,                                   intptr_t)                              \
   volatile_nonstatic_field(ObjectMonitor,      _cxq,                                          ObjectWaiter*)                         \
   volatile_nonstatic_field(ObjectMonitor,      _EntryList,                                    ObjectWaiter*)                         \
@@ -648,6 +649,7 @@
   declare_constant(InvocationCounter::count_shift)                        \
                                                                           \
   declare_constant(markWord::hash_shift)                                  \
+  AARCH64_ONLY(declare_constant(markWord::hash_shift_compact))            \
   declare_constant(markWord::monitor_value)                               \
                                                                           \
   declare_constant(markWord::biased_lock_mask_in_place)                   \
@@ -655,9 +657,12 @@
   declare_constant(markWord::epoch_mask_in_place)                         \
   declare_constant(markWord::hash_mask)                                   \
   declare_constant(markWord::hash_mask_in_place)                          \
+  AARCH64_ONLY(declare_constant(markWord::hash_mask_compact))             \
+  AARCH64_ONLY(declare_constant(markWord::hash_mask_compact_in_place))    \
                                                                           \
   declare_constant(markWord::unlocked_value)                              \
   declare_constant(markWord::biased_lock_pattern)                         \
+  AARCH64_ONLY(declare_constant(markWord::klass_shift))                   \
                                                                           \
   declare_constant(markWord::no_hash_in_place)                            \
   declare_constant(markWord::no_lock_in_place)                            \

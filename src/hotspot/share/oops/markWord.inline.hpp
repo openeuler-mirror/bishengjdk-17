@@ -26,10 +26,59 @@
 #define SHARE_OOPS_MARKWORD_INLINE_HPP
 
 #include "oops/markWord.hpp"
-
 #include "oops/klass.hpp"
 #include "oops/oop.inline.hpp"
 #include "runtime/globals.hpp"
+#include "runtime/safepoint.hpp"
+
+#ifdef AARCH64
+inline markWord markWord::actual_mark() const {
+  assert(UseCompactObjectHeaders, "only safe when using compact headers");
+  if (has_displaced_mark_helper()) {
+    return displaced_mark_helper();
+  } else {
+    return *this;
+  }
+}
+
+inline Klass* markWord::klass() const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  assert(!CompressedKlassPointers::is_null(narrow_klass()), "narrow klass must not be null: " INTPTR_FORMAT, value());
+  return CompressedKlassPointers::decode_not_null(narrow_klass());
+}
+
+inline Klass* markWord::klass_or_null() const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  return CompressedKlassPointers::decode(narrow_klass());
+}
+
+inline narrowKlass markWord::narrow_klass() const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  return narrowKlass(value() >> klass_shift);
+}
+
+inline markWord markWord::set_narrow_klass(narrowKlass nklass) const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  return markWord((value() & ~klass_mask_in_place) | ((uintptr_t) nklass << klass_shift));
+}
+
+inline Klass* markWord::safe_klass() const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  assert(SafepointSynchronize::is_at_safepoint(), "only call at safepoint");
+  markWord m = *this;
+  if (m.has_displaced_mark_helper()) {
+    m = m.displaced_mark_helper();
+  }
+  return CompressedKlassPointers::decode_not_null(m.narrow_klass());
+}
+
+inline markWord markWord::set_klass(Klass* klass) const {
+  assert(UseCompactObjectHeaders, "only used with compact object headers");
+  assert(UseCompressedClassPointers, "expect compressed klass pointers");
+  narrowKlass nklass = CompressedKlassPointers::encode(const_cast<Klass*>(klass));
+  return set_narrow_klass(nklass);
+}
+#endif // AARCH64
 
 // Should this header be preserved during GC?
 inline bool markWord::must_be_preserved(const oopDesc* obj) const {
@@ -70,7 +119,7 @@ inline bool markWord::must_be_preserved_for_promotion_failure(const oopDesc* obj
 
 inline markWord markWord::prototype_for_klass(const Klass* klass) {
   markWord prototype_header = klass->prototype_header();
-  assert(prototype_header == prototype() || prototype_header.has_bias_pattern(), "corrupt prototype header");
+  assert(AARCH64_ONLY(UseCompactObjectHeaders ||) prototype_header == prototype() || prototype_header.has_bias_pattern(), "corrupt prototype header");
 
   return prototype_header;
 }

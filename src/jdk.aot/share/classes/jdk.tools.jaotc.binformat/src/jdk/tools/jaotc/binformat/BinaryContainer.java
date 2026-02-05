@@ -341,7 +341,8 @@ public final class BinaryContainer implements SymbolTable {
 
         booleanFlagsList.addAll(Arrays.asList(graalHotSpotVMConfig.cAssertions, // Debug VM
                                               graalHotSpotVMConfig.useCompressedOops,
-                                              graalHotSpotVMConfig.useCompressedClassPointers));
+                                              graalHotSpotVMConfig.useCompressedClassPointers,
+                                              graalHotSpotVMConfig.useCompactObjectHeaders));
         if (JavaVersionUtil.JAVA_SPEC < 15) {
             // See JDK-8236224. FieldsAllocationStyle and CompactFields flags were removed in JDK15.
             booleanFlagsList.add(graalHotSpotVMConfig.compactFields);
