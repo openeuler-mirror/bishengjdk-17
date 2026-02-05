@@ -225,19 +225,6 @@ const intx ObjectAlignmentInBytes = 8;
           "Maximum number of pages to include in the page scan procedure")  \
           range(0, max_uintx)                                               \
                                                                             \
-  product(bool, LogNUMANodes, false,                                        \
-          "Print NUMANodes")                                                \
-                                                                            \
-  product(ccstr, NUMANodes, NULL,                                           \
-          "This parameter provides the same functionality as"               \
-          "'numactl --all -N <nodes> -m <nodes>'."                          \
-          "<nodes> can be '0-2', '0,1,2', 'all' and so on.")                \
-                                                                            \
-  product(uintx, NUMANodesRandom, 0,                                        \
-          "Number of continuous nodes to bind"                              \
-          "with the first node randomly chosen."                            \
-          "NUMANodesRandom has higher priority than NUMANodes")             \
-                                                                            \
   product(bool, UseAES, false,                                              \
           "Control whether AES instructions are used when available")       \
                                                                             \

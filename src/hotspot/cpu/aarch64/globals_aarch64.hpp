@@ -173,7 +173,24 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "Auto enable the AppCDS feature"                              \
           "the path save classlist and jsa file")                       \
   product(bool, PrintAutoAppCDS, false,                                 \
-          "Print path and some information about AutoSharedArchivePath")
+          "Print path and some information about AutoSharedArchivePath")\
+  product(bool, LogNUMANodes, false,                                    \
+          "Print NUMANodes")                                            \
+  product(ccstr, NUMANodes, NULL,                                       \
+          "This parameter provides the same functionality as"           \
+          "'numactl --all -N <nodes> -m <nodes>'."                      \
+          "<nodes> can be '0-2', '0,1,2', 'all' and so on.")            \
+  product(uintx, NUMANodesRandom, 0,                                    \
+          "Number of continuous nodes to bind to cpu"                   \
+          "with the first node randomly chosen."                        \
+          "If NUMANodes is set, NUMANodesRandom selects nodes randomly" \
+          "within this range.")                                         \
+  product(intx, NUMAMemNodesRandom, 0,                                  \
+          "Number of continuous nodes to bind to memory"                \
+          "with the first N nodes chosen by NUMANodesRandom.")          \
+  product(ccstr, NUMABindPolicy, NULL,                                  \
+          "Enable deterministic NUMA placement with combined Options,"  \
+          "including prefix=<id> and div=<N>.")                         \
 
 // end of ARCH_FLAGS
 
