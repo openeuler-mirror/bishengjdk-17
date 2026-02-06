@@ -1057,7 +1057,7 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
     // object should remain ineligible for biased locking
     assert(!mark.has_bias_pattern(), "invariant");
 
-    if (mark.is_neutral()) {               // if this is a normal header
+    if (mark.is_neutral() || (LockingMode == LM_LIGHTWEIGHT && mark.is_fast_locked())) {               // if this is a normal header
       hash = mark.hash();
       if (hash != 0) {                     // if it has a hash, just return it
         return hash;
@@ -1068,6 +1068,10 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
       test = obj->cas_set_mark(temp, mark);
       if (test == mark) {                  // if the hash was installed, return it
         return hash;
+      }
+      if (LockingMode == LM_LIGHTWEIGHT) {
+        // CAS failed, retry
+        continue;
       }
       // Failed to install the hash. It could be that another thread
       // installed the hash just before our attempt or inflation has
