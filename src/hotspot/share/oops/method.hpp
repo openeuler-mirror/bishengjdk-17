@@ -42,7 +42,9 @@
 #if INCLUDE_JFR
 #include "jfr/support/jfrTraceIdExtension.hpp"
 #endif
-
+#ifdef AARCH64
+class ProfileCacheMethoHold;
+#endif
 
 // A Method represents a Java method.
 //
@@ -65,6 +67,9 @@ class ConstMethod;
 class InlineTableSizes;
 class CompiledMethod;
 class InterpreterOopMap;
+#ifdef AARCH64
+class ProfileCacheMethodHold;
+#endif
 
 class Method : public Metadata {
  friend class VMStructs;
@@ -116,6 +121,16 @@ class Method : public Metadata {
   // NULL only at safepoints (because of a de-opt).
   CompiledMethod* volatile _code;                       // Points to the corresponding piece of native code
   volatile address           _from_interpreted_entry; // Cache of _code ? _adapter->i2c_entry() : _i2i_entry
+
+#ifdef AARCH64
+  int _first_invoke_init_order;  // record class initialize order when this method first been invoked
+  bool _compiled_by_jprofilecache;
+
+  ProfileCacheMethodHold* _jpc_method_holder;
+#ifndef PRODUCT
+  bool _deopted_by_jprofilecache;
+#endif // PRODUCT
+#endif // AARCH64
 
 #if INCLUDE_AOT
   CompiledMethod* _aot_code;
@@ -181,6 +196,26 @@ class Method : public Metadata {
   AnnotationArray* type_annotations() const      {
     return constMethod()->type_annotations();
   }
+
+#ifdef AARCH64
+  int  first_invoke_init_order()                            { return _first_invoke_init_order; }
+  void set_first_invoke_init_order(int value)               { _first_invoke_init_order = value; }
+
+  bool compiled_by_jprofilecache()                          { return _compiled_by_jprofilecache; }
+  void set_compiled_by_jprofilecache(bool value)            { _compiled_by_jprofilecache = value; }
+
+  ProfileCacheMethodHold* jpc_method_holder() const         { return _jpc_method_holder; }
+  void set_jpc_method_holder(ProfileCacheMethodHold* value) { _jpc_method_holder = value; }
+
+#ifndef PRODUCT
+  bool deopted_by_jprofilecache()                           { return _deopted_by_jprofilecache; }
+  void set_deopted_by_jprofilecache(bool value)             { _deopted_by_jprofilecache = value; }
+#endif
+
+  static ByteSize first_invoke_init_order_offset() {
+    return byte_offset_of(Method, _first_invoke_init_order);
+  }
+#endif // AARCH64
 
   // Helper routine: get klass name + "." + method name + signature as
   // C string, for the purpose of providing more useful

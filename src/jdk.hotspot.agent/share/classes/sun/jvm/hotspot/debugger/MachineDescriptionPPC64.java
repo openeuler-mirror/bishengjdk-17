@@ -36,4 +36,8 @@ public class MachineDescriptionPPC64 extends MachineDescriptionTwosComplement im
   public boolean isBigEndian() {
     return "big".equals(System.getProperty("sun.cpu.endian"));
   }
+
+  public boolean isAarch64(){
+    return false;
+  }
 }

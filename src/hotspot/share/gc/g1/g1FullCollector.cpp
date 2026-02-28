@@ -40,6 +40,7 @@
 #include "gc/shared/gcTraceTime.inline.hpp"
 #include "gc/shared/preservedMarks.hpp"
 #include "gc/shared/referenceProcessor.hpp"
+#include "gc/shared/slidingForwarding.hpp"
 #include "gc/shared/verifyOption.hpp"
 #include "gc/shared/weakProcessor.inline.hpp"
 #include "gc/shared/workerPolicy.hpp"
@@ -199,11 +200,15 @@ void G1FullCollector::collect() {
   // Don't add any more derived pointers during later phases
   deactivate_derived_pointers();
 
+  SlidingForwarding::begin();
+
   phase2_prepare_compaction();
 
   phase3_adjust_pointers();
 
   phase4_do_compaction();
+
+  SlidingForwarding::end();
 }
 
 void G1FullCollector::complete_collection() {

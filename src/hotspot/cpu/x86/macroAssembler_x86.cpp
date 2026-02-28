@@ -3784,11 +3784,24 @@ void MacroAssembler::eden_allocate(Register thread, Register obj,
 // Preserves the contents of address, destroys the contents length_in_bytes and temp.
 void MacroAssembler::zero_memory(Register address, Register length_in_bytes, int offset_in_bytes, Register temp) {
   assert(address != length_in_bytes && address != temp && temp != length_in_bytes, "registers must be different");
-  assert((offset_in_bytes & (BytesPerWord - 1)) == 0, "offset must be a multiple of BytesPerWord");
+  assert((offset_in_bytes & (BytesPerInt - 1)) == 0, "offset must be a multiple of BytesPerInt");
   Label done;
 
   testptr(length_in_bytes, length_in_bytes);
   jcc(Assembler::zero, done);
+
+  // Emit single 32bit store to clear leading bytes, if necessary.
+  xorptr(temp, temp);    // use _zero reg to clear memory (shorter code)
+#ifdef _LP64
+  if (!is_aligned(offset_in_bytes, BytesPerWord)) {
+    movl(Address(address, offset_in_bytes), temp);
+    offset_in_bytes += BytesPerInt;
+    decrement(length_in_bytes, BytesPerInt);
+  }
+  assert((offset_in_bytes & (BytesPerWord - 1)) == 0, "offset must be a multiple of BytesPerWord");
+  testptr(length_in_bytes, length_in_bytes);
+  jcc(Assembler::zero, done);
+#endif
 
   // initialize topmost word, divide index by 2, check if odd and test if zero
   // note: for the remaining code to work, index must be a multiple of BytesPerWord
@@ -4865,9 +4878,12 @@ void MacroAssembler::load_method_holder(Register holder, Register method) {
   movptr(holder, Address(holder, ConstantPool::pool_holder_offset_in_bytes())); // InstanceKlass*
 }
 
-void MacroAssembler::load_klass(Register dst, Register src, Register tmp) {
+void MacroAssembler::load_klass(Register dst, Register src, Register tmp, bool null_check_src) {
   assert_different_registers(src, tmp);
   assert_different_registers(dst, tmp);
+  if (null_check_src) {
+    null_check(src, oopDesc::klass_offset_in_bytes());
+  }
 #ifdef _LP64
   if (UseCompressedClassPointers) {
     movl(dst, Address(src, oopDesc::klass_offset_in_bytes()));
@@ -4892,6 +4908,30 @@ void MacroAssembler::store_klass(Register dst, Register src, Register tmp) {
   } else
 #endif
     movptr(Address(dst, oopDesc::klass_offset_in_bytes()), src);
+}
+
+void MacroAssembler::cmp_klass(Register klass, Register obj, Register tmp) {
+#ifdef _LP64
+  if (UseCompressedClassPointers) {
+    cmpl(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
+  } else
+#endif
+  {
+    cmpptr(klass, Address(obj, oopDesc::klass_offset_in_bytes()));
+  }
+}
+
+void MacroAssembler::cmp_klass(Register src, Register dst, Register tmp1, Register tmp2) {
+#ifdef _LP64
+  if (UseCompressedClassPointers) {
+    movl(tmp1, Address(src, oopDesc::klass_offset_in_bytes()));
+    cmpl(tmp1, Address(dst, oopDesc::klass_offset_in_bytes()));
+  } else
+#endif
+  {
+    movptr(tmp1, Address(src, oopDesc::klass_offset_in_bytes()));
+    cmpptr(tmp1, Address(dst, oopDesc::klass_offset_in_bytes()));
+  }
 }
 
 void MacroAssembler::access_load_at(BasicType type, DecoratorSet decorators, Register dst, Address src,
@@ -4949,7 +4989,6 @@ void MacroAssembler::store_klass_gap(Register dst, Register src) {
 
 #ifdef ASSERT
 void MacroAssembler::verify_heapbase(const char* msg) {
-  assert (UseCompressedOops, "should be compressed");
   assert (Universe::heap() != NULL, "java heap should be initialized");
   if (CheckCompressedOops) {
     Label ok;
@@ -8818,3 +8857,70 @@ void MacroAssembler::get_thread(Register thread) {
 }
 
 #endif // !WIN32 || _LP64
+
+// Implements lightweight-locking.
+// Branches to slow upon failure to lock the object, with ZF cleared.
+// Falls through upon success with unspecified ZF.
+//
+// obj: the object to be locked
+// hdr: the (pre-loaded) header of the object, must be rax
+// thread: the thread which attempts to lock obj
+// tmp: a temporary register
+void MacroAssembler::lightweight_lock(Register obj, Register hdr, Register thread, Register tmp, Label& slow) {
+  assert(hdr == rax, "header must be in rax for cmpxchg");
+  assert_different_registers(obj, hdr, thread, tmp);
+
+  // First we need to check if the lock-stack has room for pushing the object reference.
+  // Note: we subtract 1 from the end-offset so that we can do a 'greater' comparison, instead
+  // of 'greaterEqual' below, which readily clears the ZF. This makes C2 code a little simpler and
+  // avoids one branch.
+  cmpl(Address(thread, JavaThread::lock_stack_top_offset()), LockStack::end_offset() - 1);
+  jcc(Assembler::greater, slow);
+
+  // Now we attempt to take the fast-lock.
+  // Clear lock_mask bits (locked state).
+  andptr(hdr, ~(int32_t)markWord::lock_mask_in_place);
+  movptr(tmp, hdr);
+  // Set unlocked_value bit.
+  orptr(hdr, markWord::unlocked_value);
+  lock();
+  cmpxchgptr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
+  jcc(Assembler::notEqual, slow);
+
+  // If successful, push object to lock-stack.
+  movl(tmp, Address(thread, JavaThread::lock_stack_top_offset()));
+  movptr(Address(thread, tmp), obj);
+  incrementl(tmp, oopSize);
+  movl(Address(thread, JavaThread::lock_stack_top_offset()), tmp);
+}
+
+// Implements lightweight-unlocking.
+// Branches to slow upon failure, with ZF cleared.
+// Falls through upon success, with unspecified ZF.
+//
+// obj: the object to be unlocked
+// hdr: the (pre-loaded) header of the object, must be rax
+// tmp: a temporary register
+void MacroAssembler::lightweight_unlock(Register obj, Register hdr, Register tmp, Label& slow) {
+  assert(hdr == rax, "header must be in rax for cmpxchg");
+  assert_different_registers(obj, hdr, tmp);
+
+  // Mark-word must be lock_mask now, try to swing it back to unlocked_value.
+  movptr(tmp, hdr); // The expected old value
+  orptr(tmp, markWord::unlocked_value);
+  lock();
+  cmpxchgptr(tmp, Address(obj, oopDesc::mark_offset_in_bytes()));
+  jcc(Assembler::notEqual, slow);
+  // Pop the lock object from the lock-stack.
+#ifdef _LP64
+  const Register thread = r15_thread;
+#else
+  const Register thread = rax;
+  get_thread(thread);
+#endif
+  subl(Address(thread, JavaThread::lock_stack_top_offset()), oopSize);
+#ifdef ASSERT
+  movl(tmp, Address(thread, JavaThread::lock_stack_top_offset()));
+  movptr(Address(thread, tmp), 0);
+#endif
+}

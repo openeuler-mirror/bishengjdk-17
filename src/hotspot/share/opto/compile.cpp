@@ -658,6 +658,18 @@ Compile::Compile( ciEnv* ci_env, ciMethod* target, int osr_bci,
 
   print_compile_messages();
 
+#ifdef AARCH64
+  if (JProfilingCacheCompileAdvance) {
+    bool fields_resolved = ci_env->are_method_fields_all_resolved(method());
+    if (!fields_resolved) {
+      stringStream ss;
+      ss.print("Cannot parse method: fields needed by method are not all resolved");
+      record_method_not_compilable(ss.as_string());
+      return;
+    }
+  }
+#endif
+
   _ilt = InlineTree::build_inline_tree_root();
 
   // Even if NO memory addresses are used, MergeMem nodes must have at least 1 slice
@@ -1647,6 +1659,12 @@ Compile::AliasType* Compile::find_alias_type(const TypePtr* adr_type, bool no_cr
       }
     }
     if (flat->isa_klassptr()) {
+#ifdef AARCH64
+      if (UseCompactObjectHeaders) {
+        if (flat->offset() == in_bytes(Klass::prototype_header_offset()))
+          alias_type(idx)->set_rewritable(false);
+      }
+#endif // AARCH64
       if (flat->offset() == in_bytes(Klass::super_check_offset_offset()))
         alias_type(idx)->set_rewritable(false);
       if (flat->offset() == in_bytes(Klass::modifier_flags_offset()))

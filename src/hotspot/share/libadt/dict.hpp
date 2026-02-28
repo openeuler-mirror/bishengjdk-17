@@ -87,6 +87,7 @@ int hashkey(const void* key);
 
 // Key comparators
 int32_t cmpstr(const void* k1, const void* k2);
+int compute_universal_hash(const char *input, int len);      // hash string with given length
 // Slimey cheap key comparator.
 int32_t cmpkey(const void* key1, const void* key2);
 

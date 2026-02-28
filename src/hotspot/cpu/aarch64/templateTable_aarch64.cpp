@@ -165,6 +165,7 @@ void TemplateTable::patch_bytecode(Bytecodes::Code bc, Register bc_reg,
                                    Register temp_reg, bool load_bc_into_bc_reg/*=true*/,
                                    int byte_no)
 {
+  assert_different_registers(bc_reg, temp_reg);
   if (!RewriteBytecodes)  return;
   Label L_patch_done;
 
@@ -222,8 +223,12 @@ void TemplateTable::patch_bytecode(Bytecodes::Code bc, Register bc_reg,
   __ bind(L_okay);
 #endif
 
-  // patch bytecode
-  __ strb(bc_reg, at_bcp(0));
+  // Patch bytecode with release store to coordinate with ConstantPoolCacheEntry loads
+  // in fast bytecode codelets. The fast bytecode codelets have a memory barrier that gains
+  // the needed ordering, together with control dependency on entering the fast codelet
+  // itself.
+  __ lea(temp_reg, at_bcp(0));
+  __ stlrb(bc_reg, temp_reg);
   __ bind(L_patch_done);
 }
 
@@ -309,12 +314,12 @@ void TemplateTable::sipush()
   __ asrw(r0, r0, 16);
 }
 
-void TemplateTable::ldc(bool wide)
+void TemplateTable::ldc(LdcType type)
 {
   transition(vtos, vtos);
   Label call_ldc, notFloat, notClass, notInt, Done;
 
-  if (wide) {
+  if (is_ldc_wide(type)) {
     __ get_unsigned_2_byte_index_at_bcp(r1, 1);
   } else {
     __ load_unsigned_byte(r1, at_bcp(1));
@@ -343,7 +348,7 @@ void TemplateTable::ldc(bool wide)
   __ br(Assembler::NE, notClass);
 
   __ bind(call_ldc);
-  __ mov(c_rarg1, wide);
+  __ mov(c_rarg1, is_ldc_wide(type) ? 1 : 0);
   call_VM(r0, CAST_FROM_FN_PTR(address, InterpreterRuntime::ldc), c_rarg1);
   __ push_ptr(r0);
   __ verify_oop(r0);
@@ -376,7 +381,7 @@ void TemplateTable::ldc(bool wide)
 }
 
 // Fast path for caching oop constants.
-void TemplateTable::fast_aldc(bool wide)
+void TemplateTable::fast_aldc(LdcType type)
 {
   transition(vtos, atos);
 
@@ -384,7 +389,7 @@ void TemplateTable::fast_aldc(bool wide)
   Register tmp = r1;
   Register rarg = r2;
 
-  int index_size = wide ? sizeof(u2) : sizeof(u1);
+  int index_size = is_ldc_wide(type) ? sizeof(u2) : sizeof(u1);
 
   Label resolved;
 
@@ -2914,6 +2919,7 @@ void TemplateTable::fast_storefield(TosState state)
 
   // replace index with field offset from cache entry
   __ ldr(r1, Address(r2, in_bytes(base + ConstantPoolCacheEntry::f2_offset())));
+  __ verify_field_offset(r1);
 
   {
     Label notVolatile;
@@ -3007,6 +3013,8 @@ void TemplateTable::fast_accessfield(TosState state)
 
   __ ldr(r1, Address(r2, in_bytes(ConstantPoolCache::base_offset() +
                                   ConstantPoolCacheEntry::f2_offset())));
+  __ verify_field_offset(r1);
+
   __ ldrw(r3, Address(r2, in_bytes(ConstantPoolCache::base_offset() +
                                    ConstantPoolCacheEntry::flags_offset())));
 
@@ -3074,8 +3082,13 @@ void TemplateTable::fast_xaccess(TosState state)
   __ ldr(r0, aaddress(0));
   // access constant pool cache
   __ get_cache_and_index_at_bcp(r2, r3, 2);
+
+  // Must prevent reordering of the following cp cache loads with bytecode load
+  __ membar(MacroAssembler::LoadLoad);
+
   __ ldr(r1, Address(r2, in_bytes(ConstantPoolCache::base_offset() +
                                   ConstantPoolCacheEntry::f2_offset())));
+  __ verify_field_offset(r1);
 
   // 8179954: We need to make sure that the code generated for
   // volatile accesses forms a sequentially-consistent set of
@@ -3228,8 +3241,7 @@ void TemplateTable::invokevirtual_helper(Register index,
   __ bind(notFinal);
 
   // get receiver klass
-  __ null_check(recv, oopDesc::klass_offset_in_bytes());
-  __ load_klass(r0, recv);
+  __ load_klass(r0, recv, true);
 
   // profile this call
   __ profile_virtual_call(r0, rlocals, r3);
@@ -3318,8 +3330,7 @@ void TemplateTable::invokeinterface(int byte_no) {
   __ tbz(r3, ConstantPoolCacheEntry::is_vfinal_shift, notVFinal);
 
   // Get receiver klass into r3 - also a null check
-  __ null_check(r2, oopDesc::klass_offset_in_bytes());
-  __ load_klass(r3, r2);
+  __ load_klass(r3, r2, true);
 
   Label subtype;
   __ check_klass_subtype(r3, r0, r4, subtype);
@@ -3335,8 +3346,7 @@ void TemplateTable::invokeinterface(int byte_no) {
 
   // Get receiver klass into r3 - also a null check
   __ restore_locals();
-  __ null_check(r2, oopDesc::klass_offset_in_bytes());
-  __ load_klass(r3, r2);
+  __ load_klass(r3, r2, true);
 
   Label no_such_method;
 
@@ -3531,12 +3541,17 @@ void TemplateTable::_new() {
     // The object is initialized before the header.  If the object size is
     // zero, go directly to the header initialization.
     __ bind(initialize_object);
-    __ sub(r3, r3, sizeof(oopDesc));
+    __ sub(r3, r3, oopDesc::base_offset_in_bytes());
     __ cbz(r3, initialize_header);
 
     // Initialize object fields
     {
-      __ add(r2, r0, sizeof(oopDesc));
+      __ add(r2, r0, oopDesc::base_offset_in_bytes());
+      if (!is_aligned(oopDesc::base_offset_in_bytes(), BytesPerLong)) {
+        __ strw(zr, Address(__ post(r2, BytesPerInt)));
+        __ sub(r3, r3, BytesPerInt);
+        __ cbz(r3, initialize_header);
+      }
       Label loop;
       __ bind(loop);
       __ str(zr, Address(__ post(r2, BytesPerLong)));
@@ -3546,14 +3561,16 @@ void TemplateTable::_new() {
 
     // initialize object header only.
     __ bind(initialize_header);
-    if (UseBiasedLocking) {
+    if (UseBiasedLocking || UseCompactObjectHeaders) {
       __ ldr(rscratch1, Address(r4, Klass::prototype_header_offset()));
     } else {
       __ mov(rscratch1, (intptr_t)markWord::prototype().value());
     }
     __ str(rscratch1, Address(r0, oopDesc::mark_offset_in_bytes()));
-    __ store_klass_gap(r0, zr);  // zero klass gap for compressed oops
-    __ store_klass(r0, r4);      // store klass last
+    if (!UseCompactObjectHeaders) {
+      __ store_klass_gap(r0, zr);  // zero klass gap for compressed oops
+      __ store_klass(r0, r4);      // store klass last
+    }
 
     {
       SkipIfEqual skip(_masm, &DTraceAllocProbes, false);

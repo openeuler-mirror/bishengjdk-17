@@ -49,6 +49,10 @@
 #include "runtime/sharedRuntime.hpp"
 #include "services/memTracker.hpp"
 #include "utilities/macros.hpp"
+#ifdef AARCH64
+#include "java.hpp"
+#include "jprofilecache/jitProfileCache.hpp"
+#endif
 
 
 // Initialization done by VM thread in vm_init_globals()
@@ -130,6 +134,16 @@ jint init_globals() {
   if (status != JNI_OK)
     return status;
 
+#ifdef AARCH64
+  if (JProfilingCacheRecording) {
+    JitProfileCache* jpc = JitProfileCache::create_instance();
+    jpc->init();
+    if (!jpc->is_valid()) {
+      vm_exit_during_initialization("[JitProfileCache] ERROR: init fail");
+    }
+  }
+#endif
+
   AsyncLogWriter::initialize();
   gc_barrier_stubs_init();  // depends on universe_init, must be before interpreter_init
   interpreter_init_stub();  // before methods get loaded
@@ -137,6 +151,16 @@ jint init_globals() {
   InterfaceSupport_init();
   VMRegImpl::set_regName(); // need this before generate_stubs (for printing oop maps).
   SharedRuntime::generate_stubs();
+#ifdef AARCH64
+  if (JProfilingCacheCompileAdvance) {
+    JitProfileCache* jpc = JitProfileCache::create_instance();
+    jpc->init();
+    if (!jpc->is_valid()) {
+      vm_exit_during_initialization("[JitProfileCache] ERROR: init fail");
+    }
+  }
+#endif
+
   universe2_init();  // dependent on codeCache_init and stubRoutines_init1
   javaClasses_init();// must happen after vtable initialization, before referenceProcessor_init
   interpreter_init_code();  // after javaClasses_init and before any method gets linked

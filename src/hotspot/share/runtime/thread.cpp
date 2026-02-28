@@ -89,10 +89,11 @@
 #include "runtime/javaCalls.hpp"
 #include "runtime/jniHandles.inline.hpp"
 #include "runtime/jniPeriodicChecker.hpp"
+#include "runtime/lockStack.inline.hpp"
 #include "runtime/monitorDeflationThread.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "runtime/nonJavaThread.hpp"
-#include "runtime/objectMonitor.hpp"
+#include "runtime/objectMonitor.inline.hpp"
 #include "runtime/orderAccess.hpp"
 #include "runtime/osThread.hpp"
 #include "runtime/prefetch.inline.hpp"
@@ -148,6 +149,13 @@
 #endif
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
+#endif
+#if INCLUDE_VM_STRUCTS
+#include "runtime/vmStructs.hpp"
+#endif
+#ifdef AARCH64
+#include "jprofilecache/jitProfileCache.hpp"
+#include "jprofilecache/jitProfileCacheThread.hpp"
 #endif
 #if INCLUDE_JBOOSTER
 #include "jbooster/jBoosterManager.hpp"
@@ -257,6 +265,9 @@ Thread::Thread() {
   DEBUG_ONLY(_current_resource_mark = NULL;)
   set_handle_area(new (mtThread) HandleArea(NULL));
   set_metadata_handles(new (ResourceObj::C_HEAP, mtClass) GrowableArray<Metadata*>(30, mtClass));
+#ifdef AARCH64
+  set_is_eager_class_loading_active(false);
+#endif
   set_active_handles(NULL);
   set_free_handle_block(NULL);
   set_last_handle_mark(NULL);
@@ -268,6 +279,9 @@ Thread::Thread() {
   _threads_list_ptr = NULL;
   _nested_threads_hazard_ptr_cnt = 0;
   _rcu_counter = 0;
+#ifdef AARCH64
+  _super_class_resolution_depth = 0;
+#endif
 
   // the handle mark links itself to last_handle_mark
   new HandleMark(this);
@@ -1092,8 +1106,8 @@ JavaThread::JavaThread() :
 
   _class_to_be_initialized(nullptr),
 
-  _SleepEvent(ParkEvent::Allocate(this))
-{
+  _SleepEvent(ParkEvent::Allocate(this)),
+  _lock_stack(this) {
   set_jni_functions(jni_functions());
 
 #if INCLUDE_JVMCI
@@ -1571,6 +1585,7 @@ JavaThread* JavaThread::active() {
 }
 
 bool JavaThread::is_lock_owned(address adr) const {
+  assert(LockingMode != LM_LIGHTWEIGHT, "should not be called with new lightweight locking");
   return is_in_full_stack(adr);
 }
 
@@ -1990,6 +2005,10 @@ void JavaThread::oops_do_no_frames(OopClosure* f, CodeBlobClosure* cf) {
 
   if (jvmti_thread_state() != NULL) {
     jvmti_thread_state()->oops_do(f, cf);
+  }
+
+  if (LockingMode == LM_LIGHTWEIGHT) {
+    lock_stack().oops_do(f);
   }
 }
 
@@ -2825,6 +2844,15 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
     convert_vm_init_libraries_to_agents();
   }
 
+  // Should happen before any agent attaches and pokes into vmStructs
+#if INCLUDE_VM_STRUCTS
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    VMStructs::compact_headers_overrides();
+  }
+#endif // AARCH64
+#endif
+
   // Launch -agentlib/-agentpath and converted -Xrun agents
   if (Arguments::init_agents_at_startup()) {
     create_vm_init_agents();
@@ -3094,6 +3122,14 @@ jint Threads::create_vm(JavaVMInitArgs* args, bool* canTryAgain) {
 
   StatSampler::engage();
   if (CheckJNICalls)                  JniPeriodicChecker::engage();
+#ifdef AARCH64
+  if (JProfilingCacheCompileAdvance) {
+    JitProfileCache* jprofilecache = JitProfileCache::instance();
+    assert(jprofilecache != nullptr, "sanity check");
+    jprofilecache->preloader()->jvm_booted_is_done();
+    JitProfileCacheThread::launch_with_delay(JProfilingCacheDelayLoadTime, THREAD);
+  }
+#endif
 
   BiasedLocking::init();
 
@@ -3737,6 +3773,7 @@ GrowableArray<JavaThread*>* Threads::get_pending_threads(ThreadsList * t_list,
 
 JavaThread *Threads::owning_thread_from_monitor_owner(ThreadsList * t_list,
                                                       address owner) {
+  assert(LockingMode != LM_LIGHTWEIGHT, "Not with new lightweight locking");
   // NULL owner means not locked so we can skip the search
   if (owner == NULL) return NULL;
 
@@ -3764,6 +3801,31 @@ JavaThread *Threads::owning_thread_from_monitor_owner(ThreadsList * t_list,
 
   // cannot assert on lack of success here; see above comment
   return the_owner;
+}
+
+JavaThread* Threads::owning_thread_from_object(ThreadsList * t_list, oop obj) {
+  assert(LockingMode == LM_LIGHTWEIGHT, "Only with new lightweight locking");
+  DO_JAVA_THREADS(t_list, q) {
+    if (q->lock_stack().contains(obj)) {
+      return q;
+    }
+  }
+  return NULL;
+}
+
+JavaThread* Threads::owning_thread_from_monitor(ThreadsList* t_list, ObjectMonitor* monitor) {
+  if (LockingMode == LM_LIGHTWEIGHT) {
+    if (monitor->is_owner_anonymous()) {
+      return owning_thread_from_object(t_list, monitor->object());
+    } else {
+      Thread* owner = reinterpret_cast<Thread*>(monitor->owner());
+      assert(owner == NULL || owner->is_Java_thread(), "only JavaThreads own monitors");
+      return reinterpret_cast<JavaThread*>(owner);
+    }
+  } else {
+    address owner = (address)monitor->owner();
+    return owning_thread_from_monitor_owner(t_list, owner);
+  }
 }
 
 class PrintOnClosure : public ThreadClosure {

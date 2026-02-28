@@ -55,6 +55,7 @@ import java.util.Map;
  * @run main/othervm -Dkae.log=true -Dkae.ec.useKaeEngine=true KAEUseEngineTest
  * @run main/othervm -Dkae.log=true -Dkae.sm2.useKaeEngine=true KAEUseEngineTest
  * @run main/othervm -Dkae.log=true -Dall.test=disable -Dkae.digest.useKaeEngine=false -Dkae.aes.useKaeEngine=false -Dkae.sm4.useKaeEngine=false  -Dkae.hmac.useKaeEngine=false -Dkae.rsa.useKaeEngine=false -Dkae.dh.useKaeEngine=false -Dkae.ec.useKaeEngine=false -Dkae.sm2.useKaeEngine=true  KAEUseEngineTest
+ * @run main/othervm -Dkae.log=true -Dall.test=default -Dkae.engine.id=uadk_engine -Dkae.libcrypto.useGlobalMode=true KAEUseEngineTest
  * @run main/othervm -Dkae.log=true -Dkae.engine.id=uadk_engine -Dkae.libcrypto.useGlobalMode=true -Dkae.digest.useKaeEngine=true KAEUseEngineTest
  * @run main/othervm -Dkae.log=true -Dkae.engine.id=uadk_engine -Dkae.libcrypto.useGlobalMode=true -Dkae.aes.useKaeEngine=true KAEUseEngineTest
  * @run main/othervm -Dkae.log=true -Dkae.engine.id=uadk_engine -Dkae.libcrypto.useGlobalMode=true -Dkae.sm4.useKaeEngine=true KAEUseEngineTest

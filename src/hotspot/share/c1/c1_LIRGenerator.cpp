@@ -637,7 +637,7 @@ void LIRGenerator::monitor_exit(LIR_Opr object, LIR_Opr lock, LIR_Opr new_hdr, L
   // setup registers
   LIR_Opr hdr = lock;
   lock = new_hdr;
-  CodeStub* slow_path = new MonitorExitStub(lock, UseFastLocking, monitor_no);
+  CodeStub* slow_path = new MonitorExitStub(lock, LockingMode != LM_MONITOR, monitor_no);
   __ load_stack_address_monitor(monitor_no, lock);
   __ unlock_object(hdr, object, lock, scratch, slow_path);
 }
@@ -1258,7 +1258,8 @@ void LIRGenerator::do_isInstance(Intrinsic* x) {
 }
 
 void LIRGenerator::load_klass(LIR_Opr obj, LIR_Opr klass, CodeEmitInfo* null_check_info) {
-  __ load_klass(obj, klass, null_check_info);
+  CodeStub* slow_path = AARCH64_ONLY(UseCompactObjectHeaders ? new LoadKlassStub(klass) :) nullptr;
+  __ load_klass(obj, klass, null_check_info, slow_path);
 }
 
 // Example: object.getClass ()

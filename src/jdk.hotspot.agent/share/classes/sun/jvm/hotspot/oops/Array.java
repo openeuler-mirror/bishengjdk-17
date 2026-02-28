@@ -57,32 +57,50 @@ public class Array extends Oop {
   private static long lengthOffsetInBytes=0;
   private static long typeSize;
 
+  // Check whether an element of a typeArrayOop with the given type must be
+  // aligned 0 mod 8.  The typeArrayOop itself must be aligned at least this
+  // strongly.
+  public static boolean elementTypeShouldBeAligned(BasicType type) {
+    if (VM.getVM().isLP64()) {
+      if (type == BasicType.T_OBJECT || type == BasicType.T_ARRAY) {
+        return !VM.getVM().isCompressedOopsEnabled();
+      }
+    }
+    return type == BasicType.T_DOUBLE || type == BasicType.T_LONG;
+  }
+
   private static long headerSizeInBytes() {
     if (headerSize != 0) {
       return headerSize;
     }
-    if (VM.getVM().isCompressedKlassPointersEnabled()) {
-      headerSize = typeSize;
+    if (VM.getVM().isCompactObjectHeadersEnabled()) {
+      headerSize = lengthOffsetInBytes() + VM.getVM().getIntSize();
     } else {
-      headerSize = VM.getVM().alignUp(typeSize + VM.getVM().getIntSize(),
-                                      VM.getVM().getHeapWordSize());
+      if (VM.getVM().isCompressedKlassPointersEnabled()) {
+        headerSize = typeSize;
+      } else {
+        headerSize = VM.getVM().alignUp(typeSize + VM.getVM().getIntSize(),
+                                        VM.getVM().getHeapWordSize());
+      }
     }
     return headerSize;
   }
 
   private static long headerSize(BasicType type) {
-    if (Universe.elementTypeShouldBeAligned(type)) {
+    if (elementTypeShouldBeAligned(type)) {
        return alignObjectSize(headerSizeInBytes())/VM.getVM().getHeapWordSize();
     } else {
       return headerSizeInBytes()/VM.getVM().getHeapWordSize();
     }
   }
 
-  private long lengthOffsetInBytes() {
+  private static long lengthOffsetInBytes() {
     if (lengthOffsetInBytes != 0) {
       return lengthOffsetInBytes;
     }
-    if (VM.getVM().isCompressedKlassPointersEnabled()) {
+    if (VM.getVM().isCompactObjectHeadersEnabled()) {
+      lengthOffsetInBytes = Oop.getHeaderSize();
+    } else if (VM.getVM().isCompressedKlassPointersEnabled()) {
       lengthOffsetInBytes = typeSize - VM.getVM().getIntSize();
     } else {
       lengthOffsetInBytes = typeSize;
@@ -108,7 +126,17 @@ public class Array extends Oop {
   }
 
   public static long baseOffsetInBytes(BasicType type) {
-    return headerSize(type) * VM.getVM().getHeapWordSize();
+    if (VM.getVM().isCompactObjectHeadersEnabled()) {
+      long typeSizeInBytes = headerSizeInBytes();
+      if (elementTypeShouldBeAligned(type)) {
+        VM vm = VM.getVM();
+        return vm.alignUp(typeSizeInBytes, vm.getVM().getHeapWordSize());
+      } else {
+        return typeSizeInBytes;
+      }
+    } else {
+      return headerSize(type) * VM.getVM().getHeapWordSize();
+    }
   }
 
   public boolean isArray()             { return true; }

@@ -39,6 +39,7 @@ import java.util.stream.Collectors;
  * @test
  * @key jfr
  * @requires vm.hasJFR
+ * @requires vm.flagless
  * @library /test/lib
  *
  * @run main/othervm -XX:+UseBiasedLocking jdk.jfr.event.runtime.TestBiasedLockRevocationEvents

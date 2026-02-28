@@ -506,7 +506,9 @@ public class HotSpotReplacementsUtil {
 
     public static void initializeObjectHeader(Word memory, Word markWord, KlassPointer hub) {
         memory.writeWord(markOffset(INJECTED_VMCONFIG), markWord, MARK_WORD_LOCATION);
-        StoreHubNode.write(memory, hub);
+        if (!useCompactObjectHeaders(INJECTED_VMCONFIG)) {
+            StoreHubNode.write(memory, hub);
+        }
     }
 
     @Fold
@@ -617,7 +619,15 @@ public class HotSpotReplacementsUtil {
     }
 
     @Fold
+    public static boolean useCompactObjectHeaders(@InjectedParameter GraalHotSpotVMConfig config) {
+        return config.useCompactObjectHeaders;
+    }
+
+    @Fold
     public static int instanceHeaderSize(@InjectedParameter GraalHotSpotVMConfig config) {
+        if (config.useCompactObjectHeaders) {
+            return wordSize();
+        }
         return config.useCompressedClassPointers ? (2 * wordSize()) - 4 : 2 * wordSize();
     }
 

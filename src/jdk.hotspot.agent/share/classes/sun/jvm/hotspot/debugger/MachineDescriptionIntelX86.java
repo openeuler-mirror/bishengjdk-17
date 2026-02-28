@@ -32,4 +32,8 @@ public class MachineDescriptionIntelX86 extends MachineDescriptionTwosComplement
   public boolean isBigEndian() {
     return false;
   }
+
+  public boolean isAarch64(){
+    return false;
+  }
 }

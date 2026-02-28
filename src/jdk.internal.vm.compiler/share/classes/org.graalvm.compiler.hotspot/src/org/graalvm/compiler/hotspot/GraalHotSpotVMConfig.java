@@ -233,6 +233,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     // Compressed Oops related values.
     public final boolean useCompressedOops = getFlag("UseCompressedOops", Boolean.class);
     public final boolean useCompressedClassPointers = getFlag("UseCompressedClassPointers", Boolean.class);
+    public final boolean useCompactObjectHeaders = getFlag("UseCompactObjectHeaders", Boolean.class, false, osArch.equals("aarch64"));
 
     public final long narrowOopBase = getFieldValue("CompilerToVM::Data::Universe_narrow_oop_base", Long.class, "address");
     public final int narrowOopShift = getFieldValue("CompilerToVM::Data::Universe_narrow_oop_shift", Integer.class, "int");
@@ -258,7 +259,8 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     public final int vmPageSize = getFieldValue("CompilerToVM::Data::vm_page_size", Integer.class, "int");
 
     public final int markOffset = getFieldOffset("oopDesc::_mark", Integer.class, markWord);
-    public final int hubOffset = getFieldOffset("oopDesc::_metadata._klass", Integer.class, "Klass*");
+    public final int klassShift = getConstant(markWordField("klass_shift"), Integer.class, 0, osArch.equals("aarch64"));
+    public final int hubOffset = useCompactObjectHeaders ? markOffset + (klassShift / 8) : getFieldOffset("oopDesc::_metadata._klass", Integer.class, "Klass*");
 
     public final int prototypeMarkWordOffset = getFieldOffset("Klass::_prototype_header", Integer.class, markWord);
     public final int subklassOffset = getFieldOffset("Klass::_subklass", Integer.class, "Klass*");
@@ -496,13 +498,13 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
 
     public final int osThreadInterruptedOffset = getFieldOffset("OSThread::_interrupted", Integer.class, "jint", Integer.MAX_VALUE, JDK < 14);
 
-    public final long markWordHashShift = getConstant(markWordField("hash_shift"), Long.class);
+    public final long markWordHashShift = getConstant(markWordField(useCompactObjectHeaders ? "hash_shift_compact" : "hash_shift"), Long.class);
 
     public final int biasedLockMaskInPlace = getConstant(markWordField("biased_lock_mask_in_place"), Integer.class);
     public final int ageMaskInPlace = getConstant(markWordField("age_mask_in_place"), Integer.class);
     public final int epochMaskInPlace = getConstant(markWordField("epoch_mask_in_place"), Integer.class);
-    public final long markWordHashMask = getConstant(markWordField("hash_mask"), Long.class);
-    public final long markWordHashMaskInPlace = getConstant(markWordField("hash_mask_in_place"), Long.class);
+    public final long markWordHashMask = getConstant(markWordField(useCompactObjectHeaders ? "hash_mask_compact" : "hash_mask"), Long.class);
+    public final long markWordHashMaskInPlace = getConstant(markWordField(useCompactObjectHeaders ? "hash_mask_compact_in_place" : "hash_mask_in_place"), Long.class);
 
     public final int unlockedMask = getConstant(markWordField("unlocked_value"), Integer.class);
     public final int monitorMask = getConstant(markWordField("monitor_value"), Integer.class, -1, gr21761);
@@ -510,6 +512,8 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
 
     // This field has no type in vmStructs.cpp
     public final int objectMonitorOwner = getFieldOffset("ObjectMonitor::_owner", Integer.class, null, -1, gr21761);
+    public final int objectMonitorHeaderOffset = getFieldOffset("ObjectMonitor::_header", Integer.class, markWord);
+    public final int objectMonitorHeaderOffsetNoTag = objectMonitorHeaderOffset - monitorMask;
     public final int objectMonitorRecursions = getFieldOffset("ObjectMonitor::_recursions", Integer.class, "intptr_t", -1, gr21761);
     public final int objectMonitorCxq = getFieldOffset("ObjectMonitor::_cxq", Integer.class, "ObjectWaiter*", -1, jdk13Backport);
     public final int objectMonitorEntryList = getFieldOffset("ObjectMonitor::_EntryList", Integer.class, "ObjectWaiter*", -1, jdk13Backport);
@@ -541,7 +545,7 @@ public class GraalHotSpotVMConfig extends GraalHotSpotVMConfigAccess {
     /**
      * Mark word right shift to get identity hash code.
      */
-    public final int identityHashCodeShift = getConstant(markWordField("hash_shift"), Integer.class);
+    public final int identityHashCodeShift = getConstant(markWordField(useCompactObjectHeaders ? "hash_shift_compact" : "hash_shift"), Integer.class);
 
     /**
      * Identity hash code value when uninitialized.
