@@ -60,7 +60,7 @@ public class SignatureGetInstance {
 
         testDblInit(testPriv, testPub, true, "TestProvider");
         testDblInit(kp.getPrivate(), kp.getPublic(), true,
-                        System.getProperty("test.provider.name", expectedProName));
+                        System.getProperty("test.provider.name", expectedProvName));
         testDblInit(testPriv, kp.getPublic(), false, null);
         testDblInit(kp.getPrivate(), testPub, false, null);
 

@@ -275,7 +275,19 @@ oop HeapShared::archive_heap_object(oop obj) {
     // identity_hash for all shared objects, so they are less likely to be written
     // into during run time, increasing the potential of memory sharing.
     int hash_original = obj->identity_hash();
-    archived_oop->set_mark(markWord::prototype().copy_set_hash(hash_original));
+#ifdef AARCH64
+    if (UseCompactObjectHeaders) {
+      markWord mark = obj->mark();
+      if (mark.has_displaced_mark_helper()) {
+        mark = mark.displaced_mark_helper();
+      }
+      narrowKlass nklass = mark.narrow_klass();
+      archived_oop->set_mark(markWord::prototype().copy_set_hash(hash_original).set_narrow_klass(nklass));
+    } else
+#endif // AARCH64
+    {
+      archived_oop->set_mark(markWord::prototype().copy_set_hash(hash_original));
+    }
     assert(archived_oop->mark().is_unlocked(), "sanity");
 
     DEBUG_ONLY(int hash_archived = archived_oop->identity_hash());
@@ -418,10 +430,16 @@ void HeapShared::copy_roots() {
     // This is copied from MemAllocator::finish
     if (UseBiasedLocking) {
       oopDesc::set_mark(mem, k->prototype_header());
+#ifdef AARCH64
+    } else if (UseCompactObjectHeaders) {
+      oopDesc::release_set_mark(mem, k->prototype_header());
+#endif // AARCH64
     } else {
       oopDesc::set_mark(mem, markWord::prototype());
     }
-    oopDesc::release_set_klass(mem, k);
+    if (AARCH64_ONLY(!UseCompactObjectHeaders) NOT_AARCH64(true)) {
+      oopDesc::release_set_klass(mem, k);
+    }
   }
   {
     // This is copied from ObjArrayAllocator::initialize

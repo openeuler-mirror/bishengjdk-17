@@ -39,6 +39,7 @@
 #include "memory/memRegion.hpp"
 #include "memory/resourceArea.hpp"
 #include "oops/instanceKlass.hpp"
+#include "oops/klass.inline.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "oops/oopHandle.inline.hpp"
 #include "runtime/arguments.hpp"
@@ -732,6 +733,13 @@ void ArchiveBuilder::make_klasses_shareable() {
   for (int i = 0; i < klasses()->length(); i++) {
     Klass* k = klasses()->at(i);
     k->remove_java_mirror();
+#ifdef AARCH64
+    if (UseCompactObjectHeaders) {
+      Klass* requested_k = to_requested(k);
+      narrowKlass nk = CompressedKlassPointers::encode_not_null(requested_k, _requested_static_archive_bottom);
+      k->set_prototype_header(markWord::prototype().set_narrow_klass(nk));
+    }
+#endif // AARCH64
     if (k->is_objArray_klass()) {
       // InstanceKlass and TypeArrayKlass will in turn call remove_unshareable_info
       // on their array classes.
@@ -773,11 +781,20 @@ uintx ArchiveBuilder::any_to_offset(address p) const {
 // Update a Java object to point its Klass* to the new location after
 // shared archive has been compacted.
 void ArchiveBuilder::relocate_klass_ptr(oop o) {
+#ifdef _LP64
   assert(DumpSharedSpaces, "sanity");
   Klass* k = get_relocated_klass(o->klass());
   Klass* requested_k = to_requested(k);
   narrowKlass nk = CompressedKlassPointers::encode_not_null(requested_k, _requested_static_archive_bottom);
-  o->set_narrow_klass(nk);
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    o->set_mark(o->mark().set_narrow_klass(nk));
+  } else
+#endif // AARCH64
+  {
+    o->set_narrow_klass(nk);
+  }
+#endif // _LP64
 }
 
 // RelocateBufferToRequested --- Relocate all the pointers in rw/ro,

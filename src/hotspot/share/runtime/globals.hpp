@@ -147,6 +147,7 @@ const size_t minimumSymbolTableSize = 1024;
                            constraint)
 const bool UseCompressedOops = false;
 const bool UseCompressedClassPointers = false;
+const bool UseCompactObjectHeaders = false;
 const intx ObjectAlignmentInBytes = 8;
 
 #endif // _LP64
@@ -224,19 +225,6 @@ const intx ObjectAlignmentInBytes = 8;
           "Maximum number of pages to include in the page scan procedure")  \
           range(0, max_uintx)                                               \
                                                                             \
-  product(bool, LogNUMANodes, false,                                        \
-          "Print NUMANodes")                                                \
-                                                                            \
-  product(ccstr, NUMANodes, NULL,                                           \
-          "This parameter provides the same functionality as"               \
-          "'numactl --all -N <nodes> -m <nodes>'."                          \
-          "<nodes> can be '0-2', '0,1,2', 'all' and so on.")                \
-                                                                            \
-  product(uintx, NUMANodesRandom, 0,                                        \
-          "Number of continuous nodes to bind"                              \
-          "with the first node randomly chosen."                            \
-          "NUMANodesRandom has higher priority than NUMANodes")             \
-                                                                            \
   product(bool, UseAES, false,                                              \
           "Control whether AES instructions are used when available")       \
                                                                             \
@@ -254,8 +242,10 @@ const intx ObjectAlignmentInBytes = 8;
                                                                             \
   product(size_t, LargePageSizeInBytes, 0,                                  \
           "Maximum large page size used (0 will use the default large "     \
-          "page size for the environment as the maximum)")                  \
+          "page size for the environment as the maximum) "                  \
+          "(must be a power of 2)")                                         \
           range(0, max_uintx)                                               \
+          constraint(LargePageSizeInBytesConstraintFunc, AtParse)           \
                                                                             \
   product(size_t, LargePageHeapSizeThreshold, 128*M,                        \
           "Use large pages if maximum heap is at least this big")           \
@@ -2165,6 +2155,13 @@ const intx ObjectAlignmentInBytes = 8;
           false AARCH64_ONLY(DEBUG_ONLY(||true)),                           \
              "Mark all threads after a safepoint, and clear on a modify "   \
              "fence. Add cleanliness checks.")                              \
+                                                                            \
+  product(int, LockingMode, LM_LEGACY, EXPERIMENTAL,                        \
+          "Select locking mode: "                                           \
+          "0: monitors only (LM_MONITOR), "                                 \
+          "1: monitors & legacy stack-locking (LM_LEGACY, default), "       \
+          "2: monitors & new lightweight locking (LM_LIGHTWEIGHT)")         \
+          range(0, 2)                                                       \
                                                                             \
   develop(bool, TraceOptimizedUpcallStubs, false,                              \
                 "Trace optimized upcall stub generation")                      \

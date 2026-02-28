@@ -325,7 +325,7 @@ void JBoltManager::construct_stacktrace(const JfrStackTrace& stacktrace) {
   while (topFrameIndex < framesCount) {
     const JfrStackFrame& frame = frames[topFrameIndex];
 
-    if (method_type_to_string(frame.get_type()) != "Native") {
+    if (reinterpret_cast<uintptr_t>(method_type_to_string(frame.get_type())) != reinterpret_cast<uintptr_t>("Native")) {
       break;
     }
 

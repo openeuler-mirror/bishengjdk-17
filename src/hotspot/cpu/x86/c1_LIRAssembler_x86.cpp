@@ -1643,7 +1643,7 @@ void LIR_Assembler::emit_alloc_array(LIR_OpAllocArray* op) {
                       len,
                       tmp1,
                       tmp2,
-                      arrayOopDesc::header_size(op->type()),
+                      arrayOopDesc::base_offset_in_bytes(op->type()),
                       array_element_size(op->type()),
                       op->klass()->as_register(),
                       *op->stub()->entry());
@@ -3078,6 +3078,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
   Register length  = op->length()->as_register();
   Register tmp = op->tmp()->as_register();
   Register tmp_load_klass = LP64_ONLY(rscratch1) NOT_LP64(noreg);
+  Register tmp2 = noreg;
 
   CodeStub* stub = op->stub();
   int flags = op->flags();
@@ -3202,8 +3203,6 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 
   Address src_length_addr = Address(src, arrayOopDesc::length_offset_in_bytes());
   Address dst_length_addr = Address(dst, arrayOopDesc::length_offset_in_bytes());
-  Address src_klass_addr = Address(src, oopDesc::klass_offset_in_bytes());
-  Address dst_klass_addr = Address(dst, oopDesc::klass_offset_in_bytes());
 
   // length and pos's are all sign extended at this point on 64bit
 
@@ -3269,13 +3268,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
     // We don't know the array types are compatible
     if (basic_type != T_OBJECT) {
       // Simple test for basic type arrays
-      if (UseCompressedClassPointers) {
-        __ movl(tmp, src_klass_addr);
-        __ cmpl(tmp, dst_klass_addr);
-      } else {
-        __ movptr(tmp, src_klass_addr);
-        __ cmpptr(tmp, dst_klass_addr);
-      }
+      __ cmp_klass(src, dst, tmp, tmp2);
       __ jcc(Assembler::notEqual, *stub->entry());
     } else {
       // For object arrays, if src is a sub class of dst then we can
@@ -3334,6 +3327,7 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
        store_parameter(src, 4);
 
 #ifndef _LP64
+        Assert dst_klass_addr = Address(dst, oopDesc::klass_offset_in_bytes());
         __ movptr(tmp, dst_klass_addr);
         __ movptr(tmp, Address(tmp, ObjArrayKlass::element_klass_offset()));
         __ push(tmp);
@@ -3437,16 +3431,12 @@ void LIR_Assembler::emit_arraycopy(LIR_OpArrayCopy* op) {
 #endif
 
     if (basic_type != T_OBJECT) {
-
-      if (UseCompressedClassPointers)          __ cmpl(tmp, dst_klass_addr);
-      else                   __ cmpptr(tmp, dst_klass_addr);
+      __ cmp_klass(tmp, dst, tmp2);
       __ jcc(Assembler::notEqual, halt);
-      if (UseCompressedClassPointers)          __ cmpl(tmp, src_klass_addr);
-      else                   __ cmpptr(tmp, src_klass_addr);
+      __ cmp_klass(tmp, src, tmp2);
       __ jcc(Assembler::equal, known_ok);
     } else {
-      if (UseCompressedClassPointers)          __ cmpl(tmp, dst_klass_addr);
-      else                   __ cmpptr(tmp, dst_klass_addr);
+      __ cmp_klass(tmp, dst, tmp2);
       __ jcc(Assembler::equal, known_ok);
       __ cmpptr(src, dst);
       __ jcc(Assembler::equal, known_ok);
@@ -3508,11 +3498,11 @@ void LIR_Assembler::emit_lock(LIR_OpLock* op) {
   Register obj = op->obj_opr()->as_register();  // may not be an oop
   Register hdr = op->hdr_opr()->as_register();
   Register lock = op->lock_opr()->as_register();
-  if (!UseFastLocking) {
+  if (LockingMode == LM_MONITOR) {
     __ jmp(*op->stub()->entry());
   } else if (op->code() == lir_lock) {
     Register scratch = noreg;
-    if (UseBiasedLocking) {
+    if (UseBiasedLocking || LockingMode == LM_LIGHTWEIGHT) {
       scratch = op->scratch_opr()->as_register();
     }
     assert(BasicLock::displaced_header_offset_in_bytes() == 0, "lock_reg must point to the displaced header");

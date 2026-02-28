@@ -98,6 +98,7 @@ public class VM {
   private boolean      usingServerCompiler;
   /** alignment constants */
   private boolean      isLP64;
+  private boolean      isAarch64;
   private int          bytesPerLong;
   private int          bytesPerWord;
   private int          objectAlignmentInBytes;
@@ -149,6 +150,7 @@ public class VM {
   private Boolean sharingEnabled;
   private Boolean compressedOopsEnabled;
   private Boolean compressedKlassPointersEnabled;
+  private Boolean compactObjectHeadersEnabled;
 
   // command line flags supplied to VM - see struct JVMFlag in jvmFlag.hpp
   public static final class Flag {
@@ -486,6 +488,7 @@ public class VM {
 
     if (debugger != null) {
       isLP64 = debugger.getMachineDescription().isLP64();
+      isAarch64 = debugger.getMachineDescription().isAarch64();
     }
     bytesPerLong = db.lookupIntConstant("BytesPerLong").intValue();
     bytesPerWord = db.lookupIntConstant("BytesPerWord").intValue();
@@ -687,6 +690,15 @@ public class VM {
       Assert.that(isDebugging(), "Debugging system only for now");
     }
     return isLP64;
+  }
+
+  /** Indicates whether the underlying machine supports the Aarch64 data
+      model. This is needed for conditionalizing code in a few places */
+  public boolean isAarch64() {
+    if (Assert.ASSERTS_ENABLED) {
+      Assert.that(isDebugging(), "Debugging system only for now");
+    }
+    return isAarch64;
   }
 
   /** Get bytes-per-long == long/double natural alignment. */
@@ -975,6 +987,15 @@ public class VM {
              (flag.getBool()? Boolean.TRUE: Boolean.FALSE);
     }
     return compressedKlassPointersEnabled.booleanValue();
+  }
+
+  public boolean isCompactObjectHeadersEnabled() {
+    if (compactObjectHeadersEnabled == null) {
+        Flag flag = getCommandLineFlag("UseCompactObjectHeaders");
+        compactObjectHeadersEnabled = (flag == null) ? Boolean.FALSE:
+             (flag.getBool()? Boolean.TRUE: Boolean.FALSE);
+    }
+    return compactObjectHeadersEnabled.booleanValue();
   }
 
   public int getObjectAlignmentInBytes() {

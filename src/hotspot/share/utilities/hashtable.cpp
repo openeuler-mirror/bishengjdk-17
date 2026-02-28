@@ -280,6 +280,13 @@ template class BasicHashtable<mtCompiler>;
 template class BasicHashtable<mtTracing>;
 template class BasicHashtable<mtServiceability>;
 template class BasicHashtable<mtLogging>;
+#ifdef AARCH64
+template class BasicHashtableEntry<mtInternal>;
+template class HashtableEntry<Method*, mtInternal>;
+template class HashtableEntry<Symbol*, mtInternal>;
+template class Hashtable<Method*, mtInternal>;
+template class Hashtable<Symbol*, mtInternal>;
+#endif
 #if INCLUDE_JBOOSTER
 template class BasicHashtable<mtJBooster>;
 #endif // INCLUDE_JBOOSTER

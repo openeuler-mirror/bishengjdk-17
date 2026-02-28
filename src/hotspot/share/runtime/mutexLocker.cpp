@@ -42,6 +42,11 @@
 Mutex*   Patching_lock                = NULL;
 Mutex*   CompiledMethod_lock          = NULL;
 Monitor* SystemDictionary_lock        = NULL;
+#ifdef AARCH64
+Mutex*   JitProfileRecorder_lock      = nullptr;
+Mutex*   ProfileCacheClassChain_lock  = nullptr;
+Mutex*   JitProfileCachePrint_lock    = nullptr;
+#endif
 Mutex*   SharedDictionary_lock        = NULL;
 Monitor* ClassInitError_lock          = NULL;
 Mutex*   Module_lock                  = NULL;
@@ -213,6 +218,11 @@ void mutex_init() {
 
   def(CGC_lock                     , PaddedMonitor, special,     true,  _safepoint_check_never);      // coordinate between fore- and background GC
   def(STS_lock                     , PaddedMonitor, leaf,        true,  _safepoint_check_never);
+#ifdef AARCH64
+  def(JitProfileRecorder_lock      , PaddedMutex, leaf,          true,  _safepoint_check_never);
+  def(ProfileCacheClassChain_lock  , PaddedMutex, leaf,          true,  _safepoint_check_always);
+  def(JitProfileCachePrint_lock    , PaddedMutex, leaf,          true,  _safepoint_check_always);
+#endif
 
   if (UseG1GC) {
     def(G1OldGCCount_lock          , PaddedMonitor, leaf,        true,  _safepoint_check_always);

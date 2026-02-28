@@ -46,6 +46,9 @@
 #include "utilities/macros.hpp"
 #include "utilities/ostream.hpp"
 #include "utilities/vmError.hpp"
+#ifdef AARCH64
+#include "jprofilecache/jitProfileCache.hpp"
+#endif
 
 volatile size_t ClassLoaderDataGraph::_num_array_classes = 0;
 volatile size_t ClassLoaderDataGraph::_num_instance_classes = 0;
@@ -504,6 +507,16 @@ bool ClassLoaderDataGraph::do_unloading() {
   bool seen_dead_loader = false;
   uint loaders_processed = 0;
   uint loaders_removed = 0;
+
+#ifdef AARCH64
+  // Unload ProfileCacheClassChain
+  if (JProfilingCacheCompileAdvance) {
+    JitProfileCache* jpc = JitProfileCache::instance();
+    assert(jpc != nullptr, "JitProfileCache object is null");
+    ProfileCacheClassChain* chain = jpc->preloader()->chain();
+    chain->unload_class();
+  }
+#endif
 
   data = _head;
   while (data != NULL) {

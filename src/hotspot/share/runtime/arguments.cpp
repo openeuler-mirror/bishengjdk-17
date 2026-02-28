@@ -63,6 +63,10 @@
 #if INCLUDE_JFR
 #include "jfr/jfr.hpp"
 #endif
+#ifdef AARCH64
+#include "jprofilecache/jitProfileRecord.hpp"
+#include <sys/file.h>
+#endif
 #if INCLUDE_JBOOSTER
 #include "jbooster/jBoosterManager.hpp"
 #endif // INCLUDE_JBOOSTER
@@ -2014,6 +2018,22 @@ bool Arguments::check_vm_args_consistency() {
   }
 #endif
 
+#if !defined(X86) && !defined(AARCH64)
+  if (LockingMode == LM_LIGHTWEIGHT) {
+    FLAG_SET_CMDLINE(LockingMode, LM_LEGACY);
+    warning("New lightweight locking not supported on this platform");
+  }
+#endif
+
+  if (UseHeavyMonitors) {
+    if (FLAG_IS_CMDLINE(LockingMode) && LockingMode != LM_MONITOR) {
+      jio_fprintf(defaultStream::error_stream(),
+                  "Conflicting -XX:+UseHeavyMonitors and -XX:LockingMode=%d flags", LockingMode);
+      return false;
+    }
+    FLAG_SET_CMDLINE(LockingMode, LM_MONITOR);
+  }
+
   return status;
 }
 
@@ -3195,6 +3215,124 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
   UNSUPPORTED_OPTION(ShowRegistersOnAssert);
 #endif // CAN_SHOW_REGISTERS_ON_ASSERT
 
+#ifdef AARCH64
+  if (JProfilingCacheAutoArchiveDir != nullptr) {
+    if (FLAG_IS_CMDLINE(JProfilingCacheRecording) || FLAG_IS_CMDLINE(JProfilingCacheCompileAdvance)) {
+      warning("Profile cache file will be dumpped automatically. No need to set JProfilingCacheRecording/JProfilingCacheCompileAdvance");
+      JProfilingCacheRecording = false;
+      JProfilingCacheCompileAdvance = false;
+    }
+
+    if (FLAG_IS_CMDLINE(ProfilingCacheFile)) {
+      warning("ProfilingCacheFile will be ignored");
+    }
+
+    DIR* dir = os::opendir(JProfilingCacheAutoArchiveDir);
+    if (dir == nullptr) {
+      int err_code = errno;
+      switch (err_code) {
+        case ENOENT:
+          if (::mkdir(JProfilingCacheAutoArchiveDir, 0755) == OS_ERR) {
+            if (errno == EEXIST) break;
+            else {
+              jio_fprintf(defaultStream::error_stream(),
+                      "Fail to create JProfilingCacheAutoArchiveDir directory '%s'\n",
+                      JProfilingCacheAutoArchiveDir);
+              return JNI_ERR;
+            }
+          }
+          break;
+        case EACCES:
+          jio_fprintf(defaultStream::error_stream(),
+                      "Permission denied to open JProfilingCacheAutoArchiveDir directory '%s'\n",
+                      JProfilingCacheAutoArchiveDir);
+          return JNI_ERR;
+        case ENOTDIR:
+          jio_fprintf(defaultStream::error_stream(),
+                      "JProfilingCacheAutoArchiveDir '%s' is not a directory\n",
+                      JProfilingCacheAutoArchiveDir);
+          return JNI_ERR;
+        default:
+          jio_fprintf(defaultStream::error_stream(),
+                      "Couldn't open JProfilingCacheAutoArchiveDir directory '%s'\n",
+                      JProfilingCacheAutoArchiveDir);
+          return JNI_ERR;
+      }
+    } else {
+      os::closedir(dir);
+    }
+
+    const char* jpc_path = JitProfileRecorder::auto_jpcfile_name();
+    const char* jpc_tmp_path = JitProfileRecorder::auto_temp_jpcfile_name();
+    struct stat st;
+    if (os::stat(jpc_tmp_path, &st) == 0) { // recording jprofile by other JVM
+      //Test temp file is still valid
+      int jpc_tmp_fd = os::open(jpc_tmp_path, O_RDWR, 0644);
+      if (jpc_tmp_fd != -1) {
+        if (flock(jpc_tmp_fd, LOCK_EX | LOCK_NB) == 0) {
+          ::unlink(jpc_tmp_path);
+          flock(jpc_tmp_fd, LOCK_UN);
+        }
+        os::close(jpc_tmp_fd);
+      }
+    } else {
+      if (os::stat(jpc_path, &st) == 0) {   // jprofilecache file exists, replay profile data
+        JProfilingCacheCompileAdvance = true;
+      } else {
+        int jpc_fd = os::open(jpc_tmp_path, O_RDWR | O_CREAT, 0644);
+        if (jpc_fd == -1) {
+          jio_fprintf(defaultStream::error_stream(),
+                "Could not open/create jprofile cache file under JProfilingCacheAutoArchiveDir '%s'\n",
+                dir);
+        } else {
+          if (flock(jpc_fd, LOCK_EX | LOCK_NB) == 0) {  // lock the jprofile file and prepare to generate
+            FILE* jpc_file = ::fdopen(jpc_fd, "wb+");
+            if (jpc_file == nullptr) {
+              jio_fprintf(defaultStream::error_stream(),
+                  "Could not open/create jprofile cache file under JProfilingCacheAutoArchiveDir '%s'\n",
+                   dir);
+            } else {
+              log_info(jprofilecache)("AutoJProfileCache use Record Mode");
+              JitProfileRecorder::set_jpcfile_filepointer(jpc_file);
+              JProfilingCacheRecording = true;
+              ClassUnloading = false;
+              ExitVMProfileCacheFlush = true;
+              if (NUMANodesRandom != 0) {
+                NUMANodesRandom = 0;
+              }
+            }
+          } else {
+            os::close(jpc_fd);
+          }
+        }
+      }
+    }
+  }
+#endif
+
+#ifdef AARCH64
+  if (UseCompactObjectHeaders && UseZGC) {
+    if (FLAG_IS_CMDLINE(UseCompactObjectHeaders)) {
+      warning("ZGC does not work with compact object headers, disabling UseCompactObjectHeaders");
+    }
+    FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+  }
+  if (UseCompactObjectHeaders && FLAG_IS_CMDLINE(UseCompressedClassPointers) && !UseCompressedClassPointers) {
+    // If user specifies -UseCompressedClassPointers, disable compact headers with a warning.
+    warning("Compact object headers require compressed class pointers. Disabling compact object headers.");
+    FLAG_SET_DEFAULT(UseCompactObjectHeaders, false);
+  }
+  if (UseCompactObjectHeaders && LockingMode == LM_LEGACY) {
+    FLAG_SET_DEFAULT(LockingMode, LM_LIGHTWEIGHT);
+  }
+  if (UseCompactObjectHeaders && UseBiasedLocking) {
+    FLAG_SET_DEFAULT(UseBiasedLocking, false);
+  }
+  if (UseCompactObjectHeaders && !UseAltGCForwarding) {
+    FLAG_SET_DEFAULT(UseAltGCForwarding, true);
+  }
+#endif // AARCH64
+
   return JNI_OK;
 }
 
@@ -3484,13 +3622,22 @@ char* Arguments::get_default_shared_archive_path() {
   os::jvm_path(jvm_path, sizeof(jvm_path));
   char *end = strrchr(jvm_path, *os::file_separator());
   if (end != NULL) *end = '\0';
-  size_t jvm_path_len = strlen(jvm_path);
-  size_t file_sep_len = strlen(os::file_separator());
-  const size_t len = jvm_path_len + file_sep_len + 20;
-  default_archive_path = NEW_C_HEAP_ARRAY(char, len, mtArguments);
-  jio_snprintf(default_archive_path, len,
-               LP64_ONLY(!UseCompressedOops ? "%s%sclasses_nocoops.jsa":) "%s%sclasses.jsa",
-               jvm_path, os::file_separator());
+  stringStream tmp;
+  tmp.print("%s%sclasses", jvm_path, os::file_separator());
+#ifdef _LP64
+  if (!UseCompressedOops) {
+    tmp.print_raw("_nocoops");
+  }
+#ifdef AARCH64
+  if (UseCompactObjectHeaders) {
+    // Note that generation of xxx_coh.jsa variants require
+    // --enable-cds-archive-coh at build time
+    tmp.print_raw("_coh");
+  }
+#endif // AARCH64
+#endif // _LP64
+  tmp.print_raw(".jsa");
+  default_archive_path = os::strdup(tmp.base());
   return default_archive_path;
 }
 
@@ -4048,6 +4195,17 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
       warning("TraceDependencies results may be inflated by VerifyDependencies");
     }
   }
+
+#ifdef AARCH64
+  if (NUMANodes != NULL || NUMANodesRandom != 0) {
+    const char* numa_chosen_env = getenv("_JVM_NUMA_BINDING_DONE");
+    if (numa_chosen_env == NULL || strcmp(numa_chosen_env, "1") != 0) {
+      if (!UseNUMA) {
+        UseNUMA = true;
+      }
+    }
+  }
+#endif //AARCH64
 
   apply_debugger_ergo();
 

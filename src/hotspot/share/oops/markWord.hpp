@@ -25,6 +25,7 @@
 #ifndef SHARE_OOPS_MARKWORD_HPP
 #define SHARE_OOPS_MARKWORD_HPP
 
+#include "gc/shared/gc_globals.hpp"
 #include "metaprogramming/primitiveConversions.hpp"
 #include "oops/oopsHierarchy.hpp"
 #include "runtime/globals.hpp"
@@ -43,6 +44,10 @@
 //  64 bits:
 //  --------
 //  unused:25 hash:31 -->| unused_gap:1   age:4    biased_lock:1 lock:2 (normal object)
+//  64 bits (with compact headers):
+//  -------------------------------
+//  nklass:32 hash:25 -->| age:4  self-fwded:1  lock:2 (normal object)
+//
 //  JavaThread*:54 epoch:2 unused_gap:1   age:4    biased_lock:1 lock:2 (biased object)
 //
 //  - hash contains the identity hash value: largest value is
@@ -82,9 +87,9 @@
 //
 //    [ptr             | 00]  locked             ptr points to real header on stack
 //    [header      | 0 | 01]  unlocked           regular object header
-//    [ptr             | 10]  monitor            inflated lock (header is wapped out)
+//    [ptr             | 10]  monitor            inflated lock (header is swapped out)
 //    [ptr             | 11]  marked             used to mark an object
-//    [0 ............ 0| 00]  inflating          inflation in progress
+//    [0 ............ 0| 00]  inflating          inflation in progress (stack-locking in use)
 //
 //    We assume that stack/thread pointers have the lowest two bits cleared.
 //
@@ -129,23 +134,39 @@ class markWord {
   // Constants
   static const int age_bits                       = 4;
   static const int lock_bits                      = 2;
+  static const int self_forwarded_bits            = 1;
   static const int biased_lock_bits               = 1;
-  static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - biased_lock_bits;
+  static const int max_hash_bits                  = BitsPerWord - age_bits - lock_bits - self_forwarded_bits;
   static const int hash_bits                      = max_hash_bits > 31 ? 31 : max_hash_bits;
+  static const int hash_bits_compact              = max_hash_bits > 25 ? 25 : max_hash_bits;
+  // Used only without compact headers.
   static const int unused_gap_bits                = LP64_ONLY(1) NOT_LP64(0);
+#ifdef AARCH64
+  // Used only with compact headers.
+  static const int klass_bits                     = 32;
+#endif // AARCH64
   static const int epoch_bits                     = 2;
 
   // The biased locking code currently requires that the age bits be
   // contiguous to the lock bits.
   static const int lock_shift                     = 0;
   static const int biased_lock_shift              = lock_bits;
-  static const int age_shift                      = lock_bits + biased_lock_bits;
+  static const int self_forwarded_shift           = lock_shift + lock_bits;
+  static const int age_shift                      = self_forwarded_shift + self_forwarded_bits;
   static const int unused_gap_shift               = age_shift + age_bits;
   static const int hash_shift                     = unused_gap_shift + unused_gap_bits;
+  static const int hash_shift_compact             = age_shift + age_bits;
+#ifdef AARCH64
+  // Used only with compact headers.
+  static const int klass_shift                    = hash_shift_compact + hash_bits_compact;
+#endif // AARCH64
   static const int epoch_shift                    = hash_shift;
 
   static const uintptr_t lock_mask                = right_n_bits(lock_bits);
   static const uintptr_t lock_mask_in_place       = lock_mask << lock_shift;
+  static const uintptr_t self_forwarded_mask      = right_n_bits(self_forwarded_bits);
+  static const uintptr_t self_forwarded_mask_in_place = self_forwarded_mask << self_forwarded_shift;
+
   static const uintptr_t biased_lock_mask         = right_n_bits(lock_bits + biased_lock_bits);
   static const uintptr_t biased_lock_mask_in_place= biased_lock_mask << lock_shift;
   static const uintptr_t biased_lock_bit_in_place = 1 << biased_lock_shift;
@@ -156,6 +177,13 @@ class markWord {
 
   static const uintptr_t hash_mask                = right_n_bits(hash_bits);
   static const uintptr_t hash_mask_in_place       = hash_mask << hash_shift;
+  static const uintptr_t hash_mask_compact        = right_n_bits(hash_bits_compact);
+  static const uintptr_t hash_mask_compact_in_place = hash_mask_compact << hash_shift_compact;
+#ifdef AARCH64
+  // Used only with compact headers.
+  static const uintptr_t klass_mask               = right_n_bits(klass_bits);
+  static const uintptr_t klass_mask_in_place      = klass_mask << klass_shift;
+#endif // AARCH64
 
   // Alignment of JavaThread pointers encoded in object header required by biased locking
   static const size_t biased_lock_alignment       = 2 << (epoch_shift + epoch_bits);
@@ -237,6 +265,7 @@ class markWord {
   // check for and avoid overwriting a 0 value installed by some
   // other thread.  (They should spin or block instead.  The 0 value
   // is transient and *should* be short-lived).
+  // Fast-locking does not use INFLATING.
   static markWord INFLATING() { return zero(); }    // inflate-in-progress
 
   // Should this header be preserved during GC?
@@ -268,12 +297,22 @@ class markWord {
     return markWord(value() | unlocked_value);
   }
   bool has_locker() const {
-    return ((value() & lock_mask_in_place) == locked_value);
+    assert(LockingMode == LM_LEGACY, "should only be called with legacy stack locking");
+    return (value() & lock_mask_in_place) == locked_value;
   }
   BasicLock* locker() const {
     assert(has_locker(), "check");
     return (BasicLock*) value();
   }
+
+  bool is_fast_locked() const {
+    assert(LockingMode == LM_LIGHTWEIGHT, "should only be called with new lightweight locking");
+    return (value() & lock_mask_in_place) == locked_value;
+  }
+  markWord set_fast_locked() const {
+    return markWord(value() & ~lock_mask_in_place);
+  }
+
   bool has_monitor() const {
     return ((value() & monitor_value) != 0);
   }
@@ -283,14 +322,25 @@ class markWord {
     return (ObjectMonitor*) (value() ^ monitor_value);
   }
   bool has_displaced_mark_helper() const {
-    return ((value() & unlocked_value) == 0);
+    intptr_t lockbits = value() & lock_mask_in_place;
+    return LockingMode == LM_LIGHTWEIGHT  ? lockbits == monitor_value   // monitor?
+                                          : (lockbits & unlocked_value) == 0; // monitor | stack-locked?
   }
   markWord displaced_mark_helper() const;
   void set_displaced_mark_helper(markWord m) const;
   markWord copy_set_hash(intptr_t hash) const {
-    uintptr_t tmp = value() & (~hash_mask_in_place);
-    tmp |= ((hash & hash_mask) << hash_shift);
-    return markWord(tmp);
+#ifdef AARCH64
+    if (UseCompactObjectHeaders) {
+      uintptr_t tmp = value() & (~hash_mask_compact_in_place);
+      tmp |= ((hash & hash_mask_compact) << hash_shift_compact);
+      return markWord(tmp);
+    } else
+#endif // AARCH64
+    {
+      uintptr_t tmp = value() & (~hash_mask_in_place);
+      tmp |= ((hash & hash_mask) << hash_shift);
+      return markWord(tmp);
+    }
   }
   // it is only used to be stored into BasicLock as the
   // indicator that the lock is using heavyweight monitor
@@ -330,12 +380,29 @@ class markWord {
 
   // hash operations
   intptr_t hash() const {
-    return mask_bits(value() >> hash_shift, hash_mask);
+#ifdef AARCH64
+    if (UseCompactObjectHeaders) {
+      return mask_bits(value() >> hash_shift_compact, hash_mask_compact);
+    } else
+#endif // AARCH64
+    {
+      return mask_bits(value() >> hash_shift, hash_mask);
+    }
   }
 
   bool has_no_hash() const {
     return hash() == no_hash;
   }
+
+#ifdef AARCH64
+  inline markWord actual_mark() const;
+  inline Klass* klass() const;
+  inline Klass* klass_or_null() const;
+  inline narrowKlass narrow_klass() const;
+  inline markWord set_narrow_klass(narrowKlass nklass) const;
+  inline Klass* safe_klass() const;
+  inline markWord set_klass(Klass* klass) const;
+#endif // AARCH64
 
   // Prototype mark for initialization
   static markWord prototype() {
@@ -353,6 +420,19 @@ class markWord {
 
   // Recover address of oop from encoded form used in mark
   inline void* decode_pointer() { if (UseBiasedLocking && has_bias_pattern()) return NULL; return (void*)clear_lock_bits().value(); }
+
+#ifdef _LP64
+  inline bool self_forwarded() const {
+    bool self_fwd = mask_bits(value(), self_forwarded_mask_in_place) != 0;
+    assert(!self_fwd || UseAltGCForwarding, "Only set self-fwd bit when using alt GC forwarding");
+    return self_fwd;
+  }
+
+  inline markWord set_self_forwarded() const {
+    assert(UseAltGCForwarding, "Only call this with alt GC forwarding");
+    return markWord(value() | self_forwarded_mask_in_place | marked_value);
+  }
+#endif
 };
 
 // Support atomic operations.

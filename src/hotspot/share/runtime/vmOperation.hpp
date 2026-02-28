@@ -91,6 +91,7 @@
   template(ShenandoahFinalUpdateRefs)             \
   template(ShenandoahFinalRoots)                  \
   template(ShenandoahDegeneratedGC)               \
+  template(RendezvousGCThreads)                   \
   template(Exit)                                  \
   template(LinuxDllLoad)                          \
   template(RotateGCLog)                           \
