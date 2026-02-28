@@ -81,6 +81,7 @@ JitProfileCacheFileParser::JitProfileCacheFileParser(randomAccessFileStream* fs,
           _position(0),
           _parsed_method_count(0),
           _total_recorder_method(0),
+          _parsed_version(0),
           _file_stream(fs),
           _max_symbol_length(0),
           _parse_str_buf(nullptr),
@@ -211,11 +212,13 @@ bool JitProfileCacheFileParser::parse_header() {
   u4 appid = read_u4();
   unsigned int version = JitProfileCache::instance()->version();
 
-  if (parse_version != version) {
+  if (parse_version < JITPROFILECACHE_VERSION_V1 || parse_version > version) {
     _is_valid = false;
-    log_error(jprofilecache)("[JitProfileCache] ERROR : Version mismatch, expect %d but %d", version, parse_version);
+    log_error(jprofilecache)("unsupported profile version %d, supported range is [%d, %d]",
+                             parse_version, JITPROFILECACHE_VERSION_V1, version);
     return false;
   }
+  _parsed_version = parse_version;
   if (parse_magic_number != JPROFILECACHE_MAGIC_NUMBER
       || (long)parse_file_size != this->file_size()) {
     _is_valid = false;
@@ -260,6 +263,7 @@ bool JitProfileCacheFileParser::parse_class() {
   int end_position = begin_position + (int)section_size;
   u4 parse_cnt = read_u4();
   logparse_illegal_count_check(parse_cnt, false, end_position);
+  const bool has_clinit_status = parsed_version() >= JITPROFILECACHE_VERSION_V2;
 
   ProfileCacheClassChain* chain = new ProfileCacheClassChain(parse_cnt);
   info_holder()->set_chain(chain);
@@ -271,6 +275,17 @@ bool JitProfileCacheFileParser::parse_class() {
     logparse_illegal_check(parse_loader_char, false, end_position);
     const char* parse_path_char = read_string();
     logparse_illegal_check(parse_path_char, false, end_position);
+    bool clinit_succeeded = true;
+    if (has_clinit_status) {
+      u1 parse_clinit_status = read_u1();
+      logparse_illegal_count_check(parse_clinit_status, false, end_position);
+      if (parse_clinit_status != 0 && parse_clinit_status != 1) {
+        log_error(jprofilecache)("illegal class init status %u", parse_clinit_status);
+        _position = end_position;
+        return false;
+      }
+      clinit_succeeded = parse_clinit_status == 1;
+    }
     Symbol* name = create_symbol(parse_name_char);
     Symbol* loader_name = create_symbol(parse_loader_char);
     Symbol* path = create_symbol(parse_path_char);
@@ -278,6 +293,7 @@ bool JitProfileCacheFileParser::parse_class() {
     chain->at(i)->set_class_name(name);
     chain->at(i)->set_class_loader_name(loader_name);
     chain->at(i)->set_class_path(path);
+    chain->at(i)->set_recorded_clinit_succeeded(clinit_succeeded);
 
     check_class(i, name, loader_name, path, chain);
 
@@ -285,7 +301,7 @@ bool JitProfileCacheFileParser::parse_class() {
 
   // check section size
   if (_position - begin_position != (int)section_size) {
-    log_error(jprofilecache)("[JitProfileCache] ERROR : JitProfile class parse fail");
+    log_error(jprofilecache)("class section parse failed");
     return false;
   }
   return true;

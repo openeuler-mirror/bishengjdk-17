@@ -84,12 +84,14 @@ JitProfileRecorder::JitProfileRecorder():
           _recorder_state(NOT_INIT),
           _class_init_list(nullptr),
           _init_list_tail_node(nullptr),
+          _class_init_nodes(nullptr),
           _profile_record_dict(nullptr){}
 
 JitProfileRecorder::~JitProfileRecorder() {
   if (!ProfilingCacheFile) {
     os::free((void*)logfile_name());
   }
+  delete _class_init_nodes;
   delete _class_init_list;
 }
 
@@ -157,6 +159,8 @@ void JitProfileRecorder::init() {
   }
 
   _class_init_list = new (ResourceObj::C_HEAP, mtInternal) LinkedListImpl<ClassSymbolEntry>();
+  _class_init_nodes = new (ResourceObj::C_HEAP, mtInternal)
+      GrowableArray<LinkedListNode<ClassSymbolEntry>*>(128, mtInternal);
   _profile_record_dict = new JitProfileRecordDictionary(PROFILE_RECORDER_HT_SIZE);
   _recorder_state = IS_OK;
 
@@ -175,19 +179,38 @@ int JitProfileRecorder::assign_class_init_order(InstanceKlass* klass) {
     return -1;
   }
   MutexLocker mu(JitProfileRecorder_lock, Mutex::_no_safepoint_check_flag);
+  LinkedListNode<ClassSymbolEntry>* node = nullptr;
   if (_init_list_tail_node == nullptr) {
-    _class_init_list->add(ClassSymbolEntry(record_name, record_loader_name, record_path));
-    _init_list_tail_node = _class_init_list->head();
+    node = _class_init_list->add(ClassSymbolEntry(record_name, record_loader_name, record_path));
+    _init_list_tail_node = node;
   } else {
-    _class_init_list->insert_after(ClassSymbolEntry(record_name, record_loader_name, record_path),
-                                   _init_list_tail_node);
-    _init_list_tail_node = _init_list_tail_node->next();
+    node = _class_init_list->insert_after(ClassSymbolEntry(record_name, record_loader_name, record_path),
+                                          _init_list_tail_node);
+    _init_list_tail_node = node;
   }
+  if (node == nullptr) {
+    return -1;
+  }
+  _class_init_nodes->append(node);
   _class_init_order_num++;
 #ifndef PRODUCT
   klass->set_initialize_order(_class_init_order_num);
 #endif
   return _class_init_order_num;
+}
+
+void JitProfileRecorder::mark_class_init_result(int init_order, bool success) {
+  if (init_order < 0) {
+    return;
+  }
+  MutexLocker mu(JitProfileRecorder_lock, Mutex::_no_safepoint_check_flag);
+  if (_class_init_nodes == nullptr || init_order >= _class_init_nodes->length()) {
+    return;
+  }
+  LinkedListNode<ClassSymbolEntry>* node = _class_init_nodes->at(init_order);
+  if (node != nullptr) {
+    node->data()->set_clinit_succeeded(success);
+  }
 }
 
 void JitProfileRecorder::add_method(Method* method, int method_bci) {
@@ -376,6 +399,7 @@ void JitProfileRecorder::write_inited_class() {
   write_u4((u4)class_init_count());
 
   int cnt = 0;
+  int success_cnt = 0;
   const LinkedListNode<ClassSymbolEntry>* node = class_init_list()->head();
   while (node != nullptr) {
     const ClassSymbolEntry* record_entry = node->peek();
@@ -395,10 +419,16 @@ void JitProfileRecorder::write_inited_class() {
     write_string(record_class_name, strlen(record_class_name));
     write_string(record_class_loader_name, strlen(record_class_loader_name));
     write_string(path, strlen(path));
+    write_u1(record_entry->clinit_succeeded() ? (u1)1 : (u1)0);
+    if (record_entry->clinit_succeeded()) {
+      success_cnt++;
+    }
     node = node->next();
     cnt++;
   }
   assert(cnt == class_init_count(), "error happened in profile info record");
+  log_info(jprofilecache)("class init records total=%d success=%d failed=%d",
+                          cnt, success_cnt, cnt - success_cnt);
   unsigned int end_position = _pos;
   unsigned int section_size = end_position - begin_position;
   overwrite_u4(section_size, size_anchor);
