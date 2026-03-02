@@ -1201,6 +1201,21 @@ void CompileBroker::mark_on_stack() {
 // CompileBroker::compile_method
 //
 // Request compilation of a method.
+#ifdef ASSERT
+static bool is_linked_jprofile_conservative_compilation(const methodHandle& method,
+                                                        CompileTask::CompileReason compile_reason) {
+#ifdef AARCH64
+  return compile_reason == CompileTask::CompileReason::Reason_JitProfile &&
+         JProfilingCacheCompileAdvance &&
+         !ProfileCacheAggressiveInit &&
+         method->method_holder()->is_instance_klass() &&
+         method->method_holder()->is_linked();
+#else
+  return false;
+#endif
+}
+#endif
+
 void CompileBroker::compile_method_base(const methodHandle& method,
                                         int osr_bci,
                                         int comp_level,
@@ -1212,8 +1227,9 @@ void CompileBroker::compile_method_base(const methodHandle& method,
   guarantee(!method->is_abstract(), "cannot compile abstract methods");
   assert(method->method_holder()->is_instance_klass(),
          "sanity check");
-  assert(!method->method_holder()->is_not_initialized(),
-         "method holder must be initialized");
+  assert(!method->method_holder()->is_not_initialized() ||
+         is_linked_jprofile_conservative_compilation(method, compile_reason),
+         "method holder must be initialized or be a linked JProfileCache conservative compile");
   assert(!method->is_method_handle_intrinsic(), "do not enqueue these guys");
 
   if (CIPrintRequests) {
@@ -1415,7 +1431,9 @@ nmethod* CompileBroker::compile_method(const methodHandle& method, int osr_bci,
   assert(method->method_holder()->is_instance_klass(), "not an instance method");
   assert(osr_bci == InvocationEntryBci || (0 <= osr_bci && osr_bci < method->code_size()), "bci out of range");
   assert(!method->is_abstract() && (osr_bci == InvocationEntryBci || !method->is_native()), "cannot compile abstract/native methods");
-  assert(!method->method_holder()->is_not_initialized(), "method holder must be initialized");
+  assert(!method->method_holder()->is_not_initialized() ||
+         is_linked_jprofile_conservative_compilation(method, compile_reason),
+         "method holder must be initialized or be a linked JProfileCache conservative compile");
   // return quickly if possible
 
   // lock, make sure that the compilation

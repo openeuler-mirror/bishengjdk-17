@@ -550,7 +550,7 @@ bool ProfileCacheClassChain::compile_method(ProfileCacheMethodHold* mh) {
   InstanceKlass* klass = m->constants()->pool_holder();
   const int comp_level = mh->compile_level();
   if (!ProfileCacheAggressiveInit) {
-    // Conservative mode only requires verify+prepare (linked).
+    // Conservative replay keeps class handling at link-only.
     if (!klass->is_linked() || klass->is_in_error_state()) {
       return false;
     }
@@ -699,6 +699,7 @@ void ProfileCacheClassChain::preload_class_in_constantpool() {
     }
 
     if (current_k != nullptr) {
+      ResourceMark rm;
       current_k->constants()->preload_jprofilecache_classes(JavaThread::current());
       log_info(jprofilecache)("[JitProfileCache] class %s is preloaded",
                                current_k->internal_name());
