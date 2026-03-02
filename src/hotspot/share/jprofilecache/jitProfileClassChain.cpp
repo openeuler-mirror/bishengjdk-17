@@ -79,6 +79,20 @@ bool ProfileCacheClassChain::ProfileCacheClassChainEntry::is_all_initialized() {
   return true;
 }
 
+bool ProfileCacheClassChain::ProfileCacheClassChainEntry::is_all_linked() {
+  int len = resolved_klasses()->length();
+  if (len == 0) {
+    return false;
+  }
+  for (int i = 0; i < len; i++) {
+    InstanceKlass* k = resolved_klasses()->at(i);
+    if (k != nullptr && !k->is_linked() && !k->is_in_error_state()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool ProfileCacheClassChain::ProfileCacheClassChainEntry::contains_redefined_class() {
   int len = resolved_klasses()->length();
   for (int i = 0; i < len; i++) {
@@ -99,6 +113,17 @@ InstanceKlass* ProfileCacheClassChain::ProfileCacheClassChainEntry::get_first_un
   for (int i = 0; i < len; i++) {
     InstanceKlass* k = resolved_klasses()->at(i);
     if (k != nullptr && k->is_not_initialized()) {
+      return k;
+    }
+  }
+  return nullptr;
+}
+
+InstanceKlass* ProfileCacheClassChain::ProfileCacheClassChainEntry::get_first_unlinked_klass() {
+  int len = resolved_klasses()->length();
+  for (int i = 0; i < len; i++) {
+    InstanceKlass* k = resolved_klasses()->at(i);
+    if (k != nullptr && !k->is_linked() && !k->is_in_error_state()) {
       return k;
     }
   }
@@ -282,6 +307,23 @@ void ProfileCacheClassChain::update_loaded_index(int index) {
   set_loaded_index(index - 1);
 }
 
+static bool mark_skipped_if_redefined(ProfileCacheClassChain::ProfileCacheClassChainEntry* entry) {
+  if (entry->contains_redefined_class()) {
+    entry->set_skipped();
+    return true;
+  }
+  return false;
+}
+
+static void enqueue_methods(ProfileCacheClassChain::ProfileCacheClassChainEntry* entry,
+                            Stack<ProfileCacheMethodHold*, mtInternal>& compile_queue) {
+  ProfileCacheMethodHold* mh = entry->method_holder();
+  while (mh != nullptr) {
+    compile_queue.push(mh);
+    mh = mh->next();
+  }
+}
+
 void ProfileCacheClassChain::compile_methodholders_queue(Stack<ProfileCacheMethodHold*, mtInternal>& compile_queue) {
   while (!compile_queue.is_empty()) {
     ProfileCacheMethodHold* pmh = compile_queue.pop();
@@ -298,14 +340,134 @@ void ProfileCacheClassChain::compile_methodholders_queue(Stack<ProfileCacheMetho
 }
 
 void ProfileCacheClassChain::precompilation() {
-  Thread* THREAD = Thread::current();
   if (!try_transition_to_state(PROFILECACHE_COMPILING)) {
     log_warning(jprofilecache)("JProfileCache [WARNING]: The compilation cannot be started in the current state");
     return;
   }
 
+  const bool aggressive_mode = ProfileCacheAggressiveInit;
+  log_info(jprofilecache)("precompile mode=%s",
+                          aggressive_mode ? "aggressive" : "conservative");
+  if (aggressive_mode) {
+    precompile_aggressive();
+  } else {
+    precompile_conservative();
+  }
+}
+
+void ProfileCacheClassChain::precompile_conservative() {
+  Thread* THREAD = Thread::current();
   bool cancel_precompilation = false;
+  for (int index = 0; index < length(); index++) {
+    if (cancel_precompilation) {
+      break;
+    }
+    InstanceKlass* klass = nullptr;
+    Stack<ProfileCacheMethodHold*, mtInternal> compile_queue;
+    {
+      MutexLocker mu(ProfileCacheClassChain_lock);
+      ProfileCacheClassChainEntry* entry = &_entries[index];
+      switch (entry->class_state()) {
+        case ProfileCacheClassChainEntry::_not_loaded:
+          // Keep conservative mode consistent so index refresh can progress.
+          entry->set_skipped();
+        case ProfileCacheClassChainEntry::_load_skipped:
+          break;
+        case ProfileCacheClassChainEntry::_class_loaded:
+          klass = entry->get_first_unlinked_klass();
+          if (klass == nullptr && entry->is_all_linked()) {
+            entry->set_inited();
+            if (!mark_skipped_if_redefined(entry)) {
+              enqueue_methods(entry, compile_queue);
+            }
+          }
+          break;
+        case ProfileCacheClassChainEntry::_class_inited:
+          if (!mark_skipped_if_redefined(entry)) {
+            enqueue_methods(entry, compile_queue);
+          }
+          break;
+        default:
+          {
+            ResourceMark rm;
+            log_error(jprofilecache)("[JitProfileCache] ERROR: class %s has an invalid state %d",
+                              entry->class_name()->as_C_string(),
+                              entry->class_state());
+            return;
+          }
+      }
+    }
+
+    // Conservative mode is link-only: drive verify+prepare without proactive <clinit>.
+    while (klass != nullptr) {
+      assert(THREAD->is_Java_thread(), "sanity check");
+      klass->link_class((JavaThread*)THREAD);
+      if (HAS_PENDING_EXCEPTION) {
+        Symbol* loader = JitProfileCacheUtils::get_class_loader_name(klass->class_loader_data());
+        ResourceMark rm;
+        log_warning(jprofilecache)("[JitProfileCache] WARNING: Exceptions happened in linking %s being loaded by %s",
+                            klass->name()->as_C_string(), loader->as_C_string());
+        CLEAR_PENDING_EXCEPTION;
+        MutexLocker mu(ProfileCacheClassChain_lock);
+        _entries[index].set_skipped();
+        klass = nullptr;
+        break;
+      }
+
+      {
+        MutexLocker mu(ProfileCacheClassChain_lock);
+        ProfileCacheClassChainEntry* entry = &_entries[index];
+        klass = entry->get_first_unlinked_klass();
+        if (klass == nullptr && entry->is_loaded() && entry->is_all_linked()) {
+          entry->set_inited();
+          if (!mark_skipped_if_redefined(entry)) {
+            enqueue_methods(entry, compile_queue);
+          }
+        }
+      }
+    }
+
+    {
+      MutexLocker mu(ProfileCacheClassChain_lock);
+      refresh_indexes();
+      if (index > class_chain_inited_index()) {
+        cancel_precompilation = true;
+      }
+    }
+
+    compile_methodholders_queue(compile_queue);
+  }
+}
+
+void ProfileCacheClassChain::precompile_aggressive() {
+  Thread* THREAD = Thread::current();
+  bool cancel_precompilation = false;
+  int aggressive_upper_bound = length() - 1;
+  int first_recorded_clinit_failure_index = -1;
+  {
+    MutexLocker mu(ProfileCacheClassChain_lock);
+    for (int i = 0; i < length(); i++) {
+      if (!_entries[i].recorded_clinit_succeeded()) {
+        first_recorded_clinit_failure_index = i;
+        aggressive_upper_bound = i - 1;
+        break;
+      }
+    }
+  }
+  if (first_recorded_clinit_failure_index >= 0) {
+    log_info(jprofilecache)("aggressive replay stops before first recorded <clinit> failure at index=%d (upper_bound=%d)",
+                            first_recorded_clinit_failure_index, aggressive_upper_bound);
+  } else {
+    log_info(jprofilecache)("aggressive replay has no recorded <clinit> failure (upper_bound=%d)",
+                            aggressive_upper_bound);
+  }
+
   for ( int index = 0; index < length(); index++ ) {
+    if (index > aggressive_upper_bound) {
+      log_info(jprofilecache)("aggressive replay reached configured stop index=%d",
+                              aggressive_upper_bound);
+      break;
+    }
     if (cancel_precompilation) {
       break;
     }
@@ -386,19 +548,24 @@ bool ProfileCacheClassChain::compile_method(ProfileCacheMethodHold* mh) {
   }
 
   InstanceKlass* klass = m->constants()->pool_holder();
-
-  // if klass not initialize return
-  if (!klass->is_initialized()) {
-    return false;
+  const int comp_level = mh->compile_level();
+  if (!ProfileCacheAggressiveInit) {
+    // Conservative mode only requires verify+prepare (linked).
+    if (!klass->is_linked() || klass->is_in_error_state()) {
+      return false;
+    }
+  } else {
+    // Aggressive mode keeps initialized gate.
+    if (!klass->is_initialized()) {
+      return false;
+    }
   }
 
-  m->set_compiled_by_jprofilecache(true);
-  m->set_jpc_method_holder(mh);
-  int bci = InvocationEntryBci;
-
-  // commit compile
-  bool ret = JitProfileCacheUtils::commit_compilation(m, mh->compile_level(), bci, t);
+  const int bci = InvocationEntryBci;
+  bool ret = JitProfileCacheUtils::commit_compilation(m, comp_level, bci, t);
   if (ret) {
+    m->set_compiled_by_jprofilecache(true);
+    m->set_jpc_method_holder(mh);
     ResourceMark rm;
     log_info(jprofilecache)("[JitProfileCache] method %s successfully compiled",
                      m->name_and_sig_as_C_string());
@@ -410,6 +577,7 @@ void ProfileCacheClassChain::refresh_indexes() {
   assert_lock_strong(ProfileCacheClassChain_lock);
   int loaded = loaded_index();
   int inited = class_chain_inited_index();
+  const bool use_linked_gate = !ProfileCacheAggressiveInit;
   for (int i = inited + 1; i < length(); i++) {
     ProfileCacheClassChainEntry* e = &_entries[i];
     int len = e->resolved_klasses()->length();
@@ -418,7 +586,7 @@ void ProfileCacheClassChain::refresh_indexes() {
     }
     if (e->is_loaded()) {
       assert(len > 0, "class init chain entry state error");
-      if (e->is_all_initialized()) {
+      if (use_linked_gate ? e->is_all_linked() : e->is_all_initialized()) {
         e->set_inited();
       }
     }

@@ -3311,6 +3311,12 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
 #endif
 
 #ifdef AARCH64
+  if (JProfilingCacheCompileAdvance && ProfileCacheAggressiveInit && JProfilingCacheDelayLoadTime < 50) {
+    warning("JProfilingCacheDelayLoadTime (%u) is too small in aggressive replay mode, adjusted to 50 ms",
+            (uint)JProfilingCacheDelayLoadTime);
+    JProfilingCacheDelayLoadTime = 50;
+  }
+
   if (UseCompactObjectHeaders && UseZGC) {
     if (FLAG_IS_CMDLINE(UseCompactObjectHeaders)) {
       warning("ZGC does not work with compact object headers, disabling UseCompactObjectHeaders");
