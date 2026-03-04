@@ -570,6 +570,10 @@ void JitProfileRecorder::write_profilecache_footer() {
 }
 
 void JitProfileRecorder::flush_record() {
+  // Preload libzip before taking JitProfileRecorder_lock so the first crc32 call
+  // does not acquire Zip_lock under the recorder lock and trip lock rank checks.
+  char dummy = 0;
+  (void)ClassLoader::crc32(0, &dummy, 0);
   MutexLocker mu(JitProfileRecorder_lock, Mutex::_no_safepoint_check_flag);
   if (!is_valid() || is_flushed()) {
     return;
