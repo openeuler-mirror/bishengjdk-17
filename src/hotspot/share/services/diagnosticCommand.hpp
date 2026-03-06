@@ -243,6 +243,24 @@ public:
   virtual void execute(DCmdSource source, TRAPS);
 };
 
+#ifdef AARCH64
+class JProfileCacheDumpDCmd : public DCmd {
+public:
+  JProfileCacheDumpDCmd(outputStream* output, bool heap) : DCmd(output, heap) { }
+  static const char* name() { return "VM.jprofilecache_dump"; }
+  static const char* description() {
+    return "Dump JProfileCache recording data immediately.";
+  }
+  static const char* impact() { return "Low"; }
+  static const JavaPermission permission() {
+    JavaPermission p = {"java.lang.management.ManagementPermission",
+                        "monitor", nullptr};
+    return p;
+  }
+  virtual void execute(DCmdSource source, TRAPS);
+};
+#endif
+
 class SystemGCDCmd : public DCmd {
 public:
   SystemGCDCmd(outputStream* output, bool heap) : DCmd(output, heap) { }

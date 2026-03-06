@@ -33,6 +33,9 @@
 #include "compiler/compileBroker.hpp"
 #include "compiler/directivesParser.hpp"
 #include "gc/shared/gcVMOperations.hpp"
+#ifdef AARCH64
+#include "jprofilecache/jitProfileCache.hpp"
+#endif
 #include "memory/metaspace/metaspaceDCmd.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
@@ -92,6 +95,9 @@ void DCmdRegistrant::register_dcmds(){
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<VMDynamicLibrariesDCmd>(full_export, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<VMUptimeDCmd>(full_export, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<VMInfoDCmd>(full_export, true, false));
+#ifdef AARCH64
+  DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<JProfileCacheDumpDCmd>(full_export, true, false));
+#endif
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<SystemGCDCmd>(full_export, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<RunFinalizationDCmd>(full_export, true, false));
   DCmdFactory::register_DCmdFactory(new DCmdFactoryImpl<HeapInfoDCmd>(full_export, true, false));
@@ -388,6 +394,27 @@ void VMUptimeDCmd::execute(DCmdSource source, TRAPS) {
 void VMInfoDCmd::execute(DCmdSource source, TRAPS) {
   VMError::print_vm_info(_output);
 }
+
+#ifdef AARCH64
+void JProfileCacheDumpDCmd::execute(DCmdSource source, TRAPS) {
+  if (!JProfilingCacheRecording) {
+    output()->print_cr("JProfileCache recording is not enabled.");
+    return;
+  }
+
+  JitProfileCache* jpc = JitProfileCache::instance();
+  if (jpc == nullptr) {
+    output()->print_cr("JProfileCache is not initialized.");
+    return;
+  }
+
+  if (jpc->flush_recorder() == JitProfileCache::IS_OK) {
+    output()->print_cr("JProfileCache dump completed.");
+  } else {
+    output()->print_cr("JProfileCache dump failed.");
+  }
+}
+#endif
 
 void SystemGCDCmd::execute(DCmdSource source, TRAPS) {
   Universe::heap()->collect(GCCause::_dcmd_gc_run);

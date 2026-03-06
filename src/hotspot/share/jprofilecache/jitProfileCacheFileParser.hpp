@@ -58,6 +58,7 @@ public:
 
     int parsed_methods() { return _parsed_method_count; }
     int total_recorder_method()  { return _total_recorder_method; }
+    unsigned int parsed_version() const { return _parsed_version; }
 
     long file_size()              { return _file_size; }
     void set_file_size(long size) { _file_size = size; }
@@ -81,6 +82,7 @@ private:
     int                     _position;
     int                     _parsed_method_count;
     int                     _total_recorder_method;
+    unsigned int            _parsed_version;
     randomAccessFileStream* _file_stream;
 
     int                     _max_symbol_length;

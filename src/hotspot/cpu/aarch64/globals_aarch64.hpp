@@ -120,6 +120,11 @@ define_pd_global(intx, InlineSmallCode,          1000);
   product(bool, JProfilingCacheCompileAdvance, false, EXPERIMENTAL,     \
           "Enable JProfilingCacheCompileAdvance from a log file")       \
                                                                         \
+  product(bool, ProfileCacheAggressiveInit, false, EXPERIMENTAL,         \
+          "JProfileCache replay precompile strategy: "\
+          "false=conservative (link-only verify+prepare, no proactive <clinit>); "\
+          "true=aggressive (proactively initialize replay classes)")      \
+                                                                        \
   product(ccstr, CompilationProfileCacheExclude, nullptr, EXPERIMENTAL, \
           "JProfilingCacheCompileAdvance excluding list ")              \
                                                                         \
@@ -128,7 +133,8 @@ define_pd_global(intx, InlineSmallCode,          1000);
                                                                         \
   product(uintx, JProfilingCacheDelayLoadTime, 1000, EXPERIMENTAL,      \
           "Sleep time (in milliseconds) before JProfileCache loads "    \
-          "classes and methods profile ")                               \
+          "classes and methods profile. In aggressive replay mode, "    \
+          "values smaller than 50 are adjusted to 50 automatically.")   \
           range(0, 3600000)                                             \
                                                                         \
   develop(bool, CompilationProfileCacheResolveClassEagerly, true,       \

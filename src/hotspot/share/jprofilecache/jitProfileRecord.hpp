@@ -28,6 +28,7 @@
 
 #include "oops/method.hpp"
 #include "oops/methodData.hpp"
+#include "utilities/growableArray.hpp"
 #include "utilities/hashtable.hpp"
 #include "utilities/linkedlist.hpp"
 
@@ -84,10 +85,11 @@ private:
 
 class ClassSymbolEntry {
 public:
-    ClassSymbolEntry(Symbol* class_name, Symbol* class_loader_name, Symbol* path)
+    ClassSymbolEntry(Symbol* class_name, Symbol* class_loader_name, Symbol* path, bool clinit_succeeded = false)
         : _class_name(class_name),
         _class_loader_name(class_loader_name),
-        _class_path(path) {
+        _class_path(path),
+        _clinit_succeeded(clinit_succeeded) {
         if (_class_name != nullptr) _class_name->increment_refcount();
         if (_class_loader_name != nullptr) _class_loader_name->increment_refcount();
         if (_class_path != nullptr) _class_path->increment_refcount();
@@ -96,7 +98,8 @@ public:
     ClassSymbolEntry()
         : _class_name(nullptr),
         _class_loader_name(nullptr),
-        _class_path(nullptr) {
+        _class_path(nullptr),
+        _clinit_succeeded(false) {
     }
 
     ~ClassSymbolEntry() {
@@ -108,6 +111,8 @@ public:
     Symbol* class_name() const { return _class_name; }
     Symbol* class_loader_name() const { return _class_loader_name; }
     Symbol* path() const { return _class_path; }
+    bool clinit_succeeded() const { return _clinit_succeeded; }
+    void set_clinit_succeeded(bool succeeded) { _clinit_succeeded = succeeded; }
 
     bool equals(const ClassSymbolEntry& rhs) const {
         return _class_name == rhs._class_name;
@@ -117,11 +122,14 @@ private:
     Symbol* _class_name;
     Symbol* _class_loader_name;
     Symbol* _class_path;
+    bool _clinit_succeeded;
 };
 
 #define KNUTH_HASH_MULTIPLIER  2654435761UL
 #define ADDR_CHANGE_NUMBER 3
-#define JITPROFILECACHE_VERSION  0x1
+#define JITPROFILECACHE_VERSION_V1 0x1
+#define JITPROFILECACHE_VERSION_V2 0x2
+#define JITPROFILECACHE_VERSION  JITPROFILECACHE_VERSION_V2
 
 class JitProfileRecorder : public CHeapObj<mtInternal> {
 public:
@@ -142,9 +150,6 @@ public:
 
     address current_init_order_addr() { return (address)&_class_init_order_num;}
 
-    unsigned int is_flushed()                { return _flushed; }
-    void         set_flushed(bool value)  { _flushed = value; }
-
     const char*  logfile_name()                      { return _record_file_name; }
 
     unsigned int recorded_count() { return _profile_record_dict->count(); }
@@ -159,9 +164,10 @@ public:
 
     void add_method(Method* method, int method_bci);
 
-    void flush_record();
+    bool flush_record();
 
     int assign_class_init_order(InstanceKlass* klass);
+    void mark_class_init_result(int init_order, bool success);
 
     unsigned int compute_hash(Method* method) {
         uint64_t m_addr = (uint64_t)method;
@@ -180,7 +186,6 @@ private:
     int                                          _max_symbol_length;
     unsigned int                                 _pos;
     volatile int                                 _class_init_order_num;
-    volatile bool                                _flushed;
     const char*                                  _record_file_name;
     static const char*                           _auto_jpcfile_name;
     static const char*                           _auto_temp_jpcfile_name;
@@ -190,7 +195,8 @@ private:
     RecorderState                                _recorder_state;
     LinkedListImpl<ClassSymbolEntry>*            _class_init_list;
     LinkedListNode<ClassSymbolEntry>*            _init_list_tail_node;
-    JitProfileRecordDictionary*                     _profile_record_dict;
+    GrowableArray<LinkedListNode<ClassSymbolEntry>*>* _class_init_nodes;
+    JitProfileRecordDictionary*                   _profile_record_dict;
 
 private:
   void write_u1(u1 value);
