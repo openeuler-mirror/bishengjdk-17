@@ -1101,6 +1101,9 @@ void InstanceKlass::initialize_impl(TRAPS) {
   bool wait = false;
 
   JavaThread* jt = THREAD;
+#ifdef AARCH64
+  int jpc_init_order = -1;
+#endif
 
   // refer to the JVM book page 47 for description of steps
   // Step 1
@@ -1152,7 +1155,7 @@ void InstanceKlass::initialize_impl(TRAPS) {
     set_init_thread(jt);
 #ifdef AARCH64
   if (JProfilingCacheRecording) {
-    JitProfileCache::instance()->recorder()->assign_class_init_order(this);
+    jpc_init_order = JitProfileCache::instance()->recorder()->assign_class_init_order(this);
   }
 #endif
   }
@@ -1177,6 +1180,11 @@ void InstanceKlass::initialize_impl(TRAPS) {
     if (HAS_PENDING_EXCEPTION) {
       Handle e(THREAD, PENDING_EXCEPTION);
       CLEAR_PENDING_EXCEPTION;
+#ifdef AARCH64
+      if (JProfilingCacheRecording) {
+        JitProfileCache::instance()->recorder()->mark_class_init_result(jpc_init_order, false);
+      }
+#endif
       {
         EXCEPTION_MARK;
         add_initialization_error(THREAD, e);
@@ -1220,12 +1228,22 @@ void InstanceKlass::initialize_impl(TRAPS) {
   // Step 9
   if (!HAS_PENDING_EXCEPTION) {
     set_initialization_state_and_notify(fully_initialized, CHECK);
+#ifdef AARCH64
+    if (JProfilingCacheRecording) {
+      JitProfileCache::instance()->recorder()->mark_class_init_result(jpc_init_order, true);
+    }
+#endif
     debug_only(vtable().verify(tty, true);)
   }
   else {
     // Step 10 and 11
     Handle e(THREAD, PENDING_EXCEPTION);
     CLEAR_PENDING_EXCEPTION;
+#ifdef AARCH64
+    if (JProfilingCacheRecording) {
+      JitProfileCache::instance()->recorder()->mark_class_init_result(jpc_init_order, false);
+    }
+#endif
     // JVMTI has already reported the pending exception
     // JVMTI internal flag reset is needed in order to report ExceptionInInitializerError
     JvmtiExport::clear_detected_exception(jt);

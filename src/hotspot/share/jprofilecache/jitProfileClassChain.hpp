@@ -79,6 +79,7 @@ public:
         _class_loader_name(nullptr),
         _class_path(nullptr),
         _class_state(_not_loaded),
+        _recorded_clinit_succeeded(true),
         _method_holder(nullptr),
         _resolved_klasses(new (ResourceObj::C_HEAP, mtClass) GrowableArray<InstanceKlass*>(1, mtClass)),
         _method_keep_holders(new (ResourceObj::C_HEAP, mtClass) GrowableArray<jobject>(1, mtClass)) {  }
@@ -88,6 +89,7 @@ public:
         _class_loader_name(loader_name),
         _class_path(path),
         _class_state(_not_loaded),
+        _recorded_clinit_succeeded(true),
         _method_holder(nullptr),
         _resolved_klasses(new (ResourceObj::C_HEAP, mtClass) GrowableArray<InstanceKlass*>(1, mtClass)),
         _method_keep_holders(new (ResourceObj::C_HEAP, mtClass) GrowableArray<jobject>(1, mtClass)) {  }
@@ -127,6 +129,8 @@ public:
     void           set_class_state(int state)   { _class_state = state;}
 
     int            class_state()                { return _class_state; }
+    bool           recorded_clinit_succeeded() const { return _recorded_clinit_succeeded; }
+    void           set_recorded_clinit_succeeded(bool value) { _recorded_clinit_succeeded = value; }
 
     void add_method_holder(ProfileCacheMethodHold* h) {
       h->set_next(_method_holder);
@@ -135,9 +139,13 @@ public:
 
     bool is_all_initialized();
 
+    bool is_all_linked();
+
     bool contains_redefined_class();
 
     InstanceKlass* get_first_uninitialized_klass();
+
+    InstanceKlass* get_first_unlinked_klass();
 
     ProfileCacheMethodHold* method_holder()  { return _method_holder; }
 
@@ -147,6 +155,7 @@ public:
     Symbol*                              _class_loader_name;
     Symbol*                              _class_path;
     int                                  _class_state;
+    bool                                 _recorded_clinit_succeeded;
 
     ProfileCacheMethodHold*              _method_holder;
     GrowableArray<InstanceKlass*>*       _resolved_klasses;
@@ -230,6 +239,10 @@ private:
   void resolve_class_methods(InstanceKlass* k, ProfileCacheClassHolder* holder, int chain_index);
 
   void update_class_chain(InstanceKlass* ky, int chain_index);
+
+  void precompile_conservative();
+
+  void precompile_aggressive();
 
   void compile_methodholders_queue(Stack<ProfileCacheMethodHold*, mtInternal>& compile_queue);
 

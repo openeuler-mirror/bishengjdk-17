@@ -34,6 +34,7 @@
 #include "c1/c1_ValueStack.hpp"
 #include "ci/ciArrayKlass.hpp"
 #include "ci/ciInstance.hpp"
+#include "compiler/compileTask.hpp"
 #include "code/compiledIC.hpp"
 #include "gc/shared/collectedHeap.hpp"
 #include "gc/shared/gc_globals.hpp"
@@ -73,6 +74,18 @@ static void select_different_registers(Register preserve,
   }
   assert_different_registers(preserve, tmp1, tmp2);
 }
+
+#ifdef ASSERT
+static bool is_linked_jprofile_conservative_c1_compilation(ciMethod* method, Compilation* compilation) {
+  CompileTask* task = compilation->env()->task();
+  return task != nullptr &&
+         task->is_jprofilecache_compilation() &&
+         JProfilingCacheCompileAdvance &&
+         !ProfileCacheAggressiveInit &&
+         method->holder()->is_instance_klass() &&
+         method->holder()->is_linked();
+}
+#endif
 
 
 
@@ -323,7 +336,9 @@ int LIR_Assembler::check_icache() {
 
 void LIR_Assembler::clinit_barrier(ciMethod* method) {
   assert(VM_Version::supports_fast_class_init_checks(), "sanity");
-  assert(!method->holder()->is_not_initialized(), "initialization should have been started");
+  assert(!method->holder()->is_not_initialized() ||
+         is_linked_jprofile_conservative_c1_compilation(method, compilation()),
+         "initialization should have been started or be a linked JProfileCache conservative C1 compile");
 
   Label L_skip_barrier;
 
