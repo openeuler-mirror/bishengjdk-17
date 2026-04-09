@@ -4,7 +4,7 @@ BiSheng JDK is a high-performance, production-ready downstream distribution of O
 
 The latest binary builds can be downloaded from [releases](https://www.hikunpeng.com/developer/devkit/compiler/jdk).
 
-The User Guide && Installation Guide are available at [wiki](https://gitee.com/openeuler/bishengjdk-17/wikis/Home).
+The User Guide && Installation Guide are available at [wiki](https://gitcode.com/openeuler/bishengjdk-17/wiki/Home.md).
 
 ## Platform
 
@@ -12,7 +12,7 @@ BiSheng JDK currently supports `Linux/AArch64, Linux/x86_64`.
 
 ## Build platforms
 
-About the build platforms for BiSheng JDK, see [wiki](https://gitee.com/openeuler/bishengjdk-17/wikis/English%20Documentation/BiSheng%20JDK%2017%20Source%20Code%20Building%20Description?sort_id=5424365).
+About the build platforms for BiSheng JDK, see [wiki](https://gitcode.com/openeuler/bishengjdk-17/wiki/English%20Documentation%2FBiSheng%20JDK%2017%20Source%20Code%20Building%20Description.md).
 
 ## License
 
@@ -20,7 +20,7 @@ BiSheng JDK is licensed under GPLv2 with Classpath Exception. For the details, s
 
 ## Installation
 
-See the [Installation Guide](https://gitee.com/openeuler/bishengjdk-17/wikis/English%20Documentation/BiSheng%20JDK%2017%20Installation%20Guide).
+See the [Installation Guide](https://gitcode.com/openeuler/bishengjdk-17/wiki/English%20Documentation%2FBiShengJDK17_Installation_Guide.md).
 
 ## How to contribute
 
