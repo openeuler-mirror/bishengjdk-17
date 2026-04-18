@@ -197,6 +197,8 @@ define_pd_global(intx, InlineSmallCode,          1000);
   product(ccstr, NUMABindPolicy, NULL,                                  \
           "Enable deterministic NUMA placement with combined Options,"  \
           "including prefix=<id> and div=<N>.")                         \
+  product(bool, UseStlrForRelease, false,                               \
+          "Use stlr instead of dmb ish + str for release stores")       \
 
 // end of ARCH_FLAGS
 
