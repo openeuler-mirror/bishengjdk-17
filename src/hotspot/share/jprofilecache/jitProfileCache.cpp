@@ -251,7 +251,7 @@ void JitProfileCacheInfo::init() {
   }
 
   RandomFileStreamGuard fsg(new (ResourceObj::C_HEAP, mtInternal) randomAccessFileStream(
-    ProfilingCacheFile, "rb+"));
+    ProfilingCacheFile, "rb"));
   JitProfileCacheFileParser parser(fsg(), this);
   if (!fsg->is_open()) {
     log_error(jprofilecache)("[JitProfileCache] ERROR : JitProfile doesn't exist");
