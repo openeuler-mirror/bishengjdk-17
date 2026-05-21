@@ -340,6 +340,8 @@ void JBoltManager::construct_stacktrace(const JfrStackTrace& stacktrace) {
 
   JBoltFunc **tempfunc = NULL;
 
+  GrowableArray<JBoltFunc*>* funcs = create_growable_array<JBoltFunc*>();
+
   for (u4 i = 0; i < max_frames; ++i) {
     const JfrStackFrame& frame = frames[topFrameIndex + i];
 
@@ -369,7 +371,13 @@ void JBoltManager::construct_stacktrace(const JfrStackTrace& stacktrace) {
       func = NULL;
       break;
     }
+    funcs->append(func);
   }
+
+  for (int i = 0; i < funcs->length(); ++i) {
+    delete funcs->at(i);
+  }
+  delete funcs;
 
   log_trace(jbolt)(
     "StackTrace hash - %u hotcount - %d\n==============================\n", stacktrace.hash(), stacktrace.hotcount());
@@ -390,6 +398,7 @@ void JBoltManager::construct_cg_once() {
     const JfrStackTraceRepository& repository = JfrStackTraceRepository::instance();
 
     if (repository.get_entries_count_jbolt() == 0) {
+      delete traces;
       return;
     }
 
