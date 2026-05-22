@@ -7337,6 +7337,9 @@ class StubGenerator: public StubCodeGenerator {
         release = true;
         break;
     }
+    if (UseLSEPrefetch) {
+      __ prfm(Address(ptr), PSTL1STRM);
+    }
     __ mov(prev, compare_val);
     __ lse_cas(prev, exchange_val, ptr, size, acquire, release, /*not_pair*/true);
     if (order == memory_order_conservative) {
