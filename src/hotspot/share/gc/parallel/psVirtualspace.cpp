@@ -30,7 +30,8 @@
 // PSVirtualSpace
 
 PSVirtualSpace::PSVirtualSpace(ReservedSpace rs, size_t alignment) :
-  _alignment(alignment)
+  _alignment(alignment),
+  _dynamic_max_heap_size(0)
 {
   set_reserved(rs);
   set_committed(reserved_low_addr(), reserved_low_addr());
@@ -38,7 +39,8 @@ PSVirtualSpace::PSVirtualSpace(ReservedSpace rs, size_t alignment) :
 }
 
 PSVirtualSpace::PSVirtualSpace(ReservedSpace rs) :
-  _alignment(os::vm_page_size())
+  _alignment(os::vm_page_size()),
+  _dynamic_max_heap_size(0)
 {
   set_reserved(rs);
   set_committed(reserved_low_addr(), reserved_low_addr());
@@ -52,12 +54,14 @@ PSVirtualSpace::PSVirtualSpace():
   _reserved_high_addr(NULL),
   _committed_low_addr(NULL),
   _committed_high_addr(NULL),
-  _special(false) {
+  _special(false),
+  _dynamic_max_heap_size(0) {
 }
 
 // Deprecated.
 bool PSVirtualSpace::initialize(ReservedSpace rs,
                                 size_t commit_size) {
+  _dynamic_max_heap_size = 0;
   set_reserved(rs);
   set_committed(reserved_low_addr(), reserved_low_addr());
 

@@ -210,6 +210,32 @@ class Bits {                            // package-private
         assert cnt >= 0 && reservedMem >= 0 && totalCap >= 0;
     }
 
+    static String updateMaxMemory(long newSize) {
+        long reservedMem = RESERVED_MEMORY.get();
+        StringBuilder sb = new StringBuilder();
+        if (newSize >= reservedMem) {
+            sb.append("GC.elastic_max_direct_memory (");
+            sb.append(MAX_MEMORY / 1024).append("K->");
+            sb.append(newSize / 1024).append("K)");
+            sb.append("\n");
+            sb.append("GC.elastic_max_direct_memory success");
+            // update VM.maxDirectMemory and Bits.MAX_MEMORY
+            // specially, if shrink, in a multi-threaded scenario,
+            // VM.maxDirectMemory() may be inconsistent with the actual direct memory usage.
+            // the new maxMemory will take effect the next time direct memory is allocated.
+            VM.setMaxDirectMemory(newSize);
+            MAX_MEMORY = VM.maxDirectMemory();
+        } else {
+            sb.append("GC.elastic_max_direct_memory ");
+            sb.append(newSize / 1024).append("K below current reserved direct memory ");
+            sb.append(reservedMem / 1024).append("K");
+            sb.append("\n");
+            sb.append("GC.elastic_max_direct_memory fail");
+        }
+        String output = sb.toString();
+        return output;
+    }
+
     static final BufferPool BUFFER_POOL = new BufferPool() {
         @Override
         public String getName() {

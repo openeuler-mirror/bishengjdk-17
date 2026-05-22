@@ -199,3 +199,132 @@ void VM_G1PauseCleanup::work() {
   G1CollectedHeap* g1h = G1CollectedHeap::heap();
   g1h->concurrent_mark()->cleanup();
 }
+
+G1_ChangeMaxHeapOp::G1_ChangeMaxHeapOp(size_t new_max_heap) :
+  VM_ChangeMaxHeapOp(new_max_heap) {
+}
+
+/*
+ * No need calculate young/old size, shrink will adjust young automatically.
+ * ensure young_list_length, _young_list_max_length, _young_list_target_length align.
+ *
+ * 1. check if need perform gc: new_heap_max >= minimum_desired_capacity
+ * 2. perform full GC if necessary
+ * 3. update new limit
+ * 4. validation
+ */
+void G1_ChangeMaxHeapOp::doit() {
+  G1CollectedHeap* heap      = static_cast<G1CollectedHeap*>(Universe::heap());
+  const size_t min_heap_size = MinHeapSize;
+  const size_t max_heap_size = heap->current_max_heap_size();
+  bool is_shrink             = _new_max_heap < max_heap_size;
+
+  // step1. calculate maximum_used_percentage for shrink validity check
+  const double minimum_free_percentage = static_cast<double>(MinHeapFreeRatio) / 100.0;
+  const double maximum_used_percentage = 1.0 - minimum_free_percentage;
+
+  // step2. trigger GC as needed and resize
+  if (is_shrink) {
+    trigger_gc_shrink(_new_max_heap, maximum_used_percentage, max_heap_size);
+  }
+
+  log_debug(dynamic, heap)("G1_ElasticMaxHeapOp: current capacity " SIZE_FORMAT "K, new max heap " SIZE_FORMAT "K",
+                            heap->capacity() / K, _new_max_heap / K);
+
+  // step3. check if can update new limit
+  if (heap->capacity() <= _new_max_heap) {
+    uint dynamic_max_heap_len = static_cast<uint>(_new_max_heap / HeapRegion::GrainBytes);
+    heap->set_current_max_heap_size(_new_max_heap);
+    heap->_hrm.set_dynamic_max_heap_length(dynamic_max_heap_len);
+    // G1 young/old share same max size
+    heap->update_gen_max_counter(_new_max_heap);
+    _resize_success = true;
+    log_debug(dynamic, heap)("G1_ElasticMaxHeapOp success");
+  } else {
+    log_debug(dynamic, heap)("G1_ElasticMaxHeapOp fail");
+  }
+}
+
+bool DynamicMaxHeap_G1CanShrink(double used_after_gc_d, size_t _new_max_heap, double maximum_used_percentage, size_t max_heap_size) {
+  double minimum_desired_capacity_d = used_after_gc_d / maximum_used_percentage;
+  double desired_capacity_upper_bound = static_cast<double>(max_heap_size);
+  minimum_desired_capacity_d = (minimum_desired_capacity_d < desired_capacity_upper_bound) ? minimum_desired_capacity_d : desired_capacity_upper_bound;
+  size_t minimum_desired_capacity = static_cast<size_t>(minimum_desired_capacity_d);
+  minimum_desired_capacity = (minimum_desired_capacity < max_heap_size)? minimum_desired_capacity : max_heap_size;
+  bool can_shrink = (_new_max_heap >= minimum_desired_capacity);
+  return can_shrink;
+}
+
+void G1_ChangeMaxHeapOp::trigger_gc_shrink(size_t _new_max_heap,
+                                      double maximum_used_percentage,
+                                      size_t max_heap_size){
+  G1CollectedHeap* heap      = static_cast<G1CollectedHeap*>(Universe::heap());
+  G1CollectorState* collector_state = heap->collector_state();
+  bool triggered_full_gc = false;
+  bool can_shrink = DynamicMaxHeap_G1CanShrink(static_cast<double>(heap->used()), _new_max_heap, maximum_used_percentage, max_heap_size);
+  if (!can_shrink) {
+    // trigger Young GC
+    collector_state->set_in_young_only_phase(true);
+    collector_state->set_in_young_gc_before_mixed(true);
+    GCCauseSetter gccs(heap, _gc_cause);
+    bool minor_gc_succeeded = heap->do_collection_pause_at_safepoint(MaxGCPauseMillis);
+    if (minor_gc_succeeded) {
+      log_debug(dynamic, heap)("G1_ElasticMaxHeapOp heap after Young GC");
+      LogTarget(Debug, dynamic, heap) lt;
+      if (lt.is_enabled()) {
+        LogStream ls(lt);
+        heap->print_on(&ls);
+      }
+    }
+    can_shrink = DynamicMaxHeap_G1CanShrink(static_cast<double>(heap->used()), _new_max_heap, maximum_used_percentage, max_heap_size);
+    if (!can_shrink) {
+      // trigger Full GC and adjust everything in resize_if_necessary_after_full_collection
+      heap->set_exp_dynamic_max_heap_size(_new_max_heap);
+      heap->do_full_collection(true);
+      log_debug(dynamic, heap)("G1_ElasticMaxHeapOp heap after Full GC");
+      LogTarget(Debug, dynamic, heap) lt;
+      if (lt.is_enabled()) {
+        LogStream ls(lt);
+        heap->print_on(&ls);
+      }
+      heap->set_exp_dynamic_max_heap_size(0);
+      triggered_full_gc = true;
+    }
+  }
+
+  if (!triggered_full_gc) {
+    // there may be two situations when entering this branch:
+    //     1. first check passed, no GC triggered
+    //     2. first check failed, triggered Young GC,
+    //        second check passed
+    // so the shrink has not been completed and it must be valid to shrink
+    g1_shrink_without_full_gc(_new_max_heap);
+  }
+}
+
+void G1_ChangeMaxHeapOp::g1_shrink_without_full_gc(size_t _new_max_heap) {
+  G1CollectedHeap* heap      = static_cast<G1CollectedHeap*>(Universe::heap());
+  size_t capacity_before_shrink = heap->capacity();
+  // _new_max_heap is large enough, do nothing
+  if (_new_max_heap >= capacity_before_shrink) {
+    return;
+  }
+  // Capacity too large, compute shrinking size and shrink
+  size_t shrink_bytes = capacity_before_shrink - _new_max_heap;
+  heap->_verifier->verify_region_sets_optional();
+  heap->_hrm.remove_all_free_regions();
+  heap->shrink_helper(shrink_bytes);
+  heap->rebuild_region_sets(true /* free_list_only */, true /* is_dynamic_max_heap_shrink */);
+  heap->_hrm.verify_optional();
+  heap->_verifier->verify_region_sets_optional();
+  heap->_verifier->verify_after_gc(G1HeapVerifier::G1VerifyFull);
+
+  log_debug(dynamic, heap)("G1_ElasticMaxHeapOp: attempt heap shrinking for dynamic max heap %s "
+          "origin capacity " SIZE_FORMAT "K "
+          "new capacity " SIZE_FORMAT "K "
+          "shrink by " SIZE_FORMAT "K",
+           heap->capacity() <= _new_max_heap ? "success" : "fail",
+           capacity_before_shrink / K,
+           heap->capacity() / K,
+           shrink_bytes / K);
+}

@@ -27,6 +27,7 @@
 
 #include "memory/allocation.hpp"
 #include "memory/virtualspace.hpp"
+#include "memory/universe.hpp"
 
 // VirtualSpace for the parallel scavenge collector.
 //
@@ -52,6 +53,9 @@ class PSVirtualSpace : public CHeapObj<mtGC> {
   // os::commit_memory() or os::uncommit_memory().
   bool _special;
 
+  // Dynamic Max Heap
+  size_t _dynamic_max_heap_size;
+
   // Convenience wrapper.
   inline static size_t pointer_delta(const char* left, const char* right);
 
@@ -70,7 +74,8 @@ class PSVirtualSpace : public CHeapObj<mtGC> {
     _reserved_high_addr(NULL),
     _committed_low_addr(NULL),
     _committed_high_addr(NULL),
-    _special(false) {
+    _special(false),
+    _dynamic_max_heap_size(0) {
   }
   PSVirtualSpace();
   bool initialize(ReservedSpace rs, size_t commit_size);
@@ -97,6 +102,17 @@ class PSVirtualSpace : public CHeapObj<mtGC> {
   virtual bool   shrink_by(size_t bytes);
   virtual size_t expand_into(PSVirtualSpace* space, size_t bytes);
   void           release();
+  // Dynamic Max Heap
+  void set_dynamic_max_heap_size(size_t new_size) {
+    guarantee(new_size <= reserved_size(), "must be");
+    guarantee(new_size >= committed_size(), "must be");
+    _dynamic_max_heap_size = new_size;
+  }
+  size_t dynamic_max_heap_size() const {
+    guarantee(_dynamic_max_heap_size <= reserved_size(), "must be");
+    guarantee(_dynamic_max_heap_size >= committed_size(), "must be");
+    return _dynamic_max_heap_size;
+  }
 
 #ifndef PRODUCT
   // Debugging
@@ -149,6 +165,9 @@ inline size_t PSVirtualSpace::reserved_size() const {
 }
 
 inline size_t PSVirtualSpace::uncommitted_size() const {
+  if (Universe::is_dynamic_max_heap_enable()) {
+    return dynamic_max_heap_size() - committed_size();
+  }
   return reserved_size() - committed_size();
 }
 
@@ -156,6 +175,10 @@ inline void PSVirtualSpace::set_reserved(char* low_addr, char* high_addr, bool s
   _reserved_low_addr = low_addr;
   _reserved_high_addr = high_addr;
   _special = special;
+  if (Universe::is_dynamic_max_heap_enable()) {
+    guarantee(_dynamic_max_heap_size == 0, "resize virtual NYI");
+    _dynamic_max_heap_size = high_addr - low_addr;
+  }
 }
 
 inline void PSVirtualSpace::set_reserved(ReservedSpace rs) {

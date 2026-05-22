@@ -1486,7 +1486,8 @@ G1CollectedHeap::G1CollectedHeap() :
   _ref_processor_cm(NULL),
   _is_alive_closure_cm(this),
   _is_subject_to_discovery_cm(this),
-  _region_attr() {
+  _region_attr(),
+  _exp_dynamic_max_heap_size(0) {
 
   _verifier = new G1HeapVerifier(this);
 
@@ -2348,6 +2349,12 @@ size_t G1CollectedHeap::unsafe_max_tlab_alloc(Thread* ignored) const {
 }
 
 size_t G1CollectedHeap::max_capacity() const {
+  // Dynamic Max Heap
+  if (Universe::is_dynamic_max_heap_enable()) {
+    size_t cur_size = current_max_heap_size();
+    guarantee(cur_size <= max_regions() * HeapRegion::GrainBytes, "must be");
+    return cur_size;
+  }
   return max_regions() * HeapRegion::GrainBytes;
 }
 
@@ -4082,7 +4089,7 @@ public:
   }
 };
 
-void G1CollectedHeap::rebuild_region_sets(bool free_list_only) {
+void G1CollectedHeap::rebuild_region_sets(bool free_list_only, bool is_dynamic_max_heap_shrink) {
   assert_at_safepoint_on_vm_thread();
 
   if (!free_list_only) {
@@ -4101,7 +4108,10 @@ void G1CollectedHeap::rebuild_region_sets(bool free_list_only) {
       _archive_allocator->clear_used();
     }
   }
-  assert_used_and_recalculate_used_equal(this);
+  // don't do this assert if is_dynamic_max_heap_shrink
+  if (!is_dynamic_max_heap_shrink) {
+    assert_used_and_recalculate_used_equal(this);
+  }
 }
 
 // Methods for the mutator alloc region
@@ -4355,4 +4365,11 @@ GrowableArray<GCMemoryManager*> G1CollectedHeap::memory_managers() {
 
 GrowableArray<MemoryPool*> G1CollectedHeap::memory_pools() {
   return _g1mm->memory_pools();
+}
+
+bool G1CollectedHeap::change_max_heap(size_t new_size) {
+  assert_heap_not_locked();
+  G1_ChangeMaxHeapOp op(new_size);
+  VMThread::execute(&op);
+  return op.resize_success();
 }

@@ -3374,6 +3374,10 @@ bool os::pd_uncommit_memory(char* addr, size_t size, bool exec) {
   return res  != (uintptr_t) MAP_FAILED;
 }
 
+bool os::pd_free_heap_physical_memory(char *addr, size_t bytes) {
+  return madvise(addr, bytes, MADV_DONTNEED) == 0;
+}
+
 static address get_stack_commited_bottom(address bottom, size_t size) {
   address nbot = bottom;
   address ntop = bottom + size;
@@ -4662,7 +4666,7 @@ os::Linux::jboltLog_do_t os::Linux::_jboltLog_do;
 os::Linux::jboltMerge_judge_t os::Linux::_jboltMerge_judge;
 #endif // INCLUDE_JBOLT
 
-void os::Linux::load_plugin_library() {
+void os::Linux::load_ACC_library() {
 
 #if INCLUDE_AGGRESSIVE_CDS
     _jboosterAggressiveCDS_do = CAST_TO_FN_PTR(jboosterAggressiveCDS_do_t, dlsym(RTLD_DEFAULT, "JBoosterAggressiveCDS_DO"));
@@ -4779,7 +4783,7 @@ jint os::init_2(void) {
   init_adjust_stacksize_for_guard_pages();
 #endif
 
-  Linux::load_plugin_library();
+  Linux::load_ACC_library();
 
   if (UseNUMA || UseNUMAInterleaving) {
     Linux::numa_init();

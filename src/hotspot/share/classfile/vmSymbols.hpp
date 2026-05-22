@@ -712,6 +712,11 @@
   template(toFileURL_signature,                             "(Ljava/lang/String;)Ljava/net/URL;")                 \
   template(url_void_signature,                              "(Ljava/net/URL;)V")                                  \
                                                                                                                   \
+  /* ElasticMaxDirectMemory */                                                                                    \
+  template(java_nio_Bits,                          "java/nio/Bits")                                               \
+  template(updateMaxMemory_name,                   "updateMaxMemory")                                             \
+  template(updateMaxMemory_signature,              "(J)Ljava/lang/String;")                                       \
+                                                                                                                  \
   /* JBooster */                                                                                                  \
   JBOOSTER_ONLY(JBOOSTER_TEMPLATES(template))                                                                     \
                                                                                                                   \

@@ -41,6 +41,7 @@
 #include "logging/log.hpp"
 #include "utilities/growableArray.hpp"
 #include "utilities/ostream.hpp"
+#include "memory/universe.hpp"
 
 class GCHeapSummary;
 class HeapBlockClaimer;
@@ -263,6 +264,8 @@ class ParallelScavengeHeap : public CollectedHeap {
   WorkGang& workers() {
     return _workers;
   }
+
+  bool change_max_heap(size_t new_size) override;
 };
 
 // Class that can be used to print information about the

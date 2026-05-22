@@ -1866,7 +1866,9 @@ void FileMapInfo::map_heap_regions_impl() {
       log_info(cds)("the desired range " PTR_FORMAT " - "  PTR_FORMAT, p2i(range.start()), p2i(range.end()));
       log_info(cds)("is outside of the heap " PTR_FORMAT " - "  PTR_FORMAT, p2i(CompressedOops::begin()), p2i(CompressedOops::end()));
       _heap_pointers_need_patching = true;
-    } else if (header()->heap_end() != CompressedOops::end()) {
+    } else if (Universe::is_dynamic_max_heap_enable()
+               ? header()->heap_end() != CompressedOops::begin() + MaxHeapSize
+               : header()->heap_end() != CompressedOops::end()) {
       log_info(cds)("CDS heap data needs to be relocated to the end of the runtime heap to reduce fragmentation");
       _heap_pointers_need_patching = true;
     }
@@ -1885,6 +1887,9 @@ void FileMapInfo::map_heap_regions_impl() {
     // the simple math of adding the delta as shown above.
     address dumptime_heap_end = header()->heap_end();
     address runtime_heap_end = CompressedOops::end();
+    if (Universe::is_dynamic_max_heap_enable()) {
+      runtime_heap_end = CompressedOops::begin() + MaxHeapSize;
+    }
     delta = runtime_heap_end - dumptime_heap_end;
   }
 

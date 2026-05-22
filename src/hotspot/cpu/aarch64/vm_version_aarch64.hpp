@@ -136,6 +136,7 @@ public:
 #undef DECLARE_CPU_FEATURE_FLAG
   };
 
+  static int get_cpu_model();
   static int cpu_family()                     { return _cpu; }
   static int cpu_model()                      { return _model; }
   static int cpu_model2()                     { return _model2; }

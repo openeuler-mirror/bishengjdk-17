@@ -136,7 +136,7 @@ class Linux {
   static const char *libc_version()           { return _libc_version; }
   static const char *libpthread_version()     { return _libpthread_version; }
 
-  static void load_plugin_library();
+  static void load_ACC_library();
   static void libpthread_init();
   static void sched_getcpu_init();
   static void chose_numa_nodes();

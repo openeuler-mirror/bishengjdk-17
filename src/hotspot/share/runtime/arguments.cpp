@@ -31,6 +31,7 @@
 #include "classfile/stringTable.hpp"
 #include "classfile/symbolTable.hpp"
 #include "compiler/compilerDefinitions.hpp"
+#include "gc/shared/dynamicMaxHeap.hpp"
 #include "gc/shared/gcArguments.hpp"
 #include "gc/shared/gcConfig.hpp"
 #include "gc/shared/stringdedup/stringDedup.hpp"
@@ -40,6 +41,7 @@
 #include "logging/logStream.hpp"
 #include "logging/logTag.hpp"
 #include "memory/allocation.inline.hpp"
+#include "memory/universe.hpp"
 #include "oops/oop.inline.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "runtime/arguments.hpp"
@@ -1543,6 +1545,20 @@ void Arguments::set_use_compressed_oops() {
   // to use UseCompressedOops are InitialHeapSize and MinHeapSize.
   size_t max_heap_size = MAX3(MaxHeapSize, InitialHeapSize, MinHeapSize);
 
+#ifdef AARCH64
+  // DynamicMaxHeap
+  // 1. align DynamicMaxHeapSizeLimit
+  // 2. use DynamicMaxHeapSizeLimit to check whether compressedOops can enabled
+  bool dynamic_max_heap_enable = DynamicMaxHeapChecker::check_dynamic_max_heap_size_limit();
+  if (dynamic_max_heap_enable) {
+     Universe::set_dynamic_max_heap_enable(true);
+     DynamicMaxHeapConfig::set_initial_max_heap_size((size_t)MaxHeapSize);
+     size_t _heap_alignment = GCArguments::compute_heap_alignment();
+     uintx aligned_max_heap_size_limit = align_up(DynamicMaxHeapSizeLimit, _heap_alignment);
+     FLAG_SET_ERGO(DynamicMaxHeapSizeLimit, aligned_max_heap_size_limit);
+     max_heap_size = MAX2(max_heap_size, DynamicMaxHeapSizeLimit);
+  }
+#endif // AARCH64
   if (max_heap_size <= max_heap_for_compressed_oops()) {
     if (FLAG_IS_DEFAULT(UseCompressedOops)) {
       FLAG_SET_ERGO(UseCompressedOops, true);

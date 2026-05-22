@@ -155,6 +155,8 @@ class G1CollectedHeap : public CollectedHeap {
   // Testing classes.
   friend class G1CheckRegionAttrTableClosure;
 
+  friend class G1_ChangeMaxHeapOp;
+
 private:
   G1ServiceThread* _service_thread;
   G1ServiceTask* _periodic_gc_task;
@@ -188,7 +190,7 @@ private:
   // reflect the contents of the heap. The only exception is the
   // humongous set which was not torn down in the first place. If
   // free_list_only is true, it will only rebuild the free list.
-  void rebuild_region_sets(bool free_list_only);
+  void rebuild_region_sets(bool free_list_only, bool is_dynamic_max_heap_shrink = false);
 
   // Callback for region mapping changed events.
   G1RegionMappingChangedListener _listener;
@@ -1479,6 +1481,28 @@ public:
 
   // Used to print information about locations in the hs_err file.
   virtual bool print_location(outputStream* st, void* addr) const;
+
+private:
+  // Dynamic Max Heap
+  // expected DynamicMaxHeap size during full gc (temp value)
+  // 0 means do not adjust
+  // min_gen_size <= _expected_dynamic_max_heap_size <= _reserved size.
+  // will be cleared after DynamicMaxHeap VM operation.
+  size_t _exp_dynamic_max_heap_size;
+public:
+  bool change_max_heap(size_t new_size) override;
+  size_t exp_dynamic_max_heap_size() const {
+    NOT_AARCH64(return 0;)
+    AARCH64_ONLY(return _exp_dynamic_max_heap_size;)
+  }
+  void set_exp_dynamic_max_heap_size(size_t size) {
+    guarantee(size <= _reserved.byte_size(), "must be");
+    _exp_dynamic_max_heap_size = size;
+  }
+  void update_gen_max_counter(size_t size) {
+    guarantee(Universe::is_dynamic_max_heap_enable(), "must be");
+    _g1mm->update_max_sizes(size);
+  }
 };
 
 // Scoped object that performs common pre- and post-gc heap printing operations.

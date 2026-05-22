@@ -188,6 +188,12 @@ public class CheckGraalIntrinsics extends GraalTest {
                         "sun/misc/Unsafe.prefetchWriteStatic(Ljava/lang/Object;J)V",
                         "sun/misc/Unsafe.unpark(Ljava/lang/Object;)V");
 
+        // These are not in graal
+        add(ignore,
+                        "java/lang/StringCoding.implDecodeUtf8ToUtf16([BI[BII)I",
+                        "java/lang/StringCoding.implEncodeUtf8fromUtf16([BI[BII)I",
+                        "jdk/internal/util/ArraysSupport.vectorizedHashCode(Ljava/lang/Object;IIII)I");
+
         // These only exist to assist escape analysis in C2
         add(ignore,
                         "java/lang/Throwable.fillInStackTrace()Ljava/lang/Throwable;");

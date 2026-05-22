@@ -71,6 +71,11 @@ static SpinWait get_spin_wait_desc() {
   return SpinWait{};
 }
 
+int VM_Version::get_cpu_model() {
+  get_os_cpu_info();
+  return _cpu != 0 ? 1 : 0;
+}
+
 // Configure instruction sizes for nativeInst_aarch64 and c1_LIRAssembler_aarch64
 // based on flag UseTBI.
 static void init_instruction_sizes_for_tbi() {

@@ -44,6 +44,7 @@
 #include "gc/shared/concurrentGCBreakpoints.hpp"
 #include "gc/shared/gcPolicyCounters.hpp"
 #include "logging/log.hpp"
+#include "memory/universe.hpp"
 #include "runtime/java.hpp"
 #include "runtime/mutexLocker.hpp"
 #include "utilities/debug.hpp"
@@ -101,7 +102,11 @@ void G1Policy::init(G1CollectedHeap* g1h, G1CollectionSet* collection_set) {
   if (!use_adaptive_young_list_length()) {
     _young_list_fixed_length = _young_gen_sizer.min_desired_young_length();
   }
-  _young_gen_sizer.adjust_max_new_size(_g1h->max_regions());
+  if (Universe::is_dynamic_max_heap_enable()) {
+    _young_gen_sizer.adjust_max_new_size(static_cast<uint>(_g1h->current_max_heap_size() / HeapRegion::GrainBytes));
+  } else {
+    _young_gen_sizer.adjust_max_new_size(_g1h->max_regions());
+  }
 
   _free_regions_at_end_of_collection = _g1h->num_free_regions();
 

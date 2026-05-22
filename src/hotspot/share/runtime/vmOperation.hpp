@@ -92,6 +92,7 @@
   template(ShenandoahFinalRoots)                  \
   template(ShenandoahDegeneratedGC)               \
   template(RendezvousGCThreads)                   \
+  template(DynamicMaxHeap)                        \
   template(Exit)                                  \
   template(LinuxDllLoad)                          \
   template(RotateGCLog)                           \

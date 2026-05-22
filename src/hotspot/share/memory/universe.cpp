@@ -155,6 +155,9 @@ OopStorage*     Universe::_vm_global = NULL;
 
 CollectedHeap*  Universe::_collectedHeap = NULL;
 
+// Dynamic Max Heap
+bool            Universe::_enable_dynamic_max_heap = false;
+
 objArrayOop Universe::the_empty_class_array ()  {
   return (objArrayOop)_the_empty_class_array.resolve();
 }

@@ -30,6 +30,7 @@
 #include "runtime/java.hpp"
 #include "utilities/align.hpp"
 #include "utilities/globalDefinitions.hpp"
+#include "memory/universe.hpp"
 
 size_t MinNewSize = 0;
 
@@ -374,7 +375,13 @@ void GenArguments::assert_flags() {
 void GenArguments::assert_size_info() {
   GCArguments::assert_size_info();
   // GenArguments::initialize_size_info may update the MaxNewSize
-  assert(MaxNewSize < MaxHeapSize, "Ergonomics decided on incompatible maximum young and heap sizes");
+  if (Universe::is_dynamic_max_heap_enable()) {
+#ifdef AARCH64
+    assert(MaxNewSize < MAX2(MaxHeapSize, DynamicMaxHeapSizeLimit), "Ergonomics decided on incompatible maximum young and heap sizes");
+#endif //AARCH64
+  } else {
+    assert(MaxNewSize < MaxHeapSize, "Ergonomics decided on incompatible maximum young and heap sizes");
+  }
   assert(MinNewSize <= NewSize, "Ergonomics decided on incompatible minimum and initial young gen sizes");
   assert(NewSize <= MaxNewSize, "Ergonomics decided on incompatible initial and maximum young gen sizes");
   assert(MinNewSize % GenAlignment == 0, "_min_young_size alignment");
