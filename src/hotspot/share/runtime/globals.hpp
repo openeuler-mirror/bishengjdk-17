@@ -361,6 +361,9 @@ const intx ObjectAlignmentInBytes = 8;
   product(bool, UseVectorizedMismatchIntrinsic, false, DIAGNOSTIC,          \
           "Enables intrinsification of ArraysSupport.vectorizedMismatch()") \
                                                                             \
+  product(bool, UseVectorizedHashCodeIntrinsic, false, DIAGNOSTIC,          \
+          "Enables intrinsification of ArraysSupport.vectorizedHashCode()") \
+                                                                            \
   product(bool, UseCopySignIntrinsic, false, DIAGNOSTIC,                    \
           "Enables intrinsification of Math.copySign")                      \
                                                                             \

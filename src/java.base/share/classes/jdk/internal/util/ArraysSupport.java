@@ -57,6 +57,16 @@ public class ArraysSupport {
 
     private static final boolean BIG_ENDIAN = U.isBigEndian();
 
+    // See https://docs.oracle.com/javase/specs/jvms/se9/html/jvms-6.html#jvms-6.5.newarray.
+    public static final int T_BOOLEAN = 4;
+    public static final int T_CHAR = 5;
+    public static final int T_FLOAT = 6;
+    public static final int T_DOUBLE = 7;
+    public static final int T_BYTE = 8;
+    public static final int T_SHORT = 9;
+    public static final int T_INT = 10;
+    public static final int T_LONG = 11;
+
     public static final int LOG2_ARRAY_BOOLEAN_INDEX_SCALE = exactLog2(Unsafe.ARRAY_BOOLEAN_INDEX_SCALE);
     public static final int LOG2_ARRAY_BYTE_INDEX_SCALE = exactLog2(Unsafe.ARRAY_BYTE_INDEX_SCALE);
     public static final int LOG2_ARRAY_CHAR_INDEX_SCALE = exactLog2(Unsafe.ARRAY_CHAR_INDEX_SCALE);
@@ -75,6 +85,89 @@ public class ArraysSupport {
     }
 
     private ArraysSupport() {}
+
+    /**
+     * Calculate the hash code for an array in a way that enables efficient
+     * vectorization.
+     *
+     * @param initialValue the initial value for the hash (typically constant 0 or 1)
+     * @param basicType type constant denoting how to interpret the array content.
+     *                  T_BOOLEAN is used to signify unsigned bytes, and T_CHAR might be used
+     *                  even if array is a byte[].
+     * @implNote currently basicType must be constant at the call site for this method
+     *           to be intrinsified.
+     *
+     * @return the calculated hash value
+     */
+    @IntrinsicCandidate
+    public static int vectorizedHashCode(Object array, int fromIndex, int length, int initialValue,
+                                         int basicType) {
+        return switch (basicType) {
+            case T_BOOLEAN -> signedHashCode(initialValue, (byte[]) array, fromIndex, length);
+            case T_CHAR -> array instanceof byte[]
+                    ? utf16hashCode(initialValue, (byte[]) array, fromIndex, length)
+                    : hashCode(initialValue, (char[]) array, fromIndex, length);
+            case T_BYTE -> hashCode(initialValue, (byte[]) array, fromIndex, length);
+            case T_SHORT -> hashCode(initialValue, (short[]) array, fromIndex, length);
+            case T_INT -> hashCode(initialValue, (int[]) array, fromIndex, length);
+            default -> throw new IllegalArgumentException("unrecognized basic type: " + basicType);
+        };
+    }
+
+    private static int signedHashCode(int result, byte[] a, int fromIndex, int length) {
+        int end = fromIndex + length;
+        for (int i = fromIndex; i < end; i++) {
+            result = 31 * result + (a[i] & 0xff);
+        }
+        return result;
+    }
+
+    private static int hashCode(int result, byte[] a, int fromIndex, int length) {
+        int end = fromIndex + length;
+        for (int i = fromIndex; i < end; i++) {
+            result = 31 * result + a[i];
+        }
+        return result;
+    }
+
+    private static int hashCode(int result, short[] a, int fromIndex, int length) {
+        int end = fromIndex + length;
+        for (int i = fromIndex; i < end; i++) {
+            result = 31 * result + a[i];
+        }
+        return result;
+    }
+
+    private static int hashCode(int result, char[] a, int fromIndex, int length) {
+        int end = fromIndex + length;
+        for (int i = fromIndex; i < end; i++) {
+            result = 31 * result + a[i];
+        }
+        return result;
+    }
+
+    private static int utf16hashCode(int result, byte[] a, int fromIndex, int length) {
+        int end = fromIndex + length;
+        for (int i = fromIndex; i < end; i++) {
+            result = 31 * result + getUTF16Char(a, i);
+        }
+        return result;
+    }
+
+    private static char getUTF16Char(byte[] a, int index) {
+        index <<= 1;
+        return (char) (BIG_ENDIAN
+                ? ((a[index] & 0xff) << 8) | (a[index + 1] & 0xff)
+                : (a[index] & 0xff) | ((a[index + 1] & 0xff) << 8));
+    }
+
+    private static int hashCode(int result, int[] a, int fromIndex, int length) {
+        int end = fromIndex + length;
+        for (int i = fromIndex; i < end; i++) {
+            result = 31 * result + a[i];
+        }
+        return result;
+    }
 
     /**
      * Find the relative index of the first mismatching pair of elements in two

@@ -402,6 +402,10 @@ void VM_Version::initialize() {
     UseBASE64Intrinsics = true;
   }
 
+  if (FLAG_IS_DEFAULT(UseVectorizedHashCodeIntrinsic)) {
+    FLAG_SET_DEFAULT(UseVectorizedHashCodeIntrinsic, true);
+  }
+
   if (is_zva_enabled()) {
     if (FLAG_IS_DEFAULT(UseBlockZeroing)) {
       FLAG_SET_DEFAULT(UseBlockZeroing, true);
