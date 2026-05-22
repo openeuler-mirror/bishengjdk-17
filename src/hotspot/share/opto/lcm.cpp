@@ -209,6 +209,8 @@ void PhaseCFG::implicit_null_check(Block* block, Node *proj, Node *val, int allo
     case Op_StrInflatedCopy:
     case Op_StrCompressedCopy:
     case Op_EncodeISOArray:
+    case Op_DecodeUtf8ToUtf16:
+    case Op_EncodeUtf8FromUtf16:
     case Op_HasNegatives:
       // Not a legit memory op for implicit null check regardless of
       // embedded loads

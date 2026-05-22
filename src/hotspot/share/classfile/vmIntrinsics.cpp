@@ -511,6 +511,8 @@ bool vmIntrinsics::disabled_by_jvm_flags(vmIntrinsics::ID id) {
   case vmIntrinsics::_encodeISOArray:
   case vmIntrinsics::_encodeAsciiArray:
   case vmIntrinsics::_encodeByteISOArray:
+  case vmIntrinsics::_encodeUtf8FromUtf16:
+  case vmIntrinsics::_decodeUtf8ToUtf16:
     if (!SpecialEncodeISOArray) return true;
     break;
   case vmIntrinsics::_getCallerClass:

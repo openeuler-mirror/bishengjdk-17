@@ -2522,6 +2522,46 @@ public:
 
 #undef INSN
 
+  // AdvSIMD vector compare
+  void cm(Condition cond, FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn, FloatRegister Vm) {
+    starti;
+    assert(T != T1Q && T != T1D, "incorrect arrangement");
+    int cond_op;
+    switch (cond) {
+      case EQ: cond_op = 0b110001; break;
+      case GT: cond_op = 0b000110; break;
+      case GE: cond_op = 0b000111; break;
+      case HI: cond_op = 0b100110; break;
+      case HS: cond_op = 0b100111; break;
+      default:
+        ShouldNotReachHere();
+        break;
+    }
+
+    f(0, 31), f((int)T & 1, 30), f((cond_op >> 5) & 1, 29);
+    f(0b01110, 28, 24), f((int)T >> 1, 23, 22), f(1, 21), rf(Vm, 16);
+    f(cond_op & 0b11111, 15, 11), f(1, 10), rf(Vn, 5), rf(Vd, 0);
+  }
+
+  // AdvSIMD Floating-point vector compare
+  void fcm(Condition cond, FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn, FloatRegister Vm) {
+    starti;
+    assert(T == T2S || T == T4S || T == T2D, "invalid arrangement");
+    int cond_op;
+    switch (cond) {
+      case EQ: cond_op = 0b00; break;
+      case GT: cond_op = 0b11; break;
+      case GE: cond_op = 0b10; break;
+      default:
+        ShouldNotReachHere();
+        break;
+    }
+
+    f(0, 31), f((int)T & 1, 30), f((cond_op >> 1) & 1, 29);
+    f(0b01110, 28, 24), f(cond_op & 1, 23), f(T == T2D ? 1 : 0, 22);
+    f(1, 21), rf(Vm, 16), f(0b111001, 15, 10), rf(Vn, 5), rf(Vd, 0);
+  }
+
 #define INSN(NAME, opc)                                                                 \
   void NAME(FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn, FloatRegister Vm) { \
     starti;                                                                             \
@@ -2740,7 +2780,7 @@ public:
   INSN(ushr, 1, 0b000001, /* isSHR = */ true);
   INSN(usra, 1, 0b000101, /* isSHR = */ true);
   INSN(ssra, 0, 0b000101, /* isSHR = */ true);
-
+  INSN(sli,  1, 0b010101, /* isSHR = */ false);
 #undef INSN
 
 #define INSN(NAME, opc, opc2, isSHR)                                    \
@@ -2972,6 +3012,48 @@ public:
 #undef MSG
 
 #undef INSN
+
+  // AdvSIMD compare with zero (vector)
+  void cm(Condition cond, FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn) {
+    starti;
+    assert(T != T1Q && T != T1D, "invalid arrangement");
+    int cond_op;
+    switch (cond) {
+      case EQ: cond_op = 0b001; break;
+      case GE: cond_op = 0b100; break;
+      case GT: cond_op = 0b000; break;
+      case LE: cond_op = 0b101; break;
+      case LT: cond_op = 0b010; break;
+      default:
+        ShouldNotReachHere();
+        break;
+    }
+
+    f(0, 31), f((int)T & 1, 30), f((cond_op >> 2) & 1, 29);
+    f(0b01110, 28, 24), f((int)T >> 1, 23, 22), f(0b10000010, 21, 14);
+    f(cond_op & 0b11, 13, 12), f(0b10, 11, 10), rf(Vn, 5), rf(Vd, 0);
+  }
+
+  // AdvSIMD Floating-point compare with zero (vector)
+  void fcm(Condition cond, FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn) {
+    starti;
+    assert(T == T2S || T == T4S || T == T2D, "invalid arrangement");
+    int cond_op;
+    switch (cond) {
+      case EQ: cond_op = 0b010; break;
+      case GT: cond_op = 0b000; break;
+      case GE: cond_op = 0b001; break;
+      case LE: cond_op = 0b011; break;
+      case LT: cond_op = 0b100; break;
+      default:
+        ShouldNotReachHere();
+        break;
+    }
+
+    f(0, 31), f((int)T & 1, 30), f(cond_op & 1, 29), f(0b011101, 28, 23);
+    f(((int)(T >> 1) & 1), 22), f(0b10000011, 21, 14);
+    f((cond_op >> 1) & 0b11, 13, 12), f(0b10, 11, 10), rf(Vn, 5), rf(Vd, 0);
+  }
 
   void ext(FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn, FloatRegister Vm, int index)
   {

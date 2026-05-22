@@ -152,6 +152,10 @@ class java_lang_String : AllStatic {
 
   static void set_compact_strings(bool value);
 
+#ifdef AARCH64
+  static void set_utf_conversion_intrinsics(bool value);
+#endif // AARCH64
+
   static int value_offset() { CHECK_INIT(_value_offset); }
   static int coder_offset() { CHECK_INIT(_coder_offset); }
 

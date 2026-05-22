@@ -83,9 +83,21 @@ class aarch64 {
 
  public:
 
+  static address _convert_masked_utf8_to_utf16;
+  static address _scalar_convert_utf8_to_utf16;
   static address get_previous_sp_entry()
   {
     return _get_previous_sp_entry;
+  }
+
+  static address scalar_convert_utf8_to_utf16()
+  {
+    return _scalar_convert_utf8_to_utf16;
+  }
+
+  static address convert_masked_utf8_to_utf16()
+  {
+    return _convert_masked_utf8_to_utf16;
   }
 
   static address f2i_fixup()
@@ -207,6 +219,14 @@ class aarch64 {
     return _spin_wait;
   }
 
+  static address pack_1_2_3_utf8_bytes_adr() { return (address)_pack_1_2_3_utf8_bytes; }
+
+  static address pack_1_2_utf8_bytes_adr() { return (address)_pack_1_2_utf8_bytes; }
+
+  static address utf8bigindex_adr() { return (address)_utf8bigindex; }
+
+  static address shufutf8_adr() { return (address)_shufutf8; }
+
   static bool complete() {
     return _completed;
   }
@@ -224,6 +244,10 @@ private:
   static jdouble   _pio2[];
   static jdouble   _dsin_coef[];
   static jdouble  _dcos_coef[];
+  static jubyte _pack_1_2_3_utf8_bytes[256][17];
+  static jubyte _pack_1_2_utf8_bytes[256][17];
+  static jubyte _shufutf8[209][16];
+  static jubyte _utf8bigindex[4096][2];
   // end trigonometric tables block
 };
 

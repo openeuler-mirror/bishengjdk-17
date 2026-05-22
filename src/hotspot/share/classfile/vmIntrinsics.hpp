@@ -360,6 +360,12 @@ class methodHandle;
   do_intrinsic(_encodeAsciiArray,       java_lang_StringCoding, encodeAsciiArray_name, encodeISOArray_signature, F_S)   \
    do_name(     encodeAsciiArray_name,                           "implEncodeAsciiArray")                                \
                                                                                                                         \
+  do_intrinsic(_encodeUtf8FromUtf16,    java_lang_StringCoding, encodeUtf8FromUtf16_name, indexOfI_signature, F_S)      \
+   do_name(     encodeUtf8FromUtf16_name,                         "implEncodeUtf8fromUtf16")                            \
+                                                                                                                        \
+  do_intrinsic(_decodeUtf8ToUtf16,      java_lang_StringCoding, decodeUtf8ToUtf16_name, indexOfI_signature, F_S)        \
+   do_name(     decodeUtf8ToUtf16_name,                           "implDecodeUtf8ToUtf16")                              \
+                                                                                                                        \
   do_class(java_math_BigInteger,                      "java/math/BigInteger")                                           \
   do_intrinsic(_multiplyToLen,      java_math_BigInteger, multiplyToLen_name, multiplyToLen_signature, F_S)             \
    do_name(     multiplyToLen_name,                             "implMultiplyToLen")                                    \

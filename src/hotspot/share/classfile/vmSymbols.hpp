@@ -424,6 +424,7 @@
   template(cache_field_name,                          "cache")                                    \
   template(value_name,                                "value")                                    \
   template(compact_strings_name,                      "COMPACT_STRINGS")                          \
+  template(utf_conversion_intrinsics_name,            "UTF_CONVERSION_INTRINSICS")                \
   template(numberOfLeadingZeros_name,                 "numberOfLeadingZeros")                     \
   template(numberOfTrailingZeros_name,                "numberOfTrailingZeros")                    \
   template(bitCount_name,                             "bitCount")                                 \

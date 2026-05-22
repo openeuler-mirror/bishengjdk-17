@@ -199,6 +199,8 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "including prefix=<id> and div=<N>.")                         \
   product(bool, UseStlrForRelease, false,                               \
           "Use stlr instead of dmb ish + str for release stores")       \
+  product(bool, UseUTFConversionIntrinsics, false,                      \
+          "Use Intrinsics for conversion between UTF8 and UTF16")       \
 
 // end of ARCH_FLAGS
 

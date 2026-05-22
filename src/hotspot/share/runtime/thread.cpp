@@ -2669,8 +2669,12 @@ void Threads::initialize_java_lang_classes(JavaThread* main_thread, TRAPS) {
 
   initialize_class(vmSymbols::java_lang_String(), CHECK);
 
-  // Inject CompactStrings value after the static initializers for String ran.
+  // Inject CompactStrings and UseUTFConversionIntrinsics(AARCH64) value after the static initializers for String ran.
   java_lang_String::set_compact_strings(CompactStrings);
+
+#ifdef AARCH64
+  java_lang_String::set_utf_conversion_intrinsics(UseUTFConversionIntrinsics);
+#endif // AARCH64
 
   // Initialize java_lang.System (needed before creating the thread)
   initialize_class(vmSymbols::java_lang_System(), CHECK);

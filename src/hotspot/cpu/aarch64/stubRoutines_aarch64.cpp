@@ -47,6 +47,8 @@ address StubRoutines::aarch64::_double_sign_flip = NULL;
 address StubRoutines::aarch64::_zero_blocks = NULL;
 address StubRoutines::aarch64::_has_negatives = NULL;
 address StubRoutines::aarch64::_has_negatives_long = NULL;
+address StubRoutines::aarch64::_convert_masked_utf8_to_utf16 = NULL;
+address StubRoutines::aarch64::_scalar_convert_utf8_to_utf16 = NULL;
 address StubRoutines::aarch64::_large_array_equals = NULL;
 address StubRoutines::aarch64::_large_arrays_hashcode_boolean = NULL;
 address StubRoutines::aarch64::_large_arrays_hashcode_byte = NULL;
@@ -68,8 +70,15 @@ address StubRoutines::aarch64::_spin_wait = CAST_FROM_FN_PTR(address, empty_spin
 
 bool StubRoutines::aarch64::_completed = false;
 
+
+// UTF conversion lookup tables derived from simdutf (https://github.com/simdutf/simdutf).
+// See src/hotspot/share/legal/simdutf.md for licensing details.
+#define STUB_ROUTINES_AARCH64_SIMDUTF_TABLES_IMPL
+#include "simdutf_utf_tables.hpp"
+#undef STUB_ROUTINES_AARCH64_SIMDUTF_TABLES_IMPL
+
 /**
- *  crc_table[] from jdk/src/share/native/java/util/zip/zlib-1.2.5/crc32.h
+ * crc_table[] from jdk/src/share/native/java/util/zip/zlib-1.2.5/crc32.h
  */
 ATTRIBUTE_ALIGNED(4096) juint StubRoutines::aarch64::_crc_table[] =
 {
