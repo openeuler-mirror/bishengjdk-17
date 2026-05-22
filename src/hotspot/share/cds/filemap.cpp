@@ -2237,6 +2237,50 @@ int FileMapHeader::compute_crc() {
   return crc;
 }
 
+#if INCLUDE_AGGRESSIVE_CDS
+int DynamicArchiveHeader::get_current_program_crc() {
+  int cur_crc = 0;
+  const char* full_cmd = Arguments::java_command();
+  if (full_cmd == NULL) {
+    return 0;
+  }
+  const char* main_path = Arguments::get_appclasspath();
+  if (main_path == NULL || main_path[0] == '\0') {
+    // No appclasspath (e.g. -m / --module main, or no -cp specified) - nothing to CRC.
+    return 0;
+  }
+  int main_path_len = (int) strlen(main_path);
+  bool is_jar_file = strncmp(full_cmd, main_path, main_path_len) == 0;
+  if (!is_jar_file) {
+    return 0;
+  }
+
+  int fd = os::open(main_path, O_RDONLY | O_BINARY, 0);
+  if (fd < 0) {
+    return 0;
+  }
+
+  uint32_t file_size = (uint32_t) os::lseek(fd, 0, SEEK_END);
+  os::lseek(fd, 0, SEEK_SET);
+  uint32_t max_size = 40 * 1024 * 1024; // 40M
+
+  ResourceMark rm;
+  char* buf = NEW_RESOURCE_ARRAY(char, max_size);
+
+  while (file_size) {
+    uint32_t size = MIN2(max_size, file_size);
+    ssize_t n = os::read(fd, buf, (unsigned int) size);
+    if (n <= 0) {
+      break;
+    }
+    file_size -= (uint32_t) n;
+    cur_crc = ClassLoader::crc32(cur_crc, buf, (int) n);
+  }
+  os::close(fd);
+  return cur_crc;
+}
+#endif // INCLUDE_AGGRESSIVE_CDS
+
 // This function should only be called during run time with UseSharedSpaces enabled.
 bool FileMapHeader::validate() {
   if (_obj_alignment != ObjectAlignmentInBytes) {

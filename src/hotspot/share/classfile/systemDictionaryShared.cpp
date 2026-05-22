@@ -1295,6 +1295,17 @@ InstanceKlass* SystemDictionaryShared::load_shared_class_for_builtin_loader(
         (SystemDictionary::is_platform_class_loader(class_loader()) && ik->is_shared_platform_class())) {
       SharedClassLoadingMark slm(THREAD, ik);
       PackageEntry* pkg_entry = get_package_entry_from_class(ik, class_loader);
+      if (pkg_entry == NULL) {
+        int index = ik->shared_classpath_index();
+        assert(index >= 0, "Sanity");
+        SharedClassPathEntry* ent = FileMapInfo::shared_path(index);
+        if (ent->is_modules_image()) {
+          // Classes from the modules image need a PackageEntry to find the
+          // ModuleEntry used for their archived ProtectionDomain. If this
+          // loader has not defined the package yet, use normal class loading.
+          return NULL;
+        }
+      }
       Handle protection_domain =
         SystemDictionaryShared::init_security_info(class_loader, ik, pkg_entry, CHECK_NULL);
       return load_shared_class(ik, class_loader, protection_domain, NULL, pkg_entry, THREAD);
@@ -1618,6 +1629,9 @@ bool SystemDictionaryShared::check_for_exclusion_impl(InstanceKlass* k) {
   if (k->is_in_error_state()) {
     return warn_excluded(k, "In error state");
   }
+  if (!k->is_loaded()) {
+    return warn_excluded(k, "Not loaded");
+  }
   if (has_been_redefined(k)) {
     return warn_excluded(k, "Has been redefined");
   }
@@ -1791,7 +1805,8 @@ public:
   bool do_entry(LambdaProxyClassKey& key, DumpTimeLambdaProxyClassInfo& info) {
     assert_lock_strong(DumpTimeTable_lock);
     // ignore obsolete lambda
-    if (key.caller_ik()->is_loader_alive() && !key.member_method()->is_obsolete()) {
+    if (key.caller_ik()->is_loader_alive() &&
+        (key.member_method() == NULL || !key.member_method()->is_obsolete())) {
       info.metaspace_pointers_do(_it);
       key.metaspace_pointers_do(_it);
     }

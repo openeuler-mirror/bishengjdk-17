@@ -2859,6 +2859,26 @@ static void thread_entry(JavaThread* thread, TRAPS) {
 
 
 JVM_ENTRY(void, JVM_StartThread(JNIEnv* env, jobject jthread))
+#if INCLUDE_CDS
+  if (DumpSharedSpaces) {
+    // During java -Xshare:dump, if we allow multiple Java threads to
+    // execute in parallel, symbols and classes may be loaded in
+    // random orders which will make the resulting CDS archive
+    // non-deterministic.
+    //
+    // Lucikly, during java -Xshare:dump, it's important to run only
+    // the code in the main Java thread (which is NOT started here) that
+    // creates the module graph, etc. It's safe to not start the other
+    // threads which are launched by class static initializers
+    // (ReferenceHandler, FinalizerThread and CleanerImpl).
+    if (log_is_enabled(Info, cds)) {
+      ResourceMark rm;
+      oop t = JNIHandles::resolve_non_null(jthread);
+      log_info(cds)("JVM_StartThread() ignored: %s", t->klass()->external_name());
+    }
+    return;
+  }
+#endif
   JavaThread *native_thread = NULL;
 
   // We cannot hold the Threads_lock when we throw an exception,
@@ -3665,6 +3685,47 @@ JVM_ENTRY(jboolean, JVM_IsDumpingClassList(JNIEnv *env))
 #endif // INCLUDE_CDS
 JVM_END
 
+#if INCLUDE_CDS
+// Keep these in sync with java.lang.invoke.MethodType:
+// MAX_JVM_ARITY = 255 and MAX_MH_INVOKER_ARITY = MAX_JVM_ARITY - 2.
+// LambdaForm compiles invokers above MAX_MH_INVOKER_ARITY to bytecode.
+static const int lambda_form_max_jvm_arity = 255;
+static const int lambda_form_max_mh_invoker_arity = lambda_form_max_jvm_arity - 2;
+
+// Some very large MethodHandle invokers are compiled as runtime hidden
+// LambdaForm classes, e.g. java/lang/invoke/LambdaForm$MH. Such classes are
+// intentionally not archived and cannot be looked up by name in a later JVM.
+// Avoid recording only these boundary arity invokers in a dynamic archive.
+static bool is_dynamic_dump_unsafe_lambda_form_invoker(const char* line) {
+  const char* type = strrchr(line, ' ');
+  if (type == NULL) {
+    return false;
+  }
+  type++;
+
+  if (type[0] != 'L') {
+    return false;
+  }
+
+  const char* p = type + 1;
+  if (*p < '0' || *p > '9') {
+    return false;
+  }
+
+  int arity = 0;
+  while (*p >= '0' && *p <= '9') {
+    arity = arity * 10 + (*p - '0');
+    p++;
+  }
+
+  if (*p != '_') {
+    return false;
+  }
+
+  return arity > lambda_form_max_mh_invoker_arity;
+}
+#endif // INCLUDE_CDS
+
 JVM_ENTRY(void, JVM_LogLambdaFormInvoker(JNIEnv *env, jstring line))
 #if INCLUDE_CDS
   assert(ClassListWriter::is_enabled() || DynamicDumpSharedSpaces,  "Should be set and open or do dynamic dump");
@@ -3673,9 +3734,13 @@ JVM_ENTRY(void, JVM_LogLambdaFormInvoker(JNIEnv *env, jstring line))
     Handle h_line (THREAD, JNIHandles::resolve_non_null(line));
     char* c_line = java_lang_String::as_utf8_string(h_line());
     if (DynamicDumpSharedSpaces) {
-      // Note: LambdaFormInvokers::append_filtered and LambdaFormInvokers::append take same format which is not
-      // same as below the print format. The line does not include LAMBDA_FORM_TAG.
-      LambdaFormInvokers::append_filtered(os::strdup((const char*)c_line, mtInternal));
+      if (is_dynamic_dump_unsafe_lambda_form_invoker(c_line)) {
+        log_trace(cds)("Skip unsafe dynamic dump LambdaForm invoker: %s", c_line);
+      } else {
+        // Note: LambdaFormInvokers::append_filtered and LambdaFormInvokers::append take same format which is not
+        // same as below the print format. The line does not include LAMBDA_FORM_TAG.
+        LambdaFormInvokers::append_filtered(os::strdup((const char*)c_line, mtInternal));
+      }
     }
     if (ClassListWriter::is_enabled()) {
       ClassListWriter w;

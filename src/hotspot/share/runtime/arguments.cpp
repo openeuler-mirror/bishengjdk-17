@@ -3637,6 +3637,46 @@ jint Arguments::set_shared_spaces_flags_and_archive_paths() {
 
 #if INCLUDE_CDS
 // Sharing support
+
+static bool is_same_default_archive_path(const char* jvm_path, const char* archive_path, const char* name) {
+  stringStream path;
+  path.print("%s%s%s", jvm_path, os::file_separator(), name);
+  return os::same_files(path.base(), archive_path);
+}
+
+bool Arguments::is_default_archive_path(const char* archive_path) {
+  if (archive_path == NULL) {
+    return false;
+  }
+
+  char jvm_path[JVM_MAXPATHLEN];
+  os::jvm_path(jvm_path, sizeof(jvm_path));
+  char *end = strrchr(jvm_path, *os::file_separator());
+  if (end != NULL) *end = '\0';
+
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes.jsa")) {
+    return true;
+  }
+
+#ifdef _LP64
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes_nocoops.jsa")) {
+    return true;
+  }
+
+#ifdef AARCH64
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes_coh.jsa")) {
+    return true;
+  }
+
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes_nocoops_coh.jsa")) {
+    return true;
+  }
+#endif // AARCH64
+#endif // _LP64
+
+  return false;
+}
+
 // Construct the path to the archive
 char* Arguments::get_default_shared_archive_path() {
   char *default_archive_path;
@@ -3716,6 +3756,12 @@ bool Arguments::init_shared_archive_paths() {
       return false;
     }
     check_unsupported_dumping_properties();
+
+    if (is_default_archive_path(ArchiveClassesAtExit)) {
+      vm_exit_during_initialization(
+        "Cannot specify the default CDS archive for -XX:ArchiveClassesAtExit", ArchiveClassesAtExit);
+    }
+
     SharedDynamicArchivePath = os::strdup_check_oom(ArchiveClassesAtExit, mtArguments);
   } else {
     if (SharedDynamicArchivePath != nullptr) {

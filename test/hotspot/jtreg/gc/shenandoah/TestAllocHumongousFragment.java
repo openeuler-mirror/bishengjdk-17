@@ -172,6 +172,7 @@
  * @library /test/lib
  *
  * @run main/othervm -Xlog:gc+region=trace -XX:+UnlockDiagnosticVMOptions -XX:+UnlockExperimentalVMOptions -Xmx1g -Xms1g
+ *      -XX:ShenandoahTargetNumRegions=2048 -XX:+UseShenandoahGC -XX:ShenandoahGCMode=iu
  *      -XX:VerifyGCType=full -XX:+VerifyDuringGC -XX:+VerifyAfterGC -XX:+UseAltGCForwarding
  *      TestAllocHumongousFragment
  */
