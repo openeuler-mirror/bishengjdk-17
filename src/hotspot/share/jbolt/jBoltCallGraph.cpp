@@ -187,14 +187,14 @@ JBoltCallGraph& JBoltCallGraph::callgraph_instance() {
 }
 
 void JBoltCallGraph::add_func(JBoltFunc* func) {
-  if (!(UseJBolt && JBoltManager::reorder_phase_is_profiling_or_waiting())) return;
   JBoltCluster* cluster = find_cluster(func);
   assert(cluster != NULL, "invariant");
+  delete func;
 }
 
 void JBoltCallGraph::add_call(JBoltCall* call) {
-  if (!(UseJBolt && JBoltManager::reorder_phase_is_profiling_or_waiting())) return;
   add_call_to_calls(_calls, call);
+  delete call;
 }
 
 uintptr_t data_layout_jbolt[] = {
