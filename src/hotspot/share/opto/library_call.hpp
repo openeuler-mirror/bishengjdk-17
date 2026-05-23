@@ -188,6 +188,7 @@ class LibraryCallKit : public GraphKit {
                           RegionNode* region, Node* phi, StrIntrinsicNode::ArgEnc ae);
   bool inline_string_indexOfChar(StrIntrinsicNode::ArgEnc ae);
   bool inline_string_equals(StrIntrinsicNode::ArgEnc ae);
+  bool inline_vectorizedHashCode();
   bool inline_string_toBytesU();
   bool inline_string_getCharsU();
   bool inline_string_copy(bool compress);
@@ -287,6 +288,8 @@ class LibraryCallKit : public GraphKit {
   Node* get_digest_length_from_digest_object(Node *digestBase_object);
   Node* inline_digestBase_implCompressMB_predicate(int predicate);
   bool inline_encodeISOArray(bool ascii);
+  bool inline_decodeUtf8ToUtf16();
+  bool inline_encodeUtf8FromUtf16();
   bool inline_updateCRC32();
   bool inline_updateBytesCRC32();
   bool inline_updateByteBufferCRC32();
@@ -350,4 +353,3 @@ class LibraryCallKit : public GraphKit {
 
   bool inline_blackhole();
 };
-

@@ -42,6 +42,7 @@
 #include "gc/shared/locationPrinter.inline.hpp"
 #include "gc/shared/scavengableNMethods.hpp"
 #include "gc/shared/suspendibleThreadSet.hpp"
+#include "gc/shared/dynamicMaxHeap.hpp"
 #include "logging/log.hpp"
 #include "memory/iterator.hpp"
 #include "memory/metaspaceCounters.hpp"
@@ -62,6 +63,12 @@ PSAdaptiveSizePolicy* ParallelScavengeHeap::_size_policy = NULL;
 PSGCAdaptivePolicyCounters* ParallelScavengeHeap::_gc_policy_counters = NULL;
 
 jint ParallelScavengeHeap::initialize() {
+#ifdef AARCH64
+  if (Universe::is_dynamic_max_heap_enable() && !FLAG_IS_CMDLINE(DynamicMaxHeapSizeLimit) && !FLAG_IS_CMDLINE(ElasticMaxHeapSize)) {
+    guarantee(ElasticMaxHeap, "must be");
+    FLAG_SET_ERGO(DynamicMaxHeapSizeLimit, MaxHeapSize);
+  }
+#endif //AARCH64
   const size_t reserved_heap_size = ParallelArguments::heap_reserved_size_bytes();
 
   ReservedHeapSpace heap_rs = Universe::reserve_heap(reserved_heap_size, HeapAlignment);
@@ -81,9 +88,13 @@ jint ParallelScavengeHeap::initialize() {
   assert(MinNewSize <= NewSize && NewSize <= MaxNewSize, "Parameter check");
 
   // Layout the reserved space for the generations.
-  ReservedSpace old_rs   = heap_rs.first_part(MaxOldSize);
-  ReservedSpace young_rs = heap_rs.last_part(MaxOldSize);
-  assert(young_rs.size() == MaxNewSize, "Didn't reserve all of the heap");
+  size_t max_old_size = MaxOldSize;
+  if (Universe::is_dynamic_max_heap_enable()) {
+    max_old_size = GenArguments::max_old_size(reserved_heap_size);
+  }
+  ReservedSpace old_rs   = heap_rs.first_part(max_old_size);
+  ReservedSpace young_rs = heap_rs.last_part(max_old_size);
+  assert(young_rs.size() == MaxNewSize || Universe::is_dynamic_max_heap_enable(), "Didn't reserve all of the heap");
 
   // Set up WorkGang
   _workers.initialize_workers();
@@ -101,8 +112,8 @@ jint ParallelScavengeHeap::initialize() {
       MaxOldSize,
       "old", 1);
 
-  assert(young_gen()->max_gen_size() == young_rs.size(),"Consistency check");
-  assert(old_gen()->max_gen_size() == old_rs.size(), "Consistency check");
+  assert(young_gen()->max_gen_size() == young_rs.size() || Universe::is_dynamic_max_heap_enable(),"Consistency check");
+  assert(old_gen()->max_gen_size() == old_rs.size() || Universe::is_dynamic_max_heap_enable(), "Consistency check");
 
   double max_gc_pause_sec = ((double) MaxGCPauseMillis)/1000.0;
   double max_gc_minor_pause_sec = ((double) MaxGCMinorPauseMillis)/1000.0;
@@ -216,6 +227,12 @@ bool ParallelScavengeHeap::is_maximal_no_gc() const {
 
 size_t ParallelScavengeHeap::max_capacity() const {
   size_t estimated = reserved_region().byte_size();
+  // Dynamic Max Heap
+  if (Universe::is_dynamic_max_heap_enable()) {
+    // young_gen()->max_size() is also controlled by DynamicMaxHeap
+    guarantee(current_max_heap_size() <= estimated, "must be");
+    estimated = current_max_heap_size();
+  }
   if (UseAdaptiveSizePolicy) {
     estimated -= _size_policy->max_survivor_size(young_gen()->max_gen_size());
   } else {
@@ -856,4 +873,11 @@ GrowableArray<MemoryPool*> ParallelScavengeHeap::memory_pools() {
   memory_pools.append(_survivor_pool);
   memory_pools.append(_old_pool);
   return memory_pools;
+}
+
+bool ParallelScavengeHeap::change_max_heap(size_t new_size) {
+  assert(!Heap_lock->owned_by_self(), "this thread should not own the Heap_lock");
+  PS_ChangeMaxHeapOp op(new_size);
+  VMThread::execute(&op);
+  return op.resize_success();
 }

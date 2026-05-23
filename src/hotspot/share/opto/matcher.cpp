@@ -1034,6 +1034,7 @@ static void match_alias_type(Compile* C, Node* n, Node* m) {
     case Op_StrIndexOf:
     case Op_StrIndexOfChar:
     case Op_AryEq:
+    case Op_VectorizedHashCode:
     case Op_HasNegatives:
     case Op_MemBarVolatile:
     case Op_MemBarCPUOrder: // %%% these ideals should have narrower adr_type?
@@ -1041,6 +1042,8 @@ static void match_alias_type(Compile* C, Node* n, Node* m) {
     case Op_StrCompressedCopy:
     case Op_OnSpinWait:
     case Op_EncodeISOArray:
+    case Op_EncodeUtf8FromUtf16:
+    case Op_DecodeUtf8ToUtf16:
       nidx = Compile::AliasIdxTop;
       nat = nullptr;
       break;
@@ -2220,10 +2223,13 @@ bool Matcher::find_shared_visit(MStack& mstack, Node* n, uint opcode, bool& mem_
     case Op_StrIndexOf:
     case Op_StrIndexOfChar:
     case Op_AryEq:
+    case Op_VectorizedHashCode:
     case Op_HasNegatives:
     case Op_StrInflatedCopy:
     case Op_StrCompressedCopy:
     case Op_EncodeISOArray:
+    case Op_EncodeUtf8FromUtf16:
+    case Op_DecodeUtf8ToUtf16:
     case Op_FmaD:
     case Op_FmaF:
     case Op_FmaVD:
@@ -2361,7 +2367,8 @@ void Matcher::find_shared_post_visit(Node* n, uint opcode) {
       break;
     }
     case Op_StrComp:
-    case Op_StrIndexOf: {
+    case Op_StrIndexOf:
+    case Op_VectorizedHashCode: {
       Node* pair1 = new BinaryNode(n->in(2), n->in(3));
       n->set_req(2, pair1);
       Node* pair2 = new BinaryNode(n->in(4),n->in(5));
@@ -2372,7 +2379,9 @@ void Matcher::find_shared_post_visit(Node* n, uint opcode) {
     }
     case Op_StrCompressedCopy:
     case Op_StrInflatedCopy:
-    case Op_EncodeISOArray: {
+    case Op_EncodeISOArray:
+    case Op_EncodeUtf8FromUtf16:
+    case Op_DecodeUtf8ToUtf16: {
       // Restructure into a binary tree for Matching.
       Node* pair = new BinaryNode(n->in(3), n->in(4));
       n->set_req(3, pair);

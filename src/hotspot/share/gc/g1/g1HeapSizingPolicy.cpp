@@ -30,6 +30,7 @@
 #include "runtime/globals.hpp"
 #include "utilities/debug.hpp"
 #include "utilities/globalDefinitions.hpp"
+#include "memory/universe.hpp"
 
 G1HeapSizingPolicy* G1HeapSizingPolicy::create(const G1CollectedHeap* g1h, const G1Analytics* analytics) {
   return new G1HeapSizingPolicy(g1h, analytics);
@@ -196,7 +197,7 @@ size_t G1HeapSizingPolicy::young_collection_expansion_amount() {
   return expand_bytes;
 }
 
-static size_t target_heap_capacity(size_t used_bytes, uintx free_ratio) {
+static size_t target_heap_capacity(size_t used_bytes, uintx free_ratio, size_t max_heap_size) {
   const double desired_free_percentage = (double) free_ratio / 100.0;
   const double desired_used_percentage = 1.0 - desired_free_percentage;
 
@@ -206,7 +207,7 @@ static size_t target_heap_capacity(size_t used_bytes, uintx free_ratio) {
   double desired_capacity_d = used_bytes_d / desired_used_percentage;
   // Let's make sure that they are both under the max heap size, which
   // by default will make it fit into a size_t.
-  double desired_capacity_upper_bound = (double) MaxHeapSize;
+  double desired_capacity_upper_bound = (double) max_heap_size;
   desired_capacity_d = MIN2(desired_capacity_d, desired_capacity_upper_bound);
   // We can now safely turn it into size_t's.
   return (size_t) desired_capacity_d;
@@ -218,8 +219,10 @@ size_t G1HeapSizingPolicy::full_collection_resize_amount(bool& expand) {
   const size_t capacity_after_gc = _g1h->capacity();
   const size_t used_after_gc = capacity_after_gc - _g1h->unused_committed_regions_in_bytes();
 
-  size_t minimum_desired_capacity = target_heap_capacity(used_after_gc, MinHeapFreeRatio);
-  size_t maximum_desired_capacity = target_heap_capacity(used_after_gc, MaxHeapFreeRatio);
+  size_t max_heap_size = _g1h->current_max_heap_size();
+
+  size_t minimum_desired_capacity = target_heap_capacity(used_after_gc, MinHeapFreeRatio, max_heap_size);
+  size_t maximum_desired_capacity = target_heap_capacity(used_after_gc, MaxHeapFreeRatio, max_heap_size);
 
   // This assert only makes sense here, before we adjust them
   // with respect to the min and max heap size.
@@ -231,7 +234,7 @@ size_t G1HeapSizingPolicy::full_collection_resize_amount(bool& expand) {
   // Should not be greater than the heap max size. No need to adjust
   // it with respect to the heap min size as it's a lower bound (i.e.,
   // we'll try to make the capacity larger than it, not smaller).
-  minimum_desired_capacity = MIN2(minimum_desired_capacity, MaxHeapSize);
+  minimum_desired_capacity = MIN2(minimum_desired_capacity, max_heap_size);
   // Should not be less than the heap min size. No need to adjust it
   // with respect to the heap max size as it's an upper bound (i.e.,
   // we'll try to make the capacity smaller than it, not greater).
@@ -249,7 +252,27 @@ size_t G1HeapSizingPolicy::full_collection_resize_amount(bool& expand) {
     expand = true;
     return expand_bytes;
     // No expansion, now see if we want to shrink
-  } else if (capacity_after_gc > maximum_desired_capacity) {
+  }
+
+  size_t exp_size = _g1h->exp_dynamic_max_heap_size();
+  if (Universe::is_dynamic_max_heap_enable() &&
+      (exp_size > 0) &&
+      (exp_size < _g1h->capacity()) &&
+      (exp_size >= minimum_desired_capacity) &&
+      (exp_size <= maximum_desired_capacity)) {
+    // shrink to exp_dynamic_max_heap_size when
+    // 1. exp_dynamic_max_heap_size smaller than capacity
+    // 2. exp_dynamic_max_heap_size bigger than minimum_desired_capacity
+    size_t shrink_bytes = _g1h->capacity() - exp_size;
+    log_debug(gc, ergo, heap)("Attempt heap shrinking for dynamic max heap(capacity higher than expected dynamic max heap after Full GC)."
+                              "Capacity: " SIZE_FORMAT "B occupancy: " SIZE_FORMAT "B "
+                              "expected_dynamic_max_heap: " SIZE_FORMAT "B ",
+                              capacity_after_gc, used_after_gc, exp_size);
+    expand = false;
+    return shrink_bytes;
+  }
+
+  if (capacity_after_gc > maximum_desired_capacity) {
     // Capacity too large, compute shrinking size
     size_t shrink_bytes = capacity_after_gc - maximum_desired_capacity;
 

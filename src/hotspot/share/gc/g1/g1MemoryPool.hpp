@@ -61,6 +61,13 @@ protected:
                     size_t init_size,
                     size_t max_size,
                     bool support_usage_threshold);
+  size_t max_size() const override {
+    if (Universe::is_dynamic_max_heap_enable()) {
+      G1CollectedHeap* heap = static_cast<G1CollectedHeap*>(Universe::heap());
+      return heap->max_capacity();
+    }
+    return MemoryPool::max_size();
+  }
 };
 
 // Memory pool that represents the G1 eden.

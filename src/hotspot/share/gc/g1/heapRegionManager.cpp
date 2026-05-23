@@ -34,6 +34,7 @@
 #include "jfr/jfrEvents.hpp"
 #include "logging/logStream.hpp"
 #include "memory/allocation.hpp"
+#include "memory/universe.hpp"
 #include "runtime/atomic.hpp"
 #include "runtime/orderAccess.hpp"
 #include "utilities/bitMap.inline.hpp"
@@ -91,6 +92,8 @@ void HeapRegionManager::initialize(G1RegionToSpaceMapper* heap_storage,
   _card_counts_mapper = card_counts;
 
   _regions.initialize(heap_storage->reserved(), HeapRegion::GrainBytes);
+
+  _dynamic_max_heap_length = static_cast<uint>(MaxHeapSize / HeapRegion::GrainBytes);
 
   _committed_map.initialize(reserved_length());
 }
@@ -332,12 +335,15 @@ uint HeapRegionManager::expand_inactive(uint num_regions) {
 
   do {
     HeapRegionRange regions = _committed_map.next_inactive_range(offset);
-    if (regions.length() == 0) {
+    if (regions.length() == 0 || available() == 0) {
       // No more unavailable regions.
       break;
     }
 
     uint to_expand = MIN2(num_regions - expanded, regions.length());
+    if (Universe::is_dynamic_max_heap_enable()) {
+      to_expand = MIN2(to_expand, available());
+    }
     reactivate_regions(regions.start(), to_expand);
     expanded += to_expand;
     offset = regions.end();
@@ -354,12 +360,15 @@ uint HeapRegionManager::expand_any(uint num_regions, WorkGang* pretouch_workers)
 
   do {
     HeapRegionRange regions = _committed_map.next_committable_range(offset);
-    if (regions.length() == 0) {
+    if (regions.length() == 0 || available() == 0) {
       // No more unavailable regions.
       break;
     }
 
     uint to_expand = MIN2(num_regions - expanded, regions.length());
+    if (Universe::is_dynamic_max_heap_enable()) {
+      to_expand = MIN2(to_expand, available());
+    }
     expand(regions.start(), to_expand, pretouch_workers);
     expanded += to_expand;
     offset = regions.end();
@@ -370,6 +379,13 @@ uint HeapRegionManager::expand_any(uint num_regions, WorkGang* pretouch_workers)
 
 uint HeapRegionManager::expand_by(uint num_regions, WorkGang* pretouch_workers) {
   assert(num_regions > 0, "Must expand at least 1 region");
+
+  if (Universe::is_dynamic_max_heap_enable()) {
+    uint available_regions = available();
+    guarantee(dynamic_max_heap_length() >= length(), "The current length must not exceed dynamic max heap length");
+    guarantee(available_regions <= max_length() && available_regions <= dynamic_max_heap_length(), "must be");
+    num_regions = MIN2(num_regions, available_regions);
+  }
 
   // First "undo" any requests to uncommit memory concurrently by
   // reverting such regions to being available.
@@ -386,6 +402,14 @@ uint HeapRegionManager::expand_by(uint num_regions, WorkGang* pretouch_workers) 
 
 void HeapRegionManager::expand_exact(uint start, uint num_regions, WorkGang* pretouch_workers) {
   assert(num_regions != 0, "Need to request at least one region");
+
+  if (Universe::is_dynamic_max_heap_enable()) {
+    uint available_regions = available();
+    guarantee(dynamic_max_heap_length() >= length(), "The current length must not exceed dynamic max heap length");
+    guarantee(available_regions <= max_length() && available_regions <= dynamic_max_heap_length(), "must be");
+    num_regions = MIN2(num_regions, available_regions);
+  }
+
   uint end = start + num_regions;
 
   for (uint i = start; i < end; i++) {
@@ -539,7 +563,7 @@ uint HeapRegionManager::find_highest_free(bool* expanded) {
   // committed, expand at that index.
   for (uint curr = reserved_length(); curr-- > 0;) {
     HeapRegion *hr = _regions.get_by_index(curr);
-    if (hr == NULL || !is_available(curr)) {
+    if ((hr == NULL || !is_available(curr)) && available() >= 1) {
       // Found uncommitted and free region, expand to make it available for use.
       expand_exact(curr, 1, NULL);
       assert(at(curr)->is_free(), "Region (%u) must be available and free after expand", curr);
@@ -563,7 +587,7 @@ bool HeapRegionManager::allocate_containing_regions(MemRegion range, size_t* com
   // Ensure that each G1 region in the range is free, returning false if not.
   // Commit those that are not yet available, and keep count.
   for (uint curr_index = start_index; curr_index <= last_index; curr_index++) {
-    if (!is_available(curr_index)) {
+    if (!is_available(curr_index) && available() >= 1) {
       commits++;
       expand_exact(curr_index, 1, pretouch_workers);
     }

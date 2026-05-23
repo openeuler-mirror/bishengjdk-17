@@ -119,6 +119,8 @@ class CollectedHeap : public CHeapObj<mtGC> {
   // time-warp warnings.
   jlong _last_whole_heap_examined_time_ns;
 
+  size_t _current_max_heap_size;
+
   unsigned int _total_collections;          // ... started
   unsigned int _total_full_collections;     // ... started
   NOT_PRODUCT(volatile size_t _promotion_failure_alot_count;)
@@ -510,6 +512,15 @@ class CollectedHeap : public CHeapObj<mtGC> {
   void reset_promotion_should_fail(volatile size_t* count);
   void reset_promotion_should_fail();
 #endif  // #ifndef PRODUCT
+
+public:
+  // Dynamic Max Heap
+  virtual bool change_max_heap(size_t new_size){ return false; }
+  bool check_new_max_heap_validity(size_t new_size, outputStream* st);
+  size_t current_max_heap_size() const { return _current_max_heap_size; }
+  void set_current_max_heap_size(size_t new_size) {
+    _current_max_heap_size = new_size;
+  }
 };
 
 // Class to set and reset the GC cause for a CollectedHeap.

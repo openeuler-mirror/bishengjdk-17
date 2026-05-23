@@ -226,6 +226,7 @@ bool vmIntrinsics::disabled_by_jvm_flags(vmIntrinsics::ID id) {
     case vmIntrinsics::_storeFence:
     case vmIntrinsics::_fullFence:
     case vmIntrinsics::_hasNegatives:
+    case vmIntrinsics::_vectorizedHashCode:
     case vmIntrinsics::_Reference_get:
       break;
     default:
@@ -460,6 +461,9 @@ bool vmIntrinsics::disabled_by_jvm_flags(vmIntrinsics::ID id) {
   case vmIntrinsics::_vectorizedMismatch:
     if (!UseVectorizedMismatchIntrinsic) return true;
     break;
+  case vmIntrinsics::_vectorizedHashCode:
+    if (!UseVectorizedHashCodeIntrinsic) return true;
+    break;
   case vmIntrinsics::_updateBytesAdler32:
   case vmIntrinsics::_updateByteBufferAdler32:
     if (!UseAdler32Intrinsics) return true;
@@ -507,6 +511,8 @@ bool vmIntrinsics::disabled_by_jvm_flags(vmIntrinsics::ID id) {
   case vmIntrinsics::_encodeISOArray:
   case vmIntrinsics::_encodeAsciiArray:
   case vmIntrinsics::_encodeByteISOArray:
+  case vmIntrinsics::_encodeUtf8FromUtf16:
+  case vmIntrinsics::_decodeUtf8ToUtf16:
     if (!SpecialEncodeISOArray) return true;
     break;
   case vmIntrinsics::_getCallerClass:

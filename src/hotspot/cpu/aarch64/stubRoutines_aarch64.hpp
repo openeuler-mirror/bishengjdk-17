@@ -61,6 +61,11 @@ class aarch64 {
   static address _has_negatives;
   static address _has_negatives_long;
   static address _large_array_equals;
+  static address _large_arrays_hashcode_boolean;
+  static address _large_arrays_hashcode_byte;
+  static address _large_arrays_hashcode_char;
+  static address _large_arrays_hashcode_int;
+  static address _large_arrays_hashcode_short;
   static address _compare_long_string_LL;
   static address _compare_long_string_LU;
   static address _compare_long_string_UL;
@@ -78,9 +83,21 @@ class aarch64 {
 
  public:
 
+  static address _convert_masked_utf8_to_utf16;
+  static address _scalar_convert_utf8_to_utf16;
   static address get_previous_sp_entry()
   {
     return _get_previous_sp_entry;
+  }
+
+  static address scalar_convert_utf8_to_utf16()
+  {
+    return _scalar_convert_utf8_to_utf16;
+  }
+
+  static address convert_masked_utf8_to_utf16()
+  {
+    return _convert_masked_utf8_to_utf16;
   }
 
   static address f2i_fixup()
@@ -143,6 +160,25 @@ class aarch64 {
       return _large_array_equals;
   }
 
+  static address large_arrays_hashcode(BasicType eltype) {
+    switch (eltype) {
+    case T_BOOLEAN:
+      return _large_arrays_hashcode_boolean;
+    case T_BYTE:
+      return _large_arrays_hashcode_byte;
+    case T_CHAR:
+      return _large_arrays_hashcode_char;
+    case T_SHORT:
+      return _large_arrays_hashcode_short;
+    case T_INT:
+      return _large_arrays_hashcode_int;
+    default:
+      ShouldNotReachHere();
+    }
+
+    return NULL;
+  }
+
   static address compare_long_string_LL() {
       return _compare_long_string_LL;
   }
@@ -183,6 +219,14 @@ class aarch64 {
     return _spin_wait;
   }
 
+  static address pack_1_2_3_utf8_bytes_adr() { return (address)_pack_1_2_3_utf8_bytes; }
+
+  static address pack_1_2_utf8_bytes_adr() { return (address)_pack_1_2_utf8_bytes; }
+
+  static address utf8bigindex_adr() { return (address)_utf8bigindex; }
+
+  static address shufutf8_adr() { return (address)_shufutf8; }
+
   static bool complete() {
     return _completed;
   }
@@ -200,6 +244,10 @@ private:
   static jdouble   _pio2[];
   static jdouble   _dsin_coef[];
   static jdouble  _dcos_coef[];
+  static jubyte _pack_1_2_3_utf8_bytes[256][17];
+  static jubyte _pack_1_2_utf8_bytes[256][17];
+  static jubyte _shufutf8[209][16];
+  static jubyte _utf8bigindex[4096][2];
   // end trigonometric tables block
 };
 

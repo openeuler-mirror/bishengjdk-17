@@ -289,6 +289,11 @@ public:
     f(r->encoding_nocheck(), lsb + 4, lsb);
   }
 
+  // <0-15>reg: As `rf(FloatRegister)`, but only the lower 16 FloatRegisters are allowed.
+  void lrf(FloatRegister r, int lsb) {
+    f(r->encoding_nocheck(), lsb + 3, lsb);
+  }
+
   void prf(PRegister r, int lsb) {
     f(r->encoding_nocheck(), lsb + 3, lsb);
   }
@@ -698,6 +703,7 @@ public:
 #define f current_insn.f
 #define sf current_insn.sf
 #define rf current_insn.rf
+#define lrf current_insn.lrf
 #define srf current_insn.srf
 #define zrf current_insn.zrf
 #define prf current_insn.prf
@@ -1583,6 +1589,12 @@ void mvnw(Register Rd, Register Rm,
             enum shift_kind kind = LSL, unsigned shift = 0) {
   ornw(Rd, zr, Rm, kind, shift);
 }
+
+  // Load a register using a BasicType. Signed subword loads are sign-extended to 64 bits.
+  void load(Register Rt, const Address &adr, BasicType bt) {
+    int op = (is_signed_subword_type(bt) || bt == T_INT) ? 0b10 : 0b01;
+    ld_st2(Rt, adr, exact_log2(type2aelembytes(bt)), op);
+  }
 
   // Add/subtract (shifted register)
 #define INSN(NAME, size, op)                            \
@@ -2510,6 +2522,46 @@ public:
 
 #undef INSN
 
+  // AdvSIMD vector compare
+  void cm(Condition cond, FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn, FloatRegister Vm) {
+    starti;
+    assert(T != T1Q && T != T1D, "incorrect arrangement");
+    int cond_op;
+    switch (cond) {
+      case EQ: cond_op = 0b110001; break;
+      case GT: cond_op = 0b000110; break;
+      case GE: cond_op = 0b000111; break;
+      case HI: cond_op = 0b100110; break;
+      case HS: cond_op = 0b100111; break;
+      default:
+        ShouldNotReachHere();
+        break;
+    }
+
+    f(0, 31), f((int)T & 1, 30), f((cond_op >> 5) & 1, 29);
+    f(0b01110, 28, 24), f((int)T >> 1, 23, 22), f(1, 21), rf(Vm, 16);
+    f(cond_op & 0b11111, 15, 11), f(1, 10), rf(Vn, 5), rf(Vd, 0);
+  }
+
+  // AdvSIMD Floating-point vector compare
+  void fcm(Condition cond, FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn, FloatRegister Vm) {
+    starti;
+    assert(T == T2S || T == T4S || T == T2D, "invalid arrangement");
+    int cond_op;
+    switch (cond) {
+      case EQ: cond_op = 0b00; break;
+      case GT: cond_op = 0b11; break;
+      case GE: cond_op = 0b10; break;
+      default:
+        ShouldNotReachHere();
+        break;
+    }
+
+    f(0, 31), f((int)T & 1, 30), f((cond_op >> 1) & 1, 29);
+    f(0b01110, 28, 24), f(cond_op & 1, 23), f(T == T2D ? 1 : 0, 22);
+    f(1, 21), rf(Vm, 16), f(0b111001, 15, 10), rf(Vn, 5), rf(Vd, 0);
+  }
+
 #define INSN(NAME, opc)                                                                 \
   void NAME(FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn, FloatRegister Vm) { \
     starti;                                                                             \
@@ -2600,6 +2652,28 @@ public:
 
 #undef INSN
 
+#define INSN(NAME, op1, op2)                                                                       \
+  void NAME(FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn, FloatRegister Vm, int index) { \
+    starti;                                                                                        \
+    assert(T == T4H || T == T8H || T == T2S || T == T4S, "invalid arrangement");                  \
+    assert(index >= 0 &&                                                                           \
+               ((T == T2S && index <= 1) || (T != T2S && index <= 3) || (T == T8H && index <= 7)), \
+           "invalid index");                                                                       \
+    assert((T != T4H && T != T8H) || Vm->encoding_nocheck() < 16, "invalid source SIMD&FP register"); \
+    f(0, 31), f((int)T & 1, 30), f(op1, 29), f(0b01111, 28, 24);                                  \
+    if (T == T4H || T == T8H) {                                                                    \
+      f(0b01, 23, 22), f(index & 0b11, 21, 20), lrf(Vm, 16), f(index >> 2 & 1, 11);               \
+    } else {                                                                                       \
+      f(0b10, 23, 22), f(index & 1, 21), rf(Vm, 16), f(index >> 1, 11);                           \
+    }                                                                                              \
+    f(op2, 15, 12), f(0, 10), rf(Vn, 5), rf(Vd, 0);                                               \
+  }
+
+  // MUL - Vector - Scalar
+  INSN(mulvs, 0, 0b1000);
+
+#undef INSN
+
   // Floating-point Reciprocal Estimate
   void frecpe(FloatRegister Vd, FloatRegister Vn, SIMD_RegVariant type) {
     assert(type == D || type == S, "Wrong type for frecpe");
@@ -2616,6 +2690,30 @@ public:
     f(0b0101111011110001101110, 31, 10);
     rf(Vn, 5), rf(Vd, 0);
   }
+
+ protected:
+  void _xaddwv(bool is_unsigned, FloatRegister Vd, FloatRegister Vn, SIMD_Arrangement Ta,
+               FloatRegister Vm, SIMD_Arrangement Tb) {
+    starti;
+    assert((Tb >> 1) + 1 == (Ta >> 1), "Incompatible arrangement");
+    f(0, 31), f((int)Tb & 1, 30), f(is_unsigned ? 1 : 0, 29), f(0b01110, 28, 24);
+    f((int)(Ta >> 1) - 1, 23, 22), f(1, 21), rf(Vm, 16), f(0b000100, 15, 10), rf(Vn, 5), rf(Vd, 0);
+  }
+
+ public:
+#define INSN(NAME, assertion, is_unsigned)                                           \
+  void NAME(FloatRegister Vd, FloatRegister Vn, SIMD_Arrangement Ta, FloatRegister Vm, \
+            SIMD_Arrangement Tb) {                                                   \
+    assert((assertion), "invalid arrangement");                                      \
+    _xaddwv(is_unsigned, Vd, Vn, Ta, Vm, Tb);                                        \
+  }
+
+  INSN(uaddwv,  Tb == T8B || Tb == T4H || Tb == T2S,  true)
+  INSN(uaddwv2, Tb == T16B || Tb == T8H || Tb == T4S, true)
+  INSN(saddwv,  Tb == T8B || Tb == T4H || Tb == T2S,  false)
+  INSN(saddwv2, Tb == T16B || Tb == T8H || Tb == T4S, false)
+
+#undef INSN
 
   // Floating-point AdvSIMD scalar pairwise
 #define INSN(NAME, op1, op2) \
@@ -2682,7 +2780,7 @@ public:
   INSN(ushr, 1, 0b000001, /* isSHR = */ true);
   INSN(usra, 1, 0b000101, /* isSHR = */ true);
   INSN(ssra, 0, 0b000101, /* isSHR = */ true);
-
+  INSN(sli,  1, 0b010101, /* isSHR = */ false);
 #undef INSN
 
 #define INSN(NAME, opc, opc2, isSHR)                                    \
@@ -2914,6 +3012,48 @@ public:
 #undef MSG
 
 #undef INSN
+
+  // AdvSIMD compare with zero (vector)
+  void cm(Condition cond, FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn) {
+    starti;
+    assert(T != T1Q && T != T1D, "invalid arrangement");
+    int cond_op;
+    switch (cond) {
+      case EQ: cond_op = 0b001; break;
+      case GE: cond_op = 0b100; break;
+      case GT: cond_op = 0b000; break;
+      case LE: cond_op = 0b101; break;
+      case LT: cond_op = 0b010; break;
+      default:
+        ShouldNotReachHere();
+        break;
+    }
+
+    f(0, 31), f((int)T & 1, 30), f((cond_op >> 2) & 1, 29);
+    f(0b01110, 28, 24), f((int)T >> 1, 23, 22), f(0b10000010, 21, 14);
+    f(cond_op & 0b11, 13, 12), f(0b10, 11, 10), rf(Vn, 5), rf(Vd, 0);
+  }
+
+  // AdvSIMD Floating-point compare with zero (vector)
+  void fcm(Condition cond, FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn) {
+    starti;
+    assert(T == T2S || T == T4S || T == T2D, "invalid arrangement");
+    int cond_op;
+    switch (cond) {
+      case EQ: cond_op = 0b010; break;
+      case GT: cond_op = 0b000; break;
+      case GE: cond_op = 0b001; break;
+      case LE: cond_op = 0b011; break;
+      case LT: cond_op = 0b100; break;
+      default:
+        ShouldNotReachHere();
+        break;
+    }
+
+    f(0, 31), f((int)T & 1, 30), f(cond_op & 1, 29), f(0b011101, 28, 23);
+    f(((int)(T >> 1) & 1), 22), f(0b10000011, 21, 14);
+    f((cond_op >> 1) & 0b11, 13, 12), f(0b10, 11, 10), rf(Vn, 5), rf(Vd, 0);
+  }
 
   void ext(FloatRegister Vd, SIMD_Arrangement T, FloatRegister Vn, FloatRegister Vm, int index)
   {

@@ -220,8 +220,14 @@ public final class String
      */
     static final boolean COMPACT_STRINGS;
 
+    /**
+     * True if UTF Conversion intrinsics are enabled in the VM by -XX:+UseUTFConversionIntrinsics.
+     */
+    private static final boolean UTF_CONVERSION_INTRINSICS;
+
     static {
         COMPACT_STRINGS = true;
+        UTF_CONVERSION_INTRINSICS = false;
     }
 
     /**
@@ -1042,28 +1048,23 @@ public final class String
     }
 
     private static boolean isNotContinuation(int b) {
-        return (b & 0xc0) != 0x80;
+        return StringCoding.isNotContinuation(b);
     }
 
     private static boolean isMalformed3(int b1, int b2, int b3) {
-        return (b1 == (byte)0xe0 && (b2 & 0xe0) == 0x80) ||
-                (b2 & 0xc0) != 0x80 || (b3 & 0xc0) != 0x80;
+        return StringCoding.isMalformed3(b1, b2, b3);
     }
 
     private static boolean isMalformed3_2(int b1, int b2) {
-        return (b1 == (byte)0xe0 && (b2 & 0xe0) == 0x80) ||
-                (b2 & 0xc0) != 0x80;
+        return StringCoding.isMalformed3_2(b1, b2);
     }
 
     private static boolean isMalformed4(int b2, int b3, int b4) {
-        return (b2 & 0xc0) != 0x80 || (b3 & 0xc0) != 0x80 ||
-                (b4 & 0xc0) != 0x80;
+        return StringCoding.isMalformed4(b2, b3, b4);
     }
 
     private static boolean isMalformed4_2(int b1, int b2) {
-        return (b1 == 0xf0 && (b2 < 0x90 || b2 > 0xbf)) ||
-                (b1 == 0xf4 && (b2 & 0xf0) != 0x80) ||
-                (b2 & 0xc0) != 0x80;
+        return StringCoding.isMalformed4_2(b1, b2);
     }
 
     private static boolean isMalformed4_3(int b3) {
@@ -1071,32 +1072,30 @@ public final class String
     }
 
     private static char decode2(int b1, int b2) {
-        return (char)(((b1 << 6) ^ b2) ^
-                (((byte) 0xC0 << 6) ^
-                        ((byte) 0x80 << 0)));
+        return StringCoding.decode2(b1, b2);
     }
 
     private static char decode3(int b1, int b2, int b3) {
-        return (char)((b1 << 12) ^
-                (b2 <<  6) ^
-                (b3 ^
-                        (((byte) 0xE0 << 12) ^
-                                ((byte) 0x80 <<  6) ^
-                                ((byte) 0x80 <<  0))));
+        return StringCoding.decode3(b1, b2, b3);
     }
 
     private static int decode4(int b1, int b2, int b3, int b4) {
-        return ((b1 << 18) ^
-                (b2 << 12) ^
-                (b3 <<  6) ^
-                (b4 ^
-                        (((byte) 0xF0 << 18) ^
-                                ((byte) 0x80 << 12) ^
-                                ((byte) 0x80 <<  6) ^
-                                ((byte) 0x80 <<  0))));
+        return StringCoding.decode4(b1, b2, b3, b4);
     }
 
     private static int decodeUTF8_UTF16(byte[] src, int sp, int sl, byte[] dst, int dp, boolean doReplace) {
+        if (UTF_CONVERSION_INTRINSICS) {
+            // 1 attempt to intrinsic solution. If failed -> use std java method
+            int ret = StringCoding.implDecodeUtf8ToUtf16(src, sp, dst, dp, sl);
+            if (ret > 0) {
+                // ret contains dp when OK
+                return ret + dp;
+            }
+        }
+        return decodeUTF8_UTF16SlowPath(src, sp, sl, dst, dp, doReplace);
+    }
+
+    private static int decodeUTF8_UTF16SlowPath(byte[] src, int sp, int sl, byte[] dst, int dp, boolean doReplace) {
         while (sp < sl) {
             int b1 = src[sp++];
             if (b1 >= 0) {
@@ -1282,6 +1281,30 @@ public final class String
     }
 
     private static byte[] encodeUTF8_UTF16(byte[] val, boolean doReplace) {
+        if (!UTF_CONVERSION_INTRINSICS) {
+            return encodeUTF8_UTF16SlowPath(val, doReplace);
+        }
+
+        int len = val.length >> 1;
+
+        if (len < 24) {
+            return encodeUTF8_UTF16SlowPath(val, doReplace);
+        }
+
+        byte[] dst = new byte[len * 3 + 16]; // to avoid overruns on some special cases
+        // 1 attempt to intrinsic solution. If failed -> use std java method
+        int ret = StringCoding.implEncodeUtf8fromUtf16(val, 0, dst, 0, len);
+
+        if (ret <= 0) {
+            return encodeUTF8_UTF16SlowPath(val, doReplace);
+        }
+        if (ret == dst.length) {
+            return dst;
+        }
+        return Arrays.copyOf(dst, ret);
+    }
+
+    private static byte[] encodeUTF8_UTF16SlowPath(byte[] val, boolean doReplace) {
         int dp = 0;
         int sp = 0;
         int sl = val.length >> 1;

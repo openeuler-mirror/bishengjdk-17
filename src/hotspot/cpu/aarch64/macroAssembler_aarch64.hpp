@@ -1074,9 +1074,6 @@ public:
                bool acquire, bool release, bool weak,
                Register result);
 
-private:
-  void compare_eq(Register rn, Register rm, enum operand_size size);
-
 #ifdef ASSERT
   // Template short-hand support to clean-up after a failed call to trampoline
   // call generation (see trampoline_call() below),  when a set of Labels must
@@ -1090,6 +1087,9 @@ private:
     lbl.reset();
   }
 #endif
+
+private:
+  void compare_eq(Register rn, Register rm, enum operand_size size);
 
 public:
   // Calls
@@ -1267,6 +1267,24 @@ public:
   address arrays_equals(Register a1, Register a2, Register result, Register cnt1,
                         Register tmp1, Register tmp2, Register tmp3, int elem_size);
 
+// Ensure that the inline code and the stub use the same registers.
+#define ARRAYS_HASHCODE_REGISTERS \
+  do {                            \
+    assert(result == r0  &&       \
+           ary    == r1  &&       \
+           cnt    == r2  &&       \
+           vdata0 == v3  &&       \
+           vdata1 == v2  &&       \
+           vdata2 == v1  &&       \
+           vdata3 == v0  &&       \
+           vmul0  == v4  &&       \
+           vmul1  == v5  &&       \
+           vmul2  == v6  &&       \
+           vmul3  == v7  &&       \
+           vpow   == v12 &&       \
+           vpowm  == v13, "registers must match aarch64.ad"); \
+  } while (0)
+
   void string_equals(Register a1, Register a2, Register result, Register cnt1,
                      int elem_size);
 
@@ -1292,6 +1310,22 @@ public:
                         FloatRegister vtmp0, FloatRegister vtmp1,
                         FloatRegister vtmp2, FloatRegister vtmp3,
                         FloatRegister vtmp4, FloatRegister vtmp5);
+
+  void encode_utf8_from_utf16(Register src, Register dst,
+                          Register len, Register res,
+                          FloatRegister vtmp0, FloatRegister vtmp1,
+                          FloatRegister vtmp2, FloatRegister vtmp3,
+                          FloatRegister vtmp4, FloatRegister vtmp5,
+                          FloatRegister vtmp6, FloatRegister vtmp7,
+                          FloatRegister vtmp8, FloatRegister vtmp9);
+
+  void decode_utf8_to_utf16(Register src, Register dst,
+                          Register len, Register res,
+                          FloatRegister vtmp0, FloatRegister vtmp1,
+                          FloatRegister vtmp2, FloatRegister vtmp3,
+                          FloatRegister vtmp4, FloatRegister vtmp5,
+                          FloatRegister vtmp6, FloatRegister vtmp7,
+                          FloatRegister vtmp8, FloatRegister vtmp9, FloatRegister vtmp10);
 
   void fast_log(FloatRegister vtmp0, FloatRegister vtmp1, FloatRegister vtmp2,
                 FloatRegister vtmp3, FloatRegister vtmp4, FloatRegister vtmp5,

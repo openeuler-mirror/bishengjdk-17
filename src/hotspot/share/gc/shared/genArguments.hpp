@@ -26,7 +26,9 @@
 #define SHARE_GC_SHARED_GENARGUMENTS_HPP
 
 #include "gc/shared/gcArguments.hpp"
+#include "gc/shared/gc_globals.hpp"
 #include "utilities/debug.hpp"
+#include "memory/universe.hpp"
 
 extern size_t MinNewSize;
 
@@ -36,6 +38,7 @@ extern size_t MaxOldSize;
 extern size_t GenAlignment;
 
 class GenArguments : public GCArguments {
+  friend class PS_ChangeMaxHeapOp;
   friend class TestGenCollectorPolicy; // Testing
 private:
   virtual void initialize_alignments();
@@ -51,6 +54,18 @@ private:
 
 protected:
   virtual void initialize_heap_flags_and_sizes();
+public:
+  //dynamic max heap size
+  static size_t max_old_size(size_t size) {
+    if (Universe::is_dynamic_max_heap_enable()) {
+      size_t young_limit = scale_by_NewRatio_aligned(size, GenAlignment);
+      young_limit = MAX3(young_limit, MinNewSize, NewSize);
+      size_t old_limit = size - young_limit;
+      guarantee(old_limit >= MinOldSize && old_limit >= OldSize, "must be");
+      return old_limit;
+    }
+    return MaxOldSize;
+  }
 };
 
 #endif // SHARE_GC_SHARED_GENARGUMENTS_HPP

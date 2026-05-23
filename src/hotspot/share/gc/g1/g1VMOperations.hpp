@@ -27,6 +27,7 @@
 
 #include "gc/shared/gcId.hpp"
 #include "gc/shared/gcVMOperations.hpp"
+#include "gc/shared/dynamicMaxHeap.hpp"
 
 // VM_operations for the G1 collector.
 
@@ -111,6 +112,17 @@ public:
   VM_G1PauseCleanup() : VM_G1PauseConcurrent("Pause Cleanup") { }
   VMOp_Type type() const override { return VMOp_G1PauseCleanup; }
   void work() override;
+};
+
+// Change Dynamic Max Heap Size
+class G1_ChangeMaxHeapOp : public VM_ChangeMaxHeapOp {
+public:
+  G1_ChangeMaxHeapOp(size_t new_max_heap);
+  void doit() override;
+  void trigger_gc_shrink(size_t _new_max_heap,
+                   double maximum_used_percentage,
+                   size_t max_heap_size);
+  void g1_shrink_without_full_gc(size_t _new_max_heap);
 };
 
 #endif // SHARE_GC_G1_G1VMOPERATIONS_HPP

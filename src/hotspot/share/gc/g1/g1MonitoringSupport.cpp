@@ -315,6 +315,14 @@ void G1MonitoringSupport::update_eden_size() {
   }
 }
 
+void G1MonitoringSupport::update_max_sizes(size_t size) {
+  if (UsePerfData) {
+    _young_gen_counters->update_max_size(size);
+    _old_gen_counters->update_max_size(size);
+    update_sizes();
+  }
+}
+
 MemoryUsage G1MonitoringSupport::eden_space_memory_usage(size_t initial_size, size_t max_size) {
   MutexLocker x(MonitoringSupport_lock, Mutex::_no_safepoint_check_flag);
 

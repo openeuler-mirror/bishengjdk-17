@@ -85,6 +85,9 @@ class HeapRegionManager: public CHeapObj<mtGC> {
   // Internal only. The highest heap region +1 we allocated a HeapRegion instance for.
   uint _allocated_heapregions_length;
 
+  // The max number of regions controlled by Dynamic Max Heap
+  uint _dynamic_max_heap_length;
+
   HeapWord* heap_bottom() const { return _regions.bottom_address_mapped(); }
   HeapWord* heap_end() const {return _regions.end_address_mapped(); }
 
@@ -234,7 +237,12 @@ public:
   }
 
   // Return the number of regions available (uncommitted) regions.
-  uint available() const { return max_length() - length(); }
+  uint available() const {
+    if(Universe::is_dynamic_max_heap_enable()) {
+      return dynamic_max_heap_length() - length();
+    }
+    return max_length() - length();
+  }
 
   // Return the number of regions currently active and available for use.
   uint length() const { return _committed_map.num_active(); }
@@ -244,6 +252,14 @@ public:
 
   // Return maximum number of regions that heap can expand to.
   uint max_length() const { return reserved_length(); }
+
+  // Return the current maximum number of regions in the heap (dynamic max heap).
+  uint dynamic_max_heap_length() const { return _dynamic_max_heap_length; }
+
+  void set_dynamic_max_heap_length(uint len) {
+    guarantee(len <= max_length(), "must be");
+    _dynamic_max_heap_length = len;
+  }
 
   MemoryUsage get_auxiliary_data_memory_usage() const;
 

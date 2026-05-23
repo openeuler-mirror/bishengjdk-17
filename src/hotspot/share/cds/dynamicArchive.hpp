@@ -41,6 +41,9 @@ class DynamicArchiveHeader : public FileMapHeader {
   friend class CDSOffsets;
 private:
   int _base_header_crc;
+#if INCLUDE_AGGRESSIVE_CDS
+  int _program_crc;
+#endif // INCLUDE_AGGRESSIVE_CDS
   int _base_region_crc[MetaspaceShared::n_regions];
 
 public:
@@ -51,6 +54,11 @@ public:
   }
 
   void set_base_header_crc(int c) { _base_header_crc = c; }
+#if INCLUDE_AGGRESSIVE_CDS
+  int program_crc() const { return _program_crc; }
+  void set_program_crc(int c) { _program_crc = c; }
+  static int get_current_program_crc();
+#endif // INCLUDE_AGGRESSIVE_CDS
   void set_base_region_crc(int i, int c) {
     assert(is_valid_region(i), "must be");
     _base_region_crc[i] = c;

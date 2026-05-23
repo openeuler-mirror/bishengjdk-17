@@ -99,6 +99,8 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "Avoid generating unaligned memory accesses")                 \
   product(bool, UseLSE, false,                                          \
           "Use LSE instructions")                                       \
+  product(bool, UseLSEPrefetch, false,                                  \
+          "Prefetch before lock-related LSE instructions (CAS)")        \
   product(uint, UseSVE, 0,                                              \
           "Highest supported SVE instruction set version")              \
           range(0, 2)                                                   \
@@ -199,6 +201,26 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "including prefix=<id> and div=<N>.")                         \
   product(bool, UseStlrForRelease, false,                               \
           "Use stlr instead of dmb ish + str for release stores")       \
+  product(bool, UseUTFConversionIntrinsics, false,                      \
+          "Use Intrinsics for conversion between UTF8 and UTF16")       \
+                                                                        \
+  product(size_t, DynamicMaxHeapSizeLimit, ScaleForWordSize(96*M),      \
+          "The limit of Dynamic maximum heap size (in bytes)")          \
+                                                                        \
+  product(uintx, DynamicMaxHeapShrinkMinFreeRatio, 40,                  \
+          "Minimal ratio of free bytes after dynamic max heap shirnk")  \
+                                                                        \
+  product(size_t, ElasticMaxHeapSize, ScaleForWordSize(96*M),           \
+          "Elastic maximum heap size (in bytes)")                       \
+                                                                        \
+  product(bool, ElasticMaxHeap, false,                                  \
+          "Allow change max heap size during runtime with jcmd")        \
+                                                                        \
+  product(bool, TraceElasticMaxHeap, false,                             \
+          "Trace Elastic Max Heap adjustion logs and failure reasons")  \
+                                                                        \
+  product(uintx, ElasticMaxHeapShrinkMinFreeRatio, 40,                  \
+          "minimal ratio of free bytes after elastic max heap shirnk")  \
 
 // end of ARCH_FLAGS
 

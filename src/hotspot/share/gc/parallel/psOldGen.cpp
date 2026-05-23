@@ -36,11 +36,13 @@
 #include "oops/oop.inline.hpp"
 #include "runtime/java.hpp"
 #include "utilities/align.hpp"
+#include "memory/universe.hpp"
 
 PSOldGen::PSOldGen(ReservedSpace rs, size_t initial_size, size_t min_size,
                    size_t max_size, const char* perf_data_name, int level):
   _min_gen_size(min_size),
-  _max_gen_size(max_size)
+  _max_gen_size(Universe::is_dynamic_max_heap_enable() ? rs.size() : max_size),
+  _cur_max_gen_size(Universe::is_dynamic_max_heap_enable() ? max_size : -1)
 {
   initialize(rs, initial_size, GenAlignment, perf_data_name, level);
 }
@@ -52,7 +54,7 @@ void PSOldGen::initialize(ReservedSpace rs, size_t initial_size, size_t alignmen
 
   // The old gen can grow to max_gen_size().  _reserve reflects only
   // the current maximum that can be committed.
-  assert(_reserved.byte_size() <= max_gen_size(), "Consistency check");
+  assert(_reserved.byte_size() <= max_gen_size() || Universe::is_dynamic_max_heap_enable(), "Consistency check");
 
   initialize_performance_counters(perf_data_name, level);
 }
@@ -62,6 +64,9 @@ void PSOldGen::initialize_virtual_space(ReservedSpace rs,
                                         size_t alignment) {
 
   _virtual_space = new PSVirtualSpace(rs, alignment);
+  if (Universe::is_dynamic_max_heap_enable()) {
+    _virtual_space->set_dynamic_max_heap_size(_cur_max_gen_size);
+  }
   if (!_virtual_space->expand_by(initial_size)) {
     vm_exit_during_initialization("Could not reserve enough space for "
                                   "object heap");
@@ -314,7 +319,7 @@ void PSOldGen::resize(size_t desired_free_space) {
   // Adjust according to our min and max
   new_size = clamp(new_size, min_gen_size(), max_gen_size());
 
-  assert(max_gen_size() >= reserved().byte_size(), "max new size problem?");
+  assert(max_gen_size() >= reserved().byte_size() || Universe::is_dynamic_max_heap_enable(), "max new size problem?");
   new_size = align_up(new_size, alignment);
 
   const size_t current_size = capacity_in_bytes();

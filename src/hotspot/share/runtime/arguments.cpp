@@ -31,6 +31,7 @@
 #include "classfile/stringTable.hpp"
 #include "classfile/symbolTable.hpp"
 #include "compiler/compilerDefinitions.hpp"
+#include "gc/shared/dynamicMaxHeap.hpp"
 #include "gc/shared/gcArguments.hpp"
 #include "gc/shared/gcConfig.hpp"
 #include "gc/shared/stringdedup/stringDedup.hpp"
@@ -40,6 +41,7 @@
 #include "logging/logStream.hpp"
 #include "logging/logTag.hpp"
 #include "memory/allocation.inline.hpp"
+#include "memory/universe.hpp"
 #include "oops/oop.inline.hpp"
 #include "prims/jvmtiExport.hpp"
 #include "runtime/arguments.hpp"
@@ -1543,6 +1545,20 @@ void Arguments::set_use_compressed_oops() {
   // to use UseCompressedOops are InitialHeapSize and MinHeapSize.
   size_t max_heap_size = MAX3(MaxHeapSize, InitialHeapSize, MinHeapSize);
 
+#ifdef AARCH64
+  // DynamicMaxHeap
+  // 1. align DynamicMaxHeapSizeLimit
+  // 2. use DynamicMaxHeapSizeLimit to check whether compressedOops can enabled
+  bool dynamic_max_heap_enable = DynamicMaxHeapChecker::check_dynamic_max_heap_size_limit();
+  if (dynamic_max_heap_enable) {
+     Universe::set_dynamic_max_heap_enable(true);
+     DynamicMaxHeapConfig::set_initial_max_heap_size((size_t)MaxHeapSize);
+     size_t _heap_alignment = GCArguments::compute_heap_alignment();
+     uintx aligned_max_heap_size_limit = align_up(DynamicMaxHeapSizeLimit, _heap_alignment);
+     FLAG_SET_ERGO(DynamicMaxHeapSizeLimit, aligned_max_heap_size_limit);
+     max_heap_size = MAX2(max_heap_size, DynamicMaxHeapSizeLimit);
+  }
+#endif // AARCH64
   if (max_heap_size <= max_heap_for_compressed_oops()) {
     if (FLAG_IS_DEFAULT(UseCompressedOops)) {
       FLAG_SET_ERGO(UseCompressedOops, true);
@@ -3621,6 +3637,46 @@ jint Arguments::set_shared_spaces_flags_and_archive_paths() {
 
 #if INCLUDE_CDS
 // Sharing support
+
+static bool is_same_default_archive_path(const char* jvm_path, const char* archive_path, const char* name) {
+  stringStream path;
+  path.print("%s%s%s", jvm_path, os::file_separator(), name);
+  return os::same_files(path.base(), archive_path);
+}
+
+bool Arguments::is_default_archive_path(const char* archive_path) {
+  if (archive_path == NULL) {
+    return false;
+  }
+
+  char jvm_path[JVM_MAXPATHLEN];
+  os::jvm_path(jvm_path, sizeof(jvm_path));
+  char *end = strrchr(jvm_path, *os::file_separator());
+  if (end != NULL) *end = '\0';
+
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes.jsa")) {
+    return true;
+  }
+
+#ifdef _LP64
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes_nocoops.jsa")) {
+    return true;
+  }
+
+#ifdef AARCH64
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes_coh.jsa")) {
+    return true;
+  }
+
+  if (is_same_default_archive_path(jvm_path, archive_path, "classes_nocoops_coh.jsa")) {
+    return true;
+  }
+#endif // AARCH64
+#endif // _LP64
+
+  return false;
+}
+
 // Construct the path to the archive
 char* Arguments::get_default_shared_archive_path() {
   char *default_archive_path;
@@ -3700,6 +3756,12 @@ bool Arguments::init_shared_archive_paths() {
       return false;
     }
     check_unsupported_dumping_properties();
+
+    if (is_default_archive_path(ArchiveClassesAtExit)) {
+      vm_exit_during_initialization(
+        "Cannot specify the default CDS archive for -XX:ArchiveClassesAtExit", ArchiveClassesAtExit);
+    }
+
     SharedDynamicArchivePath = os::strdup_check_oom(ArchiveClassesAtExit, mtArguments);
   } else {
     if (SharedDynamicArchivePath != nullptr) {

@@ -78,6 +78,20 @@ Node* StrInflatedCopyNode::Ideal(PhaseGVN* phase, bool can_reshape) {
   return remove_dead_region(phase, can_reshape) ? this : nullptr;
 }
 
+uint VectorizedHashCodeNode::match_edge(uint idx) const {
+  // Do not match memory edge.
+  return idx >= 2 && idx <= 5; // VectorizedHashCodeNode (Binary ary1 cnt1) (Binary result bt)
+}
+
+Node* VectorizedHashCodeNode::Ideal(PhaseGVN* phase, bool can_reshape) {
+  return remove_dead_region(phase, can_reshape) ? this : nullptr;
+}
+
+const Type* VectorizedHashCodeNode::Value(PhaseGVN* phase) const {
+  if (in(0) && phase->type(in(0)) == Type::TOP) return Type::TOP;
+  return bottom_type();
+}
+
 //=============================================================================
 //------------------------------match_edge-------------------------------------
 // Do not match memory edge
@@ -98,6 +112,46 @@ const Type* EncodeISOArrayNode::Value(PhaseGVN* phase) const {
   return bottom_type();
 }
 
+//=============================================================================
+//------------------------------match_edge-------------------------------------
+// Do not match memory edge
+uint EncodeUtf8FromUtf16Node::match_edge(uint idx) const {
+  return idx == 2 || idx == 3; // EncodeUtf8FromUtf16 src (Binary dst len)
+}
+
+//------------------------------Ideal------------------------------------------
+// Return a node which is more "ideal" than the current node.  Strip out
+// control copies
+Node* EncodeUtf8FromUtf16Node::Ideal(PhaseGVN* phase, bool can_reshape) {
+  return remove_dead_region(phase, can_reshape) ? this : nullptr;
+}
+
+//------------------------------Value------------------------------------------
+const Type* EncodeUtf8FromUtf16Node::Value(PhaseGVN* phase) const {
+  if (in(0) && phase->type(in(0)) == Type::TOP) return Type::TOP;
+  return bottom_type();
+}
+
+//=============================================================================
+//------------------------------match_edge-------------------------------------
+// Do not match memory edge
+uint DecodeUtf8ToUtf16Node::match_edge(uint idx) const {
+  return idx == 2 || idx == 3; // DecodeUtf8ToUtf16 src (Binary dst len)
+}
+
+//------------------------------Ideal------------------------------------------
+// Return a node which is more "ideal" than the current node.  Strip out
+// control copies
+Node* DecodeUtf8ToUtf16Node::Ideal(PhaseGVN* phase, bool can_reshape) {
+  return remove_dead_region(phase, can_reshape) ? this : nullptr;
+}
+
+//------------------------------Value------------------------------------------
+const Type* DecodeUtf8ToUtf16Node::Value(PhaseGVN* phase) const {
+  if (in(0) && phase->type(in(0)) == Type::TOP) return Type::TOP;
+  return bottom_type();
+}
+
 //------------------------------CopySign-----------------------------------------
 CopySignDNode* CopySignDNode::make(PhaseGVN& gvn, Node* in1, Node* in2) {
   return new CopySignDNode(in1, in2, gvn.makecon(TypeD::ZERO));
@@ -111,4 +165,3 @@ SignumDNode* SignumDNode::make(PhaseGVN& gvn, Node* in) {
 SignumFNode* SignumFNode::make(PhaseGVN& gvn, Node* in) {
   return new SignumFNode(in, gvn.makecon(TypeF::ZERO), gvn.makecon(TypeF::ONE));
 }
-

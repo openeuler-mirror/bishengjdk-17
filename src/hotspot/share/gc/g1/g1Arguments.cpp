@@ -35,6 +35,7 @@
 #include "runtime/globals.hpp"
 #include "runtime/globals_extension.hpp"
 #include "runtime/java.hpp"
+#include "memory/universe.hpp"
 
 static size_t calculate_heap_alignment(size_t space_alignment) {
   size_t card_table_alignment = CardTableRS::ct_max_alignment_constraint();
@@ -48,7 +49,17 @@ void G1Arguments::initialize_alignments() {
   // There is a circular dependency here. We base the region size on the heap
   // size, but the heap size should be aligned with the region size. To get
   // around this we use the unaligned values for the heap.
-  HeapRegion::setup_heap_region_size(MaxHeapSize);
+  if (Universe::is_dynamic_max_heap_enable()) {
+#ifdef AARCH64
+    if (!FLAG_IS_CMDLINE(DynamicMaxHeapSizeLimit) && !FLAG_IS_CMDLINE(ElasticMaxHeapSize)) {
+      guarantee(ElasticMaxHeap, "must be");
+      FLAG_SET_ERGO(DynamicMaxHeapSizeLimit, MaxHeapSize);
+    }
+    HeapRegion::setup_heap_region_size(DynamicMaxHeapSizeLimit);
+#endif //AARCH64
+  } else {
+    HeapRegion::setup_heap_region_size(MaxHeapSize);
+  }
 
   // The remembered set needs the heap regions set up.
   HeapRegionRemSet::setup_remset_size();
@@ -207,6 +218,11 @@ CollectedHeap* G1Arguments::create_heap() {
 }
 
 size_t G1Arguments::heap_reserved_size_bytes() {
+#ifdef AARCH64
+  if (Universe::is_dynamic_max_heap_enable()) {
+    return DynamicMaxHeapSizeLimit;
+  }
+#endif //AARCH64
   return MaxHeapSize;
 }
 

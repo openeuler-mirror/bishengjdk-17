@@ -1866,7 +1866,9 @@ void FileMapInfo::map_heap_regions_impl() {
       log_info(cds)("the desired range " PTR_FORMAT " - "  PTR_FORMAT, p2i(range.start()), p2i(range.end()));
       log_info(cds)("is outside of the heap " PTR_FORMAT " - "  PTR_FORMAT, p2i(CompressedOops::begin()), p2i(CompressedOops::end()));
       _heap_pointers_need_patching = true;
-    } else if (header()->heap_end() != CompressedOops::end()) {
+    } else if (Universe::is_dynamic_max_heap_enable()
+               ? header()->heap_end() != CompressedOops::begin() + MaxHeapSize
+               : header()->heap_end() != CompressedOops::end()) {
       log_info(cds)("CDS heap data needs to be relocated to the end of the runtime heap to reduce fragmentation");
       _heap_pointers_need_patching = true;
     }
@@ -1885,6 +1887,9 @@ void FileMapInfo::map_heap_regions_impl() {
     // the simple math of adding the delta as shown above.
     address dumptime_heap_end = header()->heap_end();
     address runtime_heap_end = CompressedOops::end();
+    if (Universe::is_dynamic_max_heap_enable()) {
+      runtime_heap_end = CompressedOops::begin() + MaxHeapSize;
+    }
     delta = runtime_heap_end - dumptime_heap_end;
   }
 
@@ -2231,6 +2236,50 @@ int FileMapHeader::compute_crc() {
   int crc = ClassLoader::crc32(0, buf, (jint)sz);
   return crc;
 }
+
+#if INCLUDE_AGGRESSIVE_CDS
+int DynamicArchiveHeader::get_current_program_crc() {
+  int cur_crc = 0;
+  const char* full_cmd = Arguments::java_command();
+  if (full_cmd == NULL) {
+    return 0;
+  }
+  const char* main_path = Arguments::get_appclasspath();
+  if (main_path == NULL || main_path[0] == '\0') {
+    // No appclasspath (e.g. -m / --module main, or no -cp specified) - nothing to CRC.
+    return 0;
+  }
+  int main_path_len = (int) strlen(main_path);
+  bool is_jar_file = strncmp(full_cmd, main_path, main_path_len) == 0;
+  if (!is_jar_file) {
+    return 0;
+  }
+
+  int fd = os::open(main_path, O_RDONLY | O_BINARY, 0);
+  if (fd < 0) {
+    return 0;
+  }
+
+  uint32_t file_size = (uint32_t) os::lseek(fd, 0, SEEK_END);
+  os::lseek(fd, 0, SEEK_SET);
+  uint32_t max_size = 40 * 1024 * 1024; // 40M
+
+  ResourceMark rm;
+  char* buf = NEW_RESOURCE_ARRAY(char, max_size);
+
+  while (file_size) {
+    uint32_t size = MIN2(max_size, file_size);
+    ssize_t n = os::read(fd, buf, (unsigned int) size);
+    if (n <= 0) {
+      break;
+    }
+    file_size -= (uint32_t) n;
+    cur_crc = ClassLoader::crc32(cur_crc, buf, (int) n);
+  }
+  os::close(fd);
+  return cur_crc;
+}
+#endif // INCLUDE_AGGRESSIVE_CDS
 
 // This function should only be called during run time with UseSharedSpaces enabled.
 bool FileMapHeader::validate() {

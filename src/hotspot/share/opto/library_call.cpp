@@ -309,6 +309,7 @@ bool LibraryCallKit::try_to_inline(int predicate) {
 
   case vmIntrinsics::_equalsL:                  return inline_string_equals(StrIntrinsicNode::LL);
   case vmIntrinsics::_equalsU:                  return inline_string_equals(StrIntrinsicNode::UU);
+  case vmIntrinsics::_vectorizedHashCode:       return inline_vectorizedHashCode();
 
   case vmIntrinsics::_toBytesStringU:           return inline_string_toBytesU();
   case vmIntrinsics::_getCharsStringU:          return inline_string_getCharsU();
@@ -592,7 +593,10 @@ bool LibraryCallKit::try_to_inline(int predicate) {
     return inline_encodeISOArray(false);
   case vmIntrinsics::_encodeAsciiArray:
     return inline_encodeISOArray(true);
-
+  case vmIntrinsics::_encodeUtf8FromUtf16:
+    return inline_encodeUtf8FromUtf16();
+  case vmIntrinsics::_decodeUtf8ToUtf16:
+    return inline_decodeUtf8ToUtf16();
   case vmIntrinsics::_updateCRC32:
     return inline_updateCRC32();
   case vmIntrinsics::_updateBytesCRC32:
@@ -4988,6 +4992,98 @@ bool LibraryCallKit::inline_encodeISOArray(bool ascii) {
   return true;
 }
 
+//-------------inline_encodeUtf8FromUtf16-----------------------------------
+// encode char[] to byte[] in UTF8
+bool LibraryCallKit::inline_encodeUtf8FromUtf16() {
+  assert(callee()->signature()->size() == 5, "encodeUtf8FromUtf16 has 5 parameters");
+  // no receiver since it is static method
+  Node *src         = argument(0);
+  Node *src_offset  = argument(1);
+  Node *dst         = argument(2);
+  Node *dst_offset  = argument(3);
+  Node *length      = argument(4);
+
+  src = must_be_not_null(src, true);
+  dst = must_be_not_null(dst, true);
+
+  const TypeAryPtr* src_type = src->Value(&_gvn)->isa_aryptr();
+  const TypeAryPtr* dst_type = dst->Value(&_gvn)->isa_aryptr();
+  if (src_type == nullptr || src_type->elem() == Type::BOTTOM ||
+      dst_type == nullptr || dst_type->elem() == Type::BOTTOM) {
+    // failed array check
+    return false;
+  }
+
+  // Figure out the size and type of the elements we will be copying.
+  BasicType src_elem = src_type->elem()->array_element_basic_type();
+  BasicType dst_elem = dst_type->elem()->array_element_basic_type();
+  if (!((src_elem == T_CHAR) || (src_elem== T_BYTE)) || dst_elem != T_BYTE) {
+    return false;
+  }
+
+  Node* src_start = array_element_address(src, src_offset, T_CHAR);
+  Node* dst_start = array_element_address(dst, dst_offset, dst_elem);
+  // 'src_start' points to src array + scaled offset
+  // 'dst_start' points to dst array + scaled offset
+
+  const TypeAryPtr* mtype = TypeAryPtr::BYTES;
+  Node* enc = new EncodeUtf8FromUtf16Node(control(), memory(mtype), src_start, dst_start, length);
+  enc = _gvn.transform(enc);
+  Node* res_mem = _gvn.transform(new SCMemProjNode(enc));
+  set_memory(res_mem, mtype);
+  set_result(enc);
+  clear_upper_avx();
+
+  return true;
+}
+
+//-------------inline_decodeUtf8ToUtf16-----------------------------------
+// decode byte[] to char[] in UTF16
+bool LibraryCallKit::inline_decodeUtf8ToUtf16() {
+  assert(callee()->signature()->size() == 5, "decodeUtf8ToUtf16 has 5 parameters");
+  // no receiver since it is static method
+  Node *src         = argument(0);
+  Node *src_offset  = argument(1);
+  Node *dst         = argument(2);
+  Node *dst_offset  = argument(3);
+  Node *length      = argument(4);
+
+  src = must_be_not_null(src, true);
+  dst = must_be_not_null(dst, true);
+
+  Node* new_length = _gvn.transform(new SubINode(length, src_offset));
+
+  const TypeAryPtr* src_type = src->Value(&_gvn)->isa_aryptr();
+  const TypeAryPtr* dst_type = dst->Value(&_gvn)->isa_aryptr();
+  if (src_type == nullptr || src_type->elem() == Type::BOTTOM ||
+      dst_type == nullptr || dst_type->elem() == Type::BOTTOM) {
+    // failed array check
+    return false;
+  }
+
+  // Figure out the size and type of the elements we will be copying.
+  BasicType src_elem = src_type->elem()->array_element_basic_type();
+  BasicType dst_elem = dst_type->elem()->array_element_basic_type();
+  if (!((src_elem == T_CHAR) || (src_elem== T_BYTE)) || !(dst_elem == T_CHAR || dst_elem == T_BYTE)) {
+    return false;
+  }
+
+  Node* src_start = array_element_address(src, src_offset, src_elem);
+  Node* dst_start = array_element_address(dst, dst_offset, T_CHAR);
+  // 'src_start' points to src array + scaled offset
+  // 'dst_start' points to dst array + scaled offset
+
+  const TypeAryPtr* mtype = TypeAryPtr::BYTES;
+  Node* enc = new DecodeUtf8ToUtf16Node(control(), memory(mtype), src_start, dst_start, new_length);
+  enc = _gvn.transform(enc);
+  Node* res_mem = _gvn.transform(new SCMemProjNode(enc));
+  set_memory(res_mem, mtype);
+  set_result(enc);
+  clear_upper_avx();
+
+  return true;
+}
+
 //-------------inline_multiplyToLen-----------------------------------
 bool LibraryCallKit::inline_multiplyToLen() {
   assert(UseMultiplyToLenIntrinsic, "not implemented on this platform");
@@ -5494,6 +5590,37 @@ bool LibraryCallKit::inline_vectorizedMismatch() {
   set_control(exit_block);
   set_all_memory(memory_phi);
   set_result(result_phi);
+
+  return true;
+}
+
+//------------------------------inline_vectorizedHashCode----------------------------
+bool LibraryCallKit::inline_vectorizedHashCode() {
+  assert(UseVectorizedHashCodeIntrinsic, "not implemented on this platform");
+
+  assert(callee()->signature()->size() == 5, "vectorizedHashCode has 5 parameters");
+  Node* array = argument(0);
+  Node* offset = argument(1);
+  Node* length = argument(2);
+  Node* initialValue = argument(3);
+  Node* basic_type = argument(4);
+
+  array = must_be_not_null(array, true);
+  if (basic_type == top()) {
+    return false;
+  }
+
+  const TypeInt* basic_type_t = _gvn.type(basic_type)->is_int();
+  if (!basic_type_t->is_con()) {
+    return false;
+  }
+  BasicType bt = (BasicType) basic_type_t->get_con();
+
+  Node* array_start = array_element_address(array, offset, bt);
+
+  set_result(_gvn.transform(new VectorizedHashCodeNode(control(), memory(TypeAryPtr::get_array_body_type(bt)),
+                                                       array_start, length, initialValue, basic_type)));
+  clear_upper_avx();
 
   return true;
 }

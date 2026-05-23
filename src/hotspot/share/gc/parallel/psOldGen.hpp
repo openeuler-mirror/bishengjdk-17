@@ -30,6 +30,7 @@
 #include "gc/parallel/psGenerationCounters.hpp"
 #include "gc/parallel/psVirtualspace.hpp"
 #include "gc/parallel/spaceCounters.hpp"
+#include "memory/universe.hpp"
 #include "runtime/safepoint.hpp"
 
 class PSOldGen : public CHeapObj<mtGC> {
@@ -48,6 +49,9 @@ class PSOldGen : public CHeapObj<mtGC> {
   // Sizing information, in bytes, set in constructor
   const size_t _min_gen_size;
   const size_t _max_gen_size;
+
+  // For Dynamic Max Heap
+  size_t _cur_max_gen_size;
 
   // Block size for parallel iteration
   static const size_t IterateBlockSize = 1024 * 1024;
@@ -100,8 +104,26 @@ class PSOldGen : public CHeapObj<mtGC> {
            size_t max_size, const char* perf_data_name, int level);
 
   MemRegion reserved() const { return _reserved; }
-  size_t max_gen_size() const { return _max_gen_size; }
+  size_t max_gen_size() const {
+    if (Universe::is_dynamic_max_heap_enable()) {
+      guarantee(_cur_max_gen_size <= _max_gen_size && _cur_max_gen_size >= _min_gen_size, "must be");
+      return _cur_max_gen_size;
+    }
+    return _max_gen_size;
+  }
   size_t min_gen_size() const { return _min_gen_size; }
+
+  // Dynamic Max Heap
+  void set_cur_max_gen_size(size_t new_size) {
+    guarantee(Universe::is_dynamic_max_heap_enable(), "must be");
+    guarantee(new_size <= _max_gen_size && new_size >= _min_gen_size, "must be");
+    guarantee(_max_gen_size == _virtual_space->reserved_size(), "must be");
+    _cur_max_gen_size = new_size;
+    _virtual_space->set_dynamic_max_heap_size(new_size);
+    if (UsePerfData) {
+      _gen_counters->update_max_size(new_size);
+    }
+  }
 
   bool is_in(const void* p) const           {
     return _virtual_space->contains((void *)p);

@@ -92,7 +92,7 @@ public class TestMaxRAMFlags {
   }
 
   private static String getFlagValue(String flag, String where) {
-    Matcher m = Pattern.compile(flag + "\\s+:?=\\s+\\d+").matcher(where);
+    Matcher m = Pattern.compile("\\s+" + flag + "\\s+:?=\\s+\\d+").matcher(where);
     if (!m.find()) {
       throw new RuntimeException("Could not find value for flag " + flag + " in output string");
     }

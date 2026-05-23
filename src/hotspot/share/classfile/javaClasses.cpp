@@ -269,6 +269,30 @@ void java_lang_String::set_compact_strings(bool value) {
   vmClasses::String_klass()->do_local_static_fields(&fix);
 }
 
+#ifdef AARCH64
+class UTFConversionIntrinsicsFixup : public FieldClosure {
+private:
+  bool _value;
+
+public:
+  UTFConversionIntrinsicsFixup(bool value) : _value(value) {}
+
+  void do_field(fieldDescriptor* fd) {
+    if (fd->name() == vmSymbols::utf_conversion_intrinsics_name()) {
+      oop mirror = fd->field_holder()->java_mirror();
+      assert(fd->field_holder() == vmClasses::String_klass(), "Should be String");
+      assert(mirror != NULL, "String must have mirror already");
+      mirror->bool_field_put(fd->offset(), _value);
+    }
+  }
+};
+
+void java_lang_String::set_utf_conversion_intrinsics(bool value) {
+  UTFConversionIntrinsicsFixup fix(value);
+  vmClasses::String_klass()->do_local_static_fields(&fix);
+}
+#endif // AARCH64
+
 Handle java_lang_String::basic_create(int length, bool is_latin1, TRAPS) {
   assert(_initialized, "Must be initialized");
   assert(CompactStrings || !is_latin1, "Must be UTF16 without CompactStrings");

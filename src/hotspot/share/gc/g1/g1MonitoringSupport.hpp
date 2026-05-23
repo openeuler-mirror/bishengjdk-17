@@ -208,6 +208,9 @@ public:
   // counters accordingly.
   void update_sizes();
 
+  // Dynamic Max Heap
+  void update_max_sizes(size_t size);
+
   void update_eden_size();
 
   CollectorCounters* conc_collection_counters() {

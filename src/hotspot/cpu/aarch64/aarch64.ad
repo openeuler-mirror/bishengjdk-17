@@ -17223,6 +17223,32 @@ instruct array_equalsC(iRegP_R1 ary1, iRegP_R2 ary2, iRegI_R0 result,
   ins_pipe(pipe_class_memory);
 %}
 
+instruct arrays_hashcode(iRegP_R1 ary, iRegI_R2 cnt, iRegI_R0 result, immI basic_type,
+                         vRegD_V0 vtmp0, vRegD_V1 vtmp1, vRegD_V2 vtmp2, vRegD_V3 vtmp3,
+                         vRegD_V4 vtmp4, vRegD_V5 vtmp5, vRegD_V6 vtmp6, vRegD_V7 vtmp7,
+                         vRegD_V12 vtmp8, vRegD_V13 vtmp9, rFlagsReg cr)
+%{
+  match(Set result (VectorizedHashCode (Binary ary cnt) (Binary result basic_type)));
+  effect(TEMP vtmp0, TEMP vtmp1, TEMP vtmp2, TEMP vtmp3, TEMP vtmp4, TEMP vtmp5, TEMP vtmp6,
+         TEMP vtmp7, TEMP vtmp8, TEMP vtmp9, USE_KILL ary, USE_KILL cnt, USE basic_type, KILL cr);
+
+  format %{ "Array HashCode array[] $ary,$cnt,$result,$basic_type -> $result   // KILL all" %}
+  ins_encode %{
+    address tpc = __ arrays_hashcode($ary$$Register, $cnt$$Register, $result$$Register,
+                                     $vtmp3$$FloatRegister, $vtmp2$$FloatRegister,
+                                     $vtmp1$$FloatRegister, $vtmp0$$FloatRegister,
+                                     $vtmp4$$FloatRegister, $vtmp5$$FloatRegister,
+                                     $vtmp6$$FloatRegister, $vtmp7$$FloatRegister,
+                                     $vtmp8$$FloatRegister, $vtmp9$$FloatRegister,
+                                     (BasicType)$basic_type$$constant);
+    if (tpc == NULL) {
+      ciEnv::current()->record_failure("CodeCache is full");
+      return;
+    }
+  %}
+  ins_pipe(pipe_class_memory);
+%}
+
 instruct has_negatives(iRegP_R1 ary1, iRegI_R2 len, iRegI_R0 result, rFlagsReg cr)
 %{
   match(Set result (HasNegatives ary1 len));
@@ -17320,6 +17346,55 @@ instruct encode_ascii_array(iRegP_R2 src, iRegP_R1 dst, iRegI_R3 len,
                         $vtmp0$$FloatRegister, $vtmp1$$FloatRegister,
                         $vtmp2$$FloatRegister, $vtmp3$$FloatRegister,
                         $vtmp4$$FloatRegister, $vtmp5$$FloatRegister);
+  %}
+  ins_pipe(pipe_class_memory);
+%}
+
+// encode char[] to byte[] in UTF8
+instruct encode_utf8_from_utf16(iRegP_R2 src, iRegP_R1 dst, iRegI_R3 len,
+                          vRegD_V0 vtmp0, vRegD_V1 vtmp1, vRegD_V2 vtmp2,
+                          vRegD_V3 vtmp3, vRegD_V4 vtmp4, vRegD_V5 vtmp5,
+                          vRegD_V6 vtmp6, vRegD_V7 vtmp7, vRegD_V8 vtmp8,
+                          vRegD_V9 vtmp9, iRegI_R0 result, rFlagsReg cr)
+%{
+  match(Set result (EncodeUtf8FromUtf16 src (Binary dst len)));
+  effect(USE_KILL src, USE_KILL dst, USE_KILL len, KILL vtmp0, KILL vtmp1,
+        KILL vtmp2, KILL vtmp3, KILL vtmp4, KILL vtmp5, KILL vtmp6, KILL vtmp7, KILL vtmp8, KILL vtmp9, KILL cr);
+
+  format %{ "Encode UTF8 from UTF16 $src,$dst,$len -> $result # KILL $src $dst V0-V9 cr" %}
+  ins_encode %{
+    __ encode_utf8_from_utf16($src$$Register, $dst$$Register, $len$$Register,
+                        $result$$Register,
+                        $vtmp0$$FloatRegister, $vtmp1$$FloatRegister,
+                        $vtmp2$$FloatRegister, $vtmp3$$FloatRegister,
+                        $vtmp4$$FloatRegister, $vtmp5$$FloatRegister,
+                        $vtmp6$$FloatRegister, $vtmp7$$FloatRegister,
+                        $vtmp8$$FloatRegister, $vtmp9$$FloatRegister);
+  %}
+  ins_pipe(pipe_class_memory);
+%}
+
+// decode byte[] in UTF8 to char[] in UTF16
+instruct decode_utf8_to_utf16(iRegP_R2 src, iRegP_R1 dst, iRegI_R3 len,
+                          vRegD_V0 vtmp0, vRegD_V1 vtmp1, vRegD_V2 vtmp2,
+                          vRegD_V3 vtmp3, vRegD_V4 vtmp4, vRegD_V5 vtmp5,
+                          vRegD_V6 vtmp6, vRegD_V7 vtmp7, vRegD_V8 vtmp8,
+                          vRegD_V9 vtmp9, vRegD_V10 vtmp10, iRegI_R0 result, rFlagsReg cr)
+%{
+  match(Set result (DecodeUtf8ToUtf16 src (Binary dst len)));
+  effect(USE_KILL src, USE_KILL dst, USE_KILL len, KILL vtmp0, KILL vtmp1, KILL vtmp2, KILL vtmp3,
+        KILL vtmp4, KILL vtmp5, KILL vtmp6, KILL vtmp7, KILL vtmp8, KILL vtmp9, KILL vtmp10, KILL cr);
+
+  format %{ "Decode UTF8 to UTF16 $src,$dst,$len -> $result # KILL $src $dst V0-V10 cr" %}
+  ins_encode %{
+    __ decode_utf8_to_utf16($src$$Register, $dst$$Register, $len$$Register,
+                        $result$$Register,
+                        $vtmp0$$FloatRegister, $vtmp1$$FloatRegister,
+                        $vtmp2$$FloatRegister, $vtmp3$$FloatRegister,
+                        $vtmp4$$FloatRegister, $vtmp5$$FloatRegister,
+                        $vtmp6$$FloatRegister, $vtmp7$$FloatRegister,
+                        $vtmp8$$FloatRegister, $vtmp9$$FloatRegister,
+                        $vtmp10$$FloatRegister);
   %}
   ins_pipe(pipe_class_memory);
 %}

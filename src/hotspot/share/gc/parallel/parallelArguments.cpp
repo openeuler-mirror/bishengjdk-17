@@ -36,6 +36,7 @@
 #include "runtime/java.hpp"
 #include "utilities/defaultStream.hpp"
 #include "utilities/powerOfTwo.hpp"
+#include "memory/universe.hpp"
 
 size_t ParallelArguments::conservative_max_heap_alignment() {
   return compute_heap_alignment();
@@ -135,6 +136,11 @@ void ParallelArguments::initialize_heap_flags_and_sizes() {
 }
 
 size_t ParallelArguments::heap_reserved_size_bytes() {
+#ifdef AARCH64
+  if (Universe::is_dynamic_max_heap_enable()) {
+    return DynamicMaxHeapSizeLimit;
+  }
+#endif //AARCH64
   return MaxHeapSize;
 }
 
