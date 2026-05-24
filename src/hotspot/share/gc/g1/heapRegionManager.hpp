@@ -30,6 +30,7 @@
 #include "gc/g1/g1RegionToSpaceMapper.hpp"
 #include "gc/g1/heapRegionSet.hpp"
 #include "memory/allocation.hpp"
+#include "memory/universe.hpp"
 #include "services/memoryUsage.hpp"
 
 class HeapRegion;
