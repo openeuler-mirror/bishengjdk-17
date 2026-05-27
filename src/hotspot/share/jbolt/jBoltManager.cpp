@@ -390,6 +390,7 @@ void JBoltManager::construct_stacktrace(const JfrStackTrace& stacktrace) {
  */
 void JBoltManager::construct_cg_once() {
   guarantee((UseJBolt && JBoltManager::reorder_phase_is_profiling_or_waiting()), "sanity");
+  ResourceMark rm;
 
   GrowableArray<JfrStackTrace*>* traces = create_growable_array<JfrStackTrace*>();
 
@@ -940,7 +941,7 @@ bool JBoltManager::reorder_phase_collecting_to_reordering() {
 }
 
 bool JBoltManager::reorder_phase_available_to_profiling() {
-  assert(auto_mode(), "one-phase only");
+  assert(JBoltDumpMode || auto_mode(), "for two-phase dump mode & one-phase");
   return Atomic::cmpxchg(&_reorder_phase, JBoltReorderPhase::Available, JBoltReorderPhase::Profiling) == JBoltReorderPhase::Available;
 }
 
@@ -995,7 +996,7 @@ bool JBoltManager::reorder_phase_is_collecting() {
 
 bool JBoltManager::reorder_phase_is_profiling() {
   bool res = (Atomic::load_acquire(&_reorder_phase) == JBoltReorderPhase::Profiling);
-  assert(!res || auto_mode(), "one-phase only");
+  assert(!res || (JBoltDumpMode || auto_mode()), "for two-phase dump mode & one-phase");
   return res;
 }
 
