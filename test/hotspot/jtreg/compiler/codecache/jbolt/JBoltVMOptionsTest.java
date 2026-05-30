@@ -56,21 +56,21 @@ public class JBoltVMOptionsTest {
   }
 
   private static void test1() throws Exception {
-    ProcessBuilder pb1 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb1 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:+JBoltDumpMode",
       "-Xlog:jbolt*=trace",
       "--version"
     );
-    ProcessBuilder pb2 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb2 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:+JBoltLoadMode",
       "-Xlog:jbolt*=trace",
       "--version"
     );
-    ProcessBuilder pb3 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb3 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:+JBoltLoadMode",
@@ -79,7 +79,7 @@ public class JBoltVMOptionsTest {
       "-Xlog:jbolt*=trace",
       "--version"
     );
-    ProcessBuilder pb4 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb4 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:JBoltOrderFile=" + TEMP_FILE,
@@ -116,14 +116,14 @@ public class JBoltVMOptionsTest {
   }
 
   private static void test2() throws Exception {
-    ProcessBuilder pb1 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb1 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:+PrintFlagsFinal",
       "-Xlog:jbolt*=trace",
       "--version"
     );
-    ProcessBuilder pb2 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb2 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:+JBoltDumpMode",
@@ -132,7 +132,7 @@ public class JBoltVMOptionsTest {
       "-Xlog:jbolt*=trace",
       "--version"
     );
-    ProcessBuilder pb3 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb3 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:+JBoltLoadMode",
@@ -167,7 +167,7 @@ public class JBoltVMOptionsTest {
   }
 
   private static void test3() throws Exception {
-    ProcessBuilder pbF0 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pbF0 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:+JBoltLoadMode",
@@ -175,7 +175,7 @@ public class JBoltVMOptionsTest {
       "-Xlog:jbolt*=trace",
       "--version"
     );
-    ProcessBuilder pbF1 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pbF1 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:+JBoltLoadMode",
@@ -183,7 +183,7 @@ public class JBoltVMOptionsTest {
       "-Xlog:jbolt*=trace",
       "--version"
     );
-    ProcessBuilder pbF2 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pbF2 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:+JBoltLoadMode",
@@ -191,7 +191,7 @@ public class JBoltVMOptionsTest {
       "-Xlog:jbolt*=trace",
       "--version"
     );
-    ProcessBuilder pbF3 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pbF3 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:+JBoltLoadMode",
@@ -199,7 +199,7 @@ public class JBoltVMOptionsTest {
       "-Xlog:jbolt*=trace",
       "--version"
     );
-    ProcessBuilder pbF4 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pbF4 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:+JBoltLoadMode",
@@ -246,19 +246,19 @@ public class JBoltVMOptionsTest {
   }
 
   private static void test4() throws Exception {
-    ProcessBuilder pb1 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb1 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+JBoltDumpMode",
       "-Xlog:jbolt*=trace",
       "--version"
     );
-    ProcessBuilder pb2 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb2 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+JBoltLoadMode",
       "-Xlog:jbolt*=trace",
       "--version"
     );
-    ProcessBuilder pb3 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb3 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:JBoltOrderFile=" + TEMP_FILE,
       "-Xlog:jbolt*=trace",

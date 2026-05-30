@@ -79,7 +79,7 @@ public class JBoltDumpModeTest {
   }
 
   private static void testNormalUse() throws Exception {
-    ProcessBuilder pb1 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb1 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:JBoltOrderFile=" + ORDER_FILE,
@@ -88,7 +88,7 @@ public class JBoltDumpModeTest {
       "--version"
     );
 
-    ProcessBuilder pb2 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb2 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:JBoltOrderFile=" + ORDER_FILE,
@@ -98,7 +98,7 @@ public class JBoltDumpModeTest {
       "--version"
     );
 
-    ProcessBuilder pb3 = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb3 = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:JBoltOrderFile=" + ORDER_FILE,
@@ -138,7 +138,7 @@ public class JBoltDumpModeTest {
   }
 
   private static void testUnabletoRun() throws Exception {
-    ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:JBoltOrderFile=" + ORDER_FILE,
@@ -161,7 +161,7 @@ public class JBoltDumpModeTest {
   }
 
   private static void testFatalError() throws Exception {
-    ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
+    ProcessBuilder pb = ProcessTools.createLimitedTestJavaProcessBuilder(
       "-XX:+UnlockExperimentalVMOptions",
       "-XX:+UseJBolt",
       "-XX:JBoltOrderFile=" + ORDER_FILE,
