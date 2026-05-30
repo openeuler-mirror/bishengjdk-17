@@ -2129,7 +2129,9 @@ void Parse::clinit_deopt() {
   assert(C->has_method(), "only for normal compilations");
   assert(depth() == 1, "only for main compiled method");
   assert(is_normal_parse(), "no barrier needed on osr entry");
-  assert(!method()->holder()->is_not_initialized(), "initialization should have been started");
+  assert(!method()->holder()->is_not_initialized() ||
+         C->is_linked_jprofile_conservative_compilation(),
+         "initialization should have been started or be a linked JProfileCache conservative C2 compile");
 
   set_parse_bci(0);
 
