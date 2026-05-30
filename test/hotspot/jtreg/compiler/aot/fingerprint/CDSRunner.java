@@ -30,7 +30,7 @@ import jdk.test.lib.process.ProcessTools;
 // java CDSRunner <vmargs> <class> <args> ...
 public class CDSRunner {
     public static void main(String[] args) throws Exception {
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(args);
+        ProcessBuilder pb = ProcessTools.createLimitedTestJavaProcessBuilder(args);
         OutputAnalyzer output = new OutputAnalyzer(pb.start());
 
         System.out.println("[stdout = " + output.getStdout() + "]");

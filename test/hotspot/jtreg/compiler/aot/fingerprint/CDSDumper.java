@@ -50,7 +50,7 @@ public class CDSDumper {
         fos.close();
 
         // Dump the archive
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder(
+        ProcessBuilder pb = ProcessTools.createLimitedTestJavaProcessBuilder(
             heapsize,
             "-XX:+IgnoreUnrecognizedVMOptions",
             "-cp", classpath,

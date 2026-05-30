@@ -50,7 +50,7 @@ public class invocationGraalTests {
     public static void runTest(String whichTests, String classFileVersion) throws Throwable {
         System.out.println("\nGraal invocation tests, Tests: " + whichTests +
                            ", class file version: " + classFileVersion);
-        ProcessBuilder pb = ProcessTools.createJavaProcessBuilder("-Xmx128M",
+        ProcessBuilder pb = ProcessTools.createLimitedTestJavaProcessBuilder("-Xmx128M",
             "-XX:+UnlockExperimentalVMOptions", "-XX:+EnableJVMCI", "-XX:+UseJVMCICompiler",
             "--add-exports", "java.base/jdk.internal.org.objectweb.asm=ALL-UNNAMED",
             whichTests, "--classfile_version=" + classFileVersion);

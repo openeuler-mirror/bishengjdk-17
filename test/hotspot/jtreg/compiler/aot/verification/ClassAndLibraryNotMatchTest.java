@@ -92,7 +92,7 @@ public class ClassAndLibraryNotMatchTest {
     private void runAndCheckHelloWorld(String checkString) {
         ProcessBuilder pb;
         try {
-            pb = ProcessTools.createTestJvm("-cp", ".",
+            pb = ProcessTools.createLimitedTestJavaProcessBuilder("-cp", ".",
                     "-XX:+UnlockExperimentalVMOptions", "-XX:+UseAOT",
                     "-XX:AOTLibrary=./" + LIB_NAME, HELLO_WORLD_CLASS_NAME);
         } catch (Exception e) {
