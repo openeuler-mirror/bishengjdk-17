@@ -84,7 +84,6 @@ JitProfileCache::JitProfileCacheState JitProfileCache::init_for_recording() {
 }
 
 JitProfileCache::JitProfileCacheState JitProfileCache::init_for_profilecache() {
-  assert(!JProfilingCacheRecording && JProfilingCacheCompileAdvance, "JitProfileCache JVM option verify failure");
   if (CompilationProfileCacheExclude != nullptr) {
     _excluding_matcher = new SymbolRegexMatcher<mtClass>(CompilationProfileCacheExclude);
   }

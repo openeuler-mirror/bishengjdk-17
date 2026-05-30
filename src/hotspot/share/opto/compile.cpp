@@ -3963,6 +3963,23 @@ void Compile::set_allowed_deopt_reasons() {
   }
 }
 
+#ifdef ASSERT
+bool Compile::is_linked_jprofile_conservative_compilation() const {
+#ifdef AARCH64
+  CompileTask* task = env() != nullptr ? env()->task() : nullptr;
+  return task != nullptr &&
+         task->is_jprofilecache_compilation() &&
+         JProfilingCacheCompileAdvance &&
+         !ProfileCacheAggressiveInit &&
+         method() != nullptr &&
+         method()->holder()->is_instance_klass() &&
+         method()->holder()->is_linked();
+#else
+  return false;
+#endif
+}
+#endif
+
 bool Compile::needs_clinit_barrier(ciMethod* method, ciMethod* accessing_method) {
   return method->is_static() && needs_clinit_barrier(method->holder(), accessing_method);
 }

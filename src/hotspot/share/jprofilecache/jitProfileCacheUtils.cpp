@@ -26,6 +26,7 @@
 #include "compiler/compilationPolicy.hpp"
 #include "compiler/compileBroker.hpp"
 #include "jprofilecache/jitProfileCacheUtils.hpp"
+#include "logging/log.hpp"
 #include "runtime/handles.inline.hpp"
 
 Symbol* JitProfileCacheUtils::get_class_loader_name(ClassLoaderData* cld) {
@@ -75,6 +76,10 @@ Symbol* JitProfileCacheUtils::remove_meaningless_suffix(Symbol* s) {
 
 bool JitProfileCacheUtils::commit_compilation(methodHandle m, int comp_level, int bci, TRAPS) {
   comp_level = MIN3(comp_level, JProfilingCacheMaxTierLimit, (int) TieredStopAtLevel);
+  if (CompileBroker::compiler(comp_level) == nullptr) {
+    log_info(jprofilecache)("[JitProfileCache] skip compilation at level %d: compiler is unavailable", comp_level);
+    return false;
+  }
   if (CompilationPolicy::can_be_compiled(m, comp_level)) {
       CompileBroker::compile_method(m, bci, comp_level,
                                     methodHandle(), 1,

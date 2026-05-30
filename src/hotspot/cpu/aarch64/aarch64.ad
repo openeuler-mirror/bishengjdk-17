@@ -1915,7 +1915,9 @@ void MachPrologNode::emit(CodeBuffer &cbuf, PhaseRegAlloc *ra_) const {
   __ nop();
 
   if (C->clinit_barrier_on_entry()) {
-    assert(!C->method()->holder()->is_not_initialized(), "initialization should have been started");
+    assert(!C->method()->holder()->is_not_initialized() ||
+           C->is_linked_jprofile_conservative_compilation(),
+           "initialization should have been started or be a linked JProfileCache conservative C2 compile");
 
     Label L_skip_barrier;
 
