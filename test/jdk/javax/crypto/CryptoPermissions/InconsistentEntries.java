@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2022, 2025, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -31,58 +31,54 @@
  * @run testng/othervm InconsistentEntries
  */
 
-import org.testng.Assert;
-import org.testng.annotations.AfterTest;
-import org.testng.annotations.BeforeTest;
-import org.testng.annotations.Test;
-
 import javax.crypto.*;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.security.Security;
+import java.util.List;
+import jdk.test.lib.Utils;
+import jdk.test.lib.process.ProcessTools;
+import org.testng.Assert;
+import org.testng.annotations.BeforeTest;
+import org.testng.annotations.Test;
 
 public class InconsistentEntries {
 
-    private static final String JDK_HOME = System.getProperty("test.jdk");
-    private static final String TEST_SRC = System.getProperty("test.src");
-    private static final Path POLICY_DIR = Paths.get(JDK_HOME, "conf", "security",
-            "policy", "testlimited");
-    private static final Path POLICY_FILE = Paths.get(TEST_SRC, "default_local.policy");
-
-    Path targetFile = null;
+    private static final String JDK_HOME = System.getProperty("test.jdk", ".");
+    private static final String TEST_SRC = System.getProperty("test.src", ".");
+    private static final Path TEMP_JDK_HOME = Path.of("java");
+    private static final Path POLICY_DIR = TEMP_JDK_HOME.resolve(Paths.get("conf", "security",
+            "policy", "testlimited"));
+    private static final Path POLICY_FILE_SRC = Paths.get(TEST_SRC, "default_local.policy");
+    private static final Path POLICY_FILE_TARGET = POLICY_DIR
+            .resolve(POLICY_FILE_SRC.getFileName());
 
     @BeforeTest
     public void setUp() throws IOException {
+        copyDirectory(Paths.get(JDK_HOME), TEMP_JDK_HOME);
+
         if (!POLICY_DIR.toFile().exists()) {
             Files.createDirectory(POLICY_DIR);
         }
-
-        targetFile = POLICY_DIR.resolve(POLICY_FILE.getFileName());
-        Files.copy(POLICY_FILE, targetFile, StandardCopyOption.REPLACE_EXISTING);
+        Files.copy(POLICY_FILE_SRC, POLICY_FILE_TARGET,
+                StandardCopyOption.REPLACE_EXISTING);
     }
 
-    @AfterTest
-    public void cleanUp() throws IOException {
-        Files.delete(targetFile);
-    }
-
-    @Test
-    public void test() throws Exception {
-        String JAVA_HOME = System.getProperty("java.home");
-        String FS = System.getProperty("file.separator");
-        Path testlimited = Path.of(JAVA_HOME + FS + "conf" + FS + "security" +
-                FS + "policy" + FS + "testlimited");
-        if (!Files.exists(testlimited)) {
+    public static void main(String[] args) throws Exception {
+        if (!Files.exists(POLICY_DIR)) {
             throw new RuntimeException(
                     "custom policy subdirectory: testlimited does not exist");
         }
 
-        File testpolicy = new File(JAVA_HOME + FS + "conf" + FS + "security" +
-                FS + "policy" + FS + "testlimited" + FS + "default_local.policy");
+        File testpolicy = POLICY_FILE_TARGET.toFile();
         if (testpolicy.length() == 0) {
             throw new RuntimeException(
                     "policy: default_local.policy does not exist or is empty");
@@ -92,5 +88,36 @@ public class InconsistentEntries {
 
         Assert.assertThrows(ExceptionInInitializerError.class,
                 () -> Cipher.getMaxAllowedKeyLength("AES"));
+    }
+
+    @Test
+    public void test() throws Exception {
+        String tmpJava = TEMP_JDK_HOME.resolve("bin").resolve("java").toString();
+        String[] args = Utils.prependTestJavaOpts(InconsistentEntries.class.getName());
+        ProcessBuilder pb = new ProcessBuilder(tmpJava);
+        pb.command().addAll(List.of(args));
+
+        ProcessTools.executeProcess(pb).shouldHaveExitValue(0);
+    }
+
+    private static void copyDirectory(Path src, Path dst) throws IOException {
+        Files.walkFileTree(src, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir,
+                    BasicFileAttributes attrs) throws IOException {
+                Files.createDirectories(dst.resolve(src.relativize(dir)));
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
+                    throws IOException {
+                Files.copy(file, dst.resolve(src.relativize(file)),
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.COPY_ATTRIBUTES,
+                        LinkOption.NOFOLLOW_LINKS);
+                return FileVisitResult.CONTINUE;
+            }
+        });
     }
 }
