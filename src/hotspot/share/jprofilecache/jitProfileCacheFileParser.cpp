@@ -432,6 +432,9 @@ ProfileCacheMethodHold* JitProfileCacheFileParser::parse_method() {
   mh->set_mounted_offset(method_chain_offset);
   this->info_holder()->chain()->add_method_at_index(mh, method_chain_offset);
   holder->add_method(mh);
+
+  log_debug(jprofilecache)("[JitProfileCache] method %s.%s is parsed successfully", parse_class_name_char, parse_method_name_char);
+
   return mh;
 }
 
