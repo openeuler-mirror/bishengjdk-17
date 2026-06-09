@@ -3283,7 +3283,7 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
     struct stat st;
     if (os::stat(jpc_tmp_path, &st) == 0) { // recording jprofile by other JVM
       //Test temp file is still valid
-      int jpc_tmp_fd = os::open(jpc_tmp_path, O_RDWR, 0644);
+      int jpc_tmp_fd = os::open(jpc_tmp_path, O_RDWR, 0600);
       if (jpc_tmp_fd != -1) {
         if (flock(jpc_tmp_fd, LOCK_EX | LOCK_NB) == 0) {
           ::unlink(jpc_tmp_path);
@@ -3295,7 +3295,7 @@ jint Arguments::finalize_vm_init_args(bool patch_mod_javabase) {
       if (os::stat(jpc_path, &st) == 0) {   // jprofilecache file exists, replay profile data
         JProfilingCacheCompileAdvance = true;
       } else {
-        int jpc_fd = os::open(jpc_tmp_path, O_RDWR | O_CREAT, 0644);
+        int jpc_fd = os::open(jpc_tmp_path, O_RDWR | O_CREAT, 0600);
         if (jpc_fd == -1) {
           jio_fprintf(defaultStream::error_stream(),
                 "Could not open/create jprofile cache file under JProfilingCacheAutoArchiveDir '%s'\n",

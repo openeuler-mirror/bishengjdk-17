@@ -580,6 +580,13 @@ bool JitProfileRecorder::flush_record() {
   if (JProfilingCacheAutoArchiveDir != nullptr) {
     _profilelog = new (ResourceObj::C_HEAP, mtInternal) randomAccessFileStream(_auto_jpcfile_filepointer);
   } else {
+    int fd = open(logfile_name(), O_CREAT, S_IRUSR | S_IWUSR);
+    if (fd < 0) {
+      log_error(jprofilecache)("[JitProfileCache] ERROR : open log file fail! path is %s", logfile_name());
+      return false;
+    }
+    close(fd);
+
     _profilelog = new (ResourceObj::C_HEAP, mtInternal) randomAccessFileStream(logfile_name(), "wb+");
   }
   if (_profilelog == nullptr || !_profilelog->is_open()) {
