@@ -111,14 +111,6 @@ static char* get_java_executable_path() {
   return os::strdup("java");
 }
 
-static char* get_complete_classpath() {
-  const char* env_cp = Arguments::get_property("env.class.path");
-  if (env_cp == NULL || env_cp[0] == '\0') {
-    env_cp = ::getenv("CLASSPATH");
-  }
-  return (char *)env_cp;
-}
-
 static bool can_read_classlist(const char* class_list_path) {
   int fd = open(class_list_path, O_RDWR | O_CREAT, 0644);
   if (fd < 0) return false;
@@ -139,7 +131,7 @@ static void create_jsa(const char* class_list_path, const char* appcds_path, con
     // child process running on background
     setsid();
     signal(SIGHUP, SIG_IGN);
-    const char* classpath = get_complete_classpath();
+    const char* classpath = Arguments::get_appclasspath();
     if (classpath == NULL) {
       classpath = ".";
     }
