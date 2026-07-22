@@ -58,8 +58,6 @@ class aarch64 {
 
   static address _zero_blocks;
 
-  static address _has_negatives;
-  static address _has_negatives_long;
   static address _large_array_equals;
   static address _large_arrays_hashcode_boolean;
   static address _large_arrays_hashcode_byte;
@@ -82,6 +80,9 @@ class aarch64 {
   static bool _completed;
 
  public:
+
+  static address _has_negatives;
+  static address _has_negatives_long;
 
   static address _convert_masked_utf8_to_utf16;
   static address _scalar_convert_utf8_to_utf16;
