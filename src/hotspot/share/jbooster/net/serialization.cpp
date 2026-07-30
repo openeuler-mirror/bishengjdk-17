@@ -125,9 +125,10 @@ int SerializationImpl<InstanceKlass>::serialize(MessageBuffer& buf, const Instan
     char* cf_buf = nullptr;
     uint32_t cf_size = 0;
 
-    bool should_send_class_file = !arg.class_loader_data()->is_boot_class_loader_data();
+    InstanceKlass* ik = const_cast<InstanceKlass*>(&arg);
+    bool should_send_class_file = !arg.class_loader_data()->is_boot_class_loader_data()
+                                  && ik->is_linked();
     if (should_send_class_file) {
-      InstanceKlass* ik = const_cast<InstanceKlass*>(&arg);
       JvmtiClassFileReconstituter reconstituter(ik);
       if (reconstituter.get_error() == JVMTI_ERROR_NONE) {
         cf_buf = (char*) reconstituter.class_file_bytes();
