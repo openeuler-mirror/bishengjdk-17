@@ -1195,6 +1195,10 @@ class MemBarNode: public MultiNode {
     TrailingPartialArrayCopy
   } _kind;
 
+#ifdef AARCH64
+  bool _leading_release_store;
+#endif // AARCH64
+
 #ifdef ASSERT
   uint _pair_idx;
 #endif
@@ -1231,6 +1235,10 @@ public:
   bool standalone() const { return _kind == Standalone; }
   void set_trailing_partial_array_copy() { _kind = TrailingPartialArrayCopy; }
   bool trailing_partial_array_copy() const { return _kind == TrailingPartialArrayCopy; }
+#ifdef AARCH64
+  void set_leading_release_store() { _leading_release_store = true; }
+  bool leading_release_store() const { return _leading_release_store; }
+#endif // AARCH64
 
   static void set_store_pair(MemBarNode* leading, MemBarNode* trailing);
   static void set_load_store_pair(MemBarNode* leading, MemBarNode* trailing);
