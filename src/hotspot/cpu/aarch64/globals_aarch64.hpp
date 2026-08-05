@@ -87,6 +87,9 @@ define_pd_global(intx, InlineSmallCode,          1000);
           "Use Neon for CRC32 computation")                             \
   product(bool, UseCRC32, false,                                        \
           "Use CRC32 instructions for CRC32 computation")               \
+  product(bool, UseStlrForRelease, false,                               \
+          "Emit stlr for setRelease/putXRelease/putOrdered* stores "    \
+          "and elide the leading dmb ish")                              \
   product(bool, UseSIMDForMemoryOps, false,                             \
           "Use SIMD instructions in generated memory move code")        \
   product(bool, UseSIMDForArrayEquals, true,                            \
@@ -199,8 +202,6 @@ define_pd_global(intx, InlineSmallCode,          1000);
   product(ccstr, NUMABindPolicy, NULL,                                  \
           "Enable deterministic NUMA placement with combined Options,"  \
           "including prefix=<id> and div=<N>.")                         \
-  product(bool, UseStlrForRelease, false,                               \
-          "Use stlr instead of dmb ish + str for release stores")       \
   product(bool, UseUTFConversionIntrinsics, false,                      \
           "Use Intrinsics for conversion between UTF8 and UTF16")       \
                                                                         \

@@ -3284,6 +3284,9 @@ Node* ClearArrayNode::clear_memory(Node* ctl, Node* mem, Node* dest,
 MemBarNode::MemBarNode(Compile* C, int alias_idx, Node* precedent)
   : MultiNode(TypeFunc::Parms + (precedent == nullptr? 0: 1)),
     _adr_type(C->get_adr_type(alias_idx)), _kind(Standalone)
+#ifdef AARCH64
+  , _leading_release_store(false)
+#endif // AARCH64
 #ifdef ASSERT
   , _pair_idx(0)
 #endif
