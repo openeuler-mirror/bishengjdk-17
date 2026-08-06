@@ -4280,10 +4280,12 @@ jint Arguments::parse(const JavaVMInitArgs* initial_cmd_args) {
   return JNI_OK;
 }
 
-jint Arguments::apply_ergo() {
+jint Arguments::apply_ergo(JavaVMInitArgs* args) {
   // Set flags based on ergonomics.
   jint result = set_ergonomics_flags();
   if (result != JNI_OK) return result;
+
+  AARCH64_ONLY(JavaThread::handle_appcds_for_executor(args);)
 
   // Set heap size based on available physical memory
   set_heap_size();

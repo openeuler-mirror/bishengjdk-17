@@ -35,7 +35,11 @@
 #include "runtime/java.hpp"
 #include "runtime/thread.inline.hpp"
 
+#include <ctype.h>
+#include <errno.h>
+#include <pwd.h>
 #include <sys/file.h>
+#include <unistd.h>
 
 frame JavaThread::pd_last_frame() {
   assert(has_last_Java_frame(), "must have last_Java_sp() when suspended");
@@ -117,6 +121,221 @@ static bool can_read_classlist(const char* class_list_path) {
   return flock(fd, LOCK_EX | LOCK_NB) == 0;
 }
 
+static char* copy_identity(const char* value, size_t length) {
+  char* result = NEW_C_HEAP_ARRAY(char, length + 1, mtInternal);
+  memcpy(result, value, length);
+  result[length] = '\0';
+  return result;
+}
+
+static char* get_effective_user_identity() {
+  uid_t effective_uid = geteuid();
+  long configured_size = sysconf(_SC_GETPW_R_SIZE_MAX);
+  size_t buffer_size = configured_size > 0 ? (size_t)configured_size
+                                           : (size_t)1024;
+  const size_t max_buffer_size = 1024 * 1024;
+  buffer_size = MIN2(buffer_size, max_buffer_size);
+
+  char* buffer = NEW_C_HEAP_ARRAY(char, buffer_size, mtInternal);
+  struct passwd entry;
+  struct passwd* result = NULL;
+  int status = 0;
+  while (true) {
+    status = getpwuid_r(effective_uid, &entry, buffer, buffer_size, &result);
+    if (status != ERANGE || buffer_size == max_buffer_size) {
+      break;
+    }
+    FREE_C_HEAP_ARRAY(char, buffer);
+    buffer_size = MIN2(buffer_size * 2, max_buffer_size);
+    buffer = NEW_C_HEAP_ARRAY(char, buffer_size, mtInternal);
+  }
+
+  char* identity = NULL;
+  if (status == 0 && result != NULL && result->pw_name != NULL &&
+      result->pw_name[0] != '\0') {
+    identity = copy_identity(result->pw_name, strlen(result->pw_name));
+  } else {
+    char fallback[64];
+    jio_snprintf(fallback, sizeof(fallback), "uid-%lu",
+                 (unsigned long)effective_uid);
+    identity = copy_identity(fallback, strlen(fallback));
+    if (PrintAutoAppCDS) {
+      warning("Could not resolve effective user name; using %s.", identity);
+    }
+  }
+
+  FREE_C_HEAP_ARRAY(char, buffer);
+  return identity;
+}
+
+static char* get_application_identity() {
+  const char* command = Arguments::java_command();
+  if (command == NULL) {
+    return copy_identity("java", sizeof("java") - 1);
+  }
+
+  while (*command != '\0' && isspace((unsigned char)*command)) {
+    command++;
+  }
+  const char* end = command;
+  while (*end != '\0' && !isspace((unsigned char)*end)) {
+    end++;
+  }
+  return end == command
+         ? copy_identity("java", sizeof("java") - 1)
+         : copy_identity(command, (size_t)(end - command));
+}
+
+static char* normalize_identity(const char* identity) {
+  size_t length = strlen(identity);
+  char* normalized = NEW_C_HEAP_ARRAY(char, length + 1, mtInternal);
+  for (size_t i = 0; i < length; i++) {
+    unsigned char value = (unsigned char)identity[i];
+    normalized[i] = value == '/' || value <= 0x1f || value == 0x7f
+                    ? '_' : identity[i];
+  }
+  normalized[length] = '\0';
+  return normalized;
+}
+
+static bool construct_identity_path(char* destination,
+                                    size_t destination_size,
+                                    const char* base,
+                                    const char* file_name) {
+  size_t required = strlen(base) + 1 + strlen(file_name);
+  if (required >= destination_size) {
+    return false;
+  }
+  jio_snprintf(destination, destination_size, "%s/%s", base, file_name);
+  return true;
+}
+
+static uint64_t update_identity_hash(uint64_t hash, const char* value) {
+  size_t length = strlen(value);
+  for (size_t i = 0; i < sizeof(length); i++) {
+    hash ^= (unsigned char)((length >> (i * 8)) & 0xff);
+    hash *= UCONST64(0x100000001b3);
+  }
+  for (size_t i = 0; i < length; i++) {
+    hash ^= (unsigned char)value[i];
+    hash *= UCONST64(0x100000001b3);
+  }
+  return hash;
+}
+
+static uint64_t identity_hash(const char* user, const char* application) {
+  uint64_t hash = UCONST64(0xcbf29ce484222325);
+  hash = update_identity_hash(hash, user);
+  return update_identity_hash(hash, application);
+}
+
+static size_t auto_appcds_name_max(const char* base_path) {
+  errno = 0;
+  long value = pathconf(base_path, _PC_NAME_MAX);
+  size_t name_max = value > 0 ? (size_t)value : (size_t)255;
+  return MIN2(name_max, (size_t)PATH_MAX - 1);
+}
+
+static bool build_identity_stem(char* destination, size_t destination_size,
+                                const char* raw_user,
+                                const char* raw_application,
+                                const char* user,
+                                const char* application,
+                                size_t stem_max) {
+  const size_t prefix_length = strlen("appcds_");
+  const size_t user_length = strlen(user);
+  const size_t application_length = strlen(application);
+  const size_t readable_length = prefix_length + user_length + 1 +
+                                 application_length;
+
+  stem_max = MIN2(stem_max, destination_size - 1);
+  if (readable_length <= stem_max) {
+    int written = jio_snprintf(destination, destination_size,
+                               "appcds_%s_%s", user, application);
+    return written >= 0 && (size_t)written == readable_length;
+  }
+
+  const size_t hash_suffix_length = strlen("_h") + 16;
+  const size_t fixed_length = prefix_length + 1 + hash_suffix_length;
+  if (stem_max < fixed_length) {
+    return false;
+  }
+
+  size_t readable_capacity = stem_max - fixed_length;
+  size_t user_keep = MIN2(user_length, readable_capacity);
+  size_t application_keep = readable_capacity - user_keep;
+  uint64_t hash = identity_hash(raw_user, raw_application);
+
+  int written = jio_snprintf(destination, destination_size,
+                             "appcds_%.*s_%.*s_h%016" PRIx64,
+                              (int)user_keep, user,
+                              (int)application_keep, application,
+                              hash);
+  return written >= 0 && (size_t)written <= stem_max;
+}
+
+static bool append_identity_suffix(char* destination,
+                                   size_t destination_size,
+                                   const char* stem,
+                                   const char* suffix,
+                                   size_t name_max) {
+  size_t required = strlen(stem) + strlen(suffix);
+  if (required > name_max || required >= destination_size) {
+    return false;
+  }
+  int written = jio_snprintf(destination, destination_size,
+                             "%s%s", stem, suffix);
+  return written >= 0 && (size_t)written == required;
+}
+
+static bool build_identity_paths(const char* base_path,
+                                 char* class_list_path,
+                                 size_t class_list_size,
+                                 char* coop_path,
+                                 size_t coop_size,
+                                 char* nocoop_path,
+                                 size_t nocoop_size) {
+  char* raw_user = get_effective_user_identity();
+  char* raw_application = get_application_identity();
+  char* user = normalize_identity(raw_user);
+  char* application = normalize_identity(raw_application);
+
+  char stem[PATH_MAX];
+  char class_list_name[PATH_MAX];
+  char coop_name[PATH_MAX];
+  char nocoop_name[PATH_MAX];
+  size_t name_max = auto_appcds_name_max(base_path);
+  const size_t longest_suffix_length = strlen("_nocoop.jsa");
+
+  bool success = name_max > longest_suffix_length &&
+      build_identity_stem(stem, sizeof(stem),
+                          raw_user, raw_application,
+                          user, application,
+                          name_max - longest_suffix_length) &&
+      append_identity_suffix(class_list_name, sizeof(class_list_name),
+                             stem, ".lst", name_max) &&
+      append_identity_suffix(coop_name, sizeof(coop_name),
+                             stem, "_coop.jsa", name_max) &&
+      append_identity_suffix(nocoop_name, sizeof(nocoop_name),
+                             stem, "_nocoop.jsa", name_max) &&
+      construct_identity_path(class_list_path, class_list_size,
+                              base_path, class_list_name) &&
+      construct_identity_path(coop_path, coop_size,
+                              base_path, coop_name) &&
+      construct_identity_path(nocoop_path, nocoop_size,
+                              base_path, nocoop_name);
+
+  FREE_C_HEAP_ARRAY(char, application);
+  FREE_C_HEAP_ARRAY(char, user);
+  FREE_C_HEAP_ARRAY(char, raw_application);
+  FREE_C_HEAP_ARRAY(char, raw_user);
+
+  if (!success) {
+    warning("Auto AppCDS identity path is too long; Auto AppCDS is disabled for this VM.");
+  }
+  return success;
+}
+
 static void construct_path(char *dest, size_t dest_size, const char *base, const char *suffix) {
   size_t base_len = strlen(base);
   size_t suffix_len = strlen(suffix);
@@ -125,7 +344,10 @@ static void construct_path(char *dest, size_t dest_size, const char *base, const
   jio_snprintf(dest, dest_size, "%s%s", base, suffix);
 }
 
-static void create_jsa(const char* class_list_path, const char* appcds_path, const JavaVMInitArgs* original_args) {
+static void create_jsa_with_coop_option(const char* class_list_path, const char* appcds_path,
+                                        const JavaVMInitArgs* original_args, bool use_compressed_oops) {
+  static const char shared_class_list_option[] = "-XX:SharedClassListFile=";
+  static const char shared_archive_option[] = "-XX:SharedArchiveFile=";                                        
   pid_t pid = fork();
   if (pid == 0) {
     // child process running on background
@@ -139,7 +361,7 @@ static void create_jsa(const char* class_list_path, const char* appcds_path, con
     int arg_count = Arguments::num_jvm_args();
     char** vm_args  = Arguments::jvm_args_array();
 
-    int total_args = arg_count + 9;
+    int total_args = arg_count + 12;
     char** args = NEW_C_HEAP_ARRAY(char*, total_args + 1, mtInternal);
     int idx = 0;
 
@@ -148,26 +370,41 @@ static void create_jsa(const char* class_list_path, const char* appcds_path, con
     args[idx++] = os::strdup("-XX:+UnlockDiagnosticVMOptions");
     args[idx++] = os::strdup("-XX:+SkipSharedClassPathCheck");
 
-    char shared_class_list_file[PATH_MAX];
-    construct_path(shared_class_list_file, sizeof(shared_class_list_file), "-XX:SharedClassListFile=", class_list_path);
+    char shared_class_list_file[PATH_MAX + sizeof(shared_class_list_option)];
+    construct_path(shared_class_list_file, sizeof(shared_class_list_file),
+                   shared_class_list_option, class_list_path);
     args[idx++] = os::strdup(shared_class_list_file);
 
-    char shared_archive_file[PATH_MAX];
-    construct_path(shared_archive_file, sizeof(shared_archive_file), "-XX:SharedArchiveFile=", appcds_path);
+    char shared_archive_file[PATH_MAX + sizeof(shared_archive_option)];
+    construct_path(shared_archive_file, sizeof(shared_archive_file),
+                   shared_archive_option, appcds_path);
     args[idx++] = os::strdup(shared_archive_file);
 
     args[idx++] = os::strdup("-classpath");
     args[idx++] = os::strdup(classpath);
+
+    // copy the original parameters and filter out the conflicting ones
     for (int i = 0; i < arg_count; i++) {
       if (vm_args[i] != NULL && strstr(vm_args[i], "AutoSharedArchivePath") == NULL
-                             && strstr(vm_args[i], "JProfilingCacheAutoArchiveDir") == NULL) {
+                             && strstr(vm_args[i], "JProfilingCacheAutoArchiveDir") == NULL
+                             && strstr(vm_args[i], "UseCompressedOops") == NULL) {
         args[idx++] = os::strdup(vm_args[i]);
       }
+    }
+
+    args[idx++] = os::strdup("-Xms128m");
+ 	  args[idx++] = os::strdup("-Xmx256m");
+
+    if (use_compressed_oops) {
+      args[idx++] = os::strdup("-XX:+UseCompressedOops");
+    } else {
+      args[idx++] = os::strdup("-XX:-UseCompressedOops");
     }
     args[idx++] = os::strdup("-version");
     args[idx] = NULL;
 
     if (PrintAutoAppCDS) {
+      tty->print_cr("Creating JSA with UseCompressedOops=%s", use_compressed_oops ? "true" : "false");
       int i = 0;
       while (args[i] != NULL) {
         tty->print_cr("args[%d] = %s", i, args[i]);
@@ -175,6 +412,30 @@ static void create_jsa(const char* class_list_path, const char* appcds_path, con
       }
     }
     execv(java_path, args);
+  }
+}
+
+// create missing JSA files (both coop and nocoop versions if needed)
+static void try_create_missing_jsa(const char* class_list_path,
+                                   const char* appcds_coop_path,
+                                   const char* appcds_nocoop_path,
+                                   const JavaVMInitArgs* original_args) {
+  struct stat st;
+  bool coop_exists = (stat(appcds_coop_path, &st) == 0);
+  bool nocoop_exists = (stat(appcds_nocoop_path, &st) == 0);
+
+  if (!coop_exists) {
+    if (PrintAutoAppCDS) {
+      tty->print_cr("Creating missing JSA file with compressed oops: %s", appcds_coop_path);
+    }
+    create_jsa_with_coop_option(class_list_path, appcds_coop_path, original_args, true);
+  }
+
+  if (!nocoop_exists) {
+    if (PrintAutoAppCDS) {
+      tty->print_cr("Creating missing JSA file without compressed oops: %s", appcds_nocoop_path);
+    }
+    create_jsa_with_coop_option(class_list_path, appcds_nocoop_path, original_args, false);
   }
 }
 
@@ -189,30 +450,63 @@ void JavaThread::handle_appcds_for_executor(const JavaVMInitArgs* args) {
   }
 
   static char base_path[JVM_MAXPATHLEN] = {'\0'};
+  if (UseAutoAppCDSIdentity &&
+      strlen(AutoSharedArchivePath) >= sizeof(base_path)) {
+    warning("AutoSharedArchivePath is too long; Auto AppCDS is disabled for this VM.");
+    return;
+  }
   jio_snprintf(base_path, sizeof(base_path), "%s", AutoSharedArchivePath);
 
   struct stat st;
   if (stat(base_path, &st) != 0) {
     if (mkdir(base_path, 0755) != 0) {
-      vm_exit_during_initialization(err_msg("can't create dirs %s : %s", base_path, os::strerror(errno)));
+      vm_exit_during_initialization(err_msg("Can't create dirs %s : %s", base_path, strerror(errno)));
+    }
+  } else {
+    if (!S_ISDIR(st.st_mode)) {
+      vm_exit_during_initialization(err_msg("Path %s exists but is not a directory.", base_path));
+    }
+
+    if (access(base_path, R_OK | W_OK | X_OK) != 0) {
+      vm_exit_during_initialization(err_msg("Insufficient permissions for directory %s. Requires read,"
+                                    " write, and execute access. Error: %s", base_path, strerror(errno)));
     }
   }
 
   char class_list_path[PATH_MAX];
-  char appcds_path[PATH_MAX];
+  char appcds_coop_path[PATH_MAX];
+  char appcds_nocoop_path[PATH_MAX];
 #if INCLUDE_AGGRESSIVE_CDS
   char aggrecds_path[PATH_MAX];
 #endif
 
-  construct_path(class_list_path, sizeof(class_list_path), base_path, "/appcds.lst");
-  construct_path(appcds_path, sizeof(appcds_path), base_path, "/appcds.jsa");
+  if (UseAutoAppCDSIdentity) {
+    if (!build_identity_paths(base_path,
+                              class_list_path, sizeof(class_list_path),
+                              appcds_coop_path, sizeof(appcds_coop_path),
+                              appcds_nocoop_path, sizeof(appcds_nocoop_path))) {
+      return;
+    }
+  } else {
+    construct_path(class_list_path, sizeof(class_list_path),
+                   base_path, "/appcds.lst");
+    construct_path(appcds_coop_path, sizeof(appcds_coop_path),
+                   base_path, "/appcds_coop.jsa");
+    construct_path(appcds_nocoop_path, sizeof(appcds_nocoop_path),
+                   base_path, "/appcds_nocoop.jsa");
+  }
+  
+  const char* current_appcds_path = UseCompressedOops
+                                    ? appcds_coop_path
+                                    : appcds_nocoop_path;
 #if INCLUDE_AGGRESSIVE_CDS
   construct_path(aggrecds_path, sizeof(aggrecds_path), base_path, "/aggrecds.jsa");
 #endif
 
   if (PrintAutoAppCDS) {
     tty->print_cr("classlist file : %s", class_list_path);
-    tty->print_cr("appcds jsa file : %s", appcds_path);
+    tty->print_cr("appcds jsa file : %s", current_appcds_path);
+    tty->print_cr("UseCompressedOops : %s", UseCompressedOops ? "true" : "false");
 #if INCLUDE_AGGRESSIVE_CDS
     if (UseAggressiveCDS) {
       tty->print_cr("aggressive jsa file : %s", aggrecds_path);
@@ -221,7 +515,7 @@ void JavaThread::handle_appcds_for_executor(const JavaVMInitArgs* args) {
   }
 
   const char* class_list_ptr = class_list_path;
-  const char* appcds_ptr = appcds_path;
+  const char* appcds_ptr = current_appcds_path;
 #if INCLUDE_AGGRESSIVE_CDS
   const char* aggrecds_ptr = aggrecds_path;
 
@@ -241,7 +535,9 @@ void JavaThread::handle_appcds_for_executor(const JavaVMInitArgs* args) {
   }
 #endif
 
-  if (stat(appcds_path, &st) == 0) {
+  if (stat(current_appcds_path, &st) == 0) {
+    try_create_missing_jsa(class_list_path,
+                           appcds_coop_path, appcds_nocoop_path, args);
 #if INCLUDE_AGGRESSIVE_CDS
     if (UseAggressiveCDS) {
       if (PrintAutoAppCDS) {
@@ -255,6 +551,9 @@ void JavaThread::handle_appcds_for_executor(const JavaVMInitArgs* args) {
     UseSharedSpaces = true;
     RequireSharedSpaces = true;
     JVMFlagAccess::set_ccstr(JVMFlag::find_declared_flag((char*)"SharedArchiveFile"), &appcds_ptr, JVMFlagOrigin::COMMAND_LINE);
+    if (PrintAutoAppCDS) {
+      tty->print_cr("The process %d use AppCDS jsa.", os::current_process_id());
+    }
 #if INCLUDE_AGGRESSIVE_CDS
     if (UseAggressiveCDS) {
       DynamicDumpSharedSpaces = true;
@@ -271,11 +570,14 @@ void JavaThread::handle_appcds_for_executor(const JavaVMInitArgs* args) {
       }
       return;
     }
-    if (stat(appcds_path, &st) != 0) {
+
+    // generate two versions of JSA
+    if (stat(current_appcds_path, &st) != 0) {
       if (PrintAutoAppCDS) {
-        tty->print_cr("generate JSA file by %d.", os::current_process_id());
+        tty->print_cr("generate jsa files by %d.", os::current_process_id());
       }
-      create_jsa(class_list_path, appcds_path, args);
+      try_create_missing_jsa(class_list_path,
+                             appcds_coop_path, appcds_nocoop_path, args);
     }
   } else {
     if (!can_read_classlist(class_list_path)) {
