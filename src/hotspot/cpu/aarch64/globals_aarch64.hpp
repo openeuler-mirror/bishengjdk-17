@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2000, 2021, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2015, 2019, Red Hat Inc. All rights reserved.
+ * Copyright (c) 2026, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -224,6 +225,14 @@ define_pd_global(intx, InlineSmallCode,          1000);
                                                                         \
   product(uintx, ElasticMaxHeapShrinkMinFreeRatio, 40,                  \
           "minimal ratio of free bytes after elastic max heap shirnk")  \
+                                                                        \
+  product(bool, UseKMLPow, false,                                       \
+          "Use the Kunpeng Math Library implementation of Math.pow")    \
+                                                                        \
+  product(ccstr, KMLLibraryPath, nullptr,                               \
+          "Colon-separated list of absolute directories to search "     \
+          "for libkm.so; use the system dynamic library search "        \
+          "path if unset")                                              \
 
 // end of ARCH_FLAGS
 

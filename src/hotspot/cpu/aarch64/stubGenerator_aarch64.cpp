@@ -1,6 +1,7 @@
 /*
  * Copyright (c) 2003, 2022, Oracle and/or its affiliates. All rights reserved.
  * Copyright (c) 2014, 2022, Red Hat Inc. All rights reserved.
+ * Copyright (c) 2026, Huawei Technologies Co., Ltd. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -33,6 +34,7 @@
 #include "gc/shared/gc_globals.hpp"
 #include "gc/shared/tlab_globals.hpp"
 #include "interpreter/interpreter.hpp"
+#include "logging/log.hpp"
 #include "memory/universe.hpp"
 #include "nativeInst_aarch64.hpp"
 #include "oops/instanceOop.hpp"
@@ -43,6 +45,8 @@
 #include "runtime/atomic.hpp"
 #include "runtime/frame.inline.hpp"
 #include "runtime/handles.inline.hpp"
+#include "runtime/java.hpp"
+#include "runtime/os.hpp"
 #include "runtime/sharedRuntime.hpp"
 #include "runtime/stubCodeGenerator.hpp"
 #include "runtime/stubRoutines.hpp"
@@ -8381,6 +8385,210 @@ class StubGenerator: public StubCodeGenerator {
     // }
   };
 
+#undef __
+#define __ _masm->
+
+#ifdef LINUX
+  static void free_kml_library_paths(char** paths, size_t count) {
+    for (size_t i = 0; i < count; i++) {
+      FREE_C_HEAP_ARRAY(char, paths[i]);
+    }
+    FREE_C_HEAP_ARRAY(char*, paths);
+  }
+
+  static bool find_kml_library_path(const char* search_path,
+                                    const char* library_name,
+                                    char* library_path,
+                                    size_t library_path_size) {
+    const char* const file_separator = os::file_separator();
+    const size_t file_name_length =
+        strlen(library_name) + strlen(file_separator) + 1;
+    size_t path_count = 0;
+    char** const paths =
+        os::split_path(search_path, &path_count, file_name_length);
+    if (paths == nullptr || path_count == 0) {
+      vm_exit_during_initialization("-XX:KMLLibraryPath must not be empty");
+    }
+
+    for (size_t i = 0; i < path_count; i++) {
+      if (paths[i][0] == '\0') {
+        vm_exit_during_initialization(
+            "-XX:KMLLibraryPath must not contain empty path elements",
+            search_path);
+      }
+      if (paths[i][0] != *file_separator) {
+        vm_exit_during_initialization(
+            "-XX:KMLLibraryPath entries must be absolute directories",
+            paths[i]);
+      }
+    }
+
+    bool found = false;
+    for (size_t i = 0; i < path_count; i++) {
+      const size_t path_length = strlen(paths[i]);
+      const char* const separator =
+          paths[i][path_length - 1] == *file_separator ? "" : file_separator;
+      const int written = os::snprintf(library_path, library_path_size,
+                                       "%s%s%s", paths[i], separator,
+                                       library_name);
+      if (written < 0 ||
+          static_cast<size_t>(written) >= library_path_size) {
+        vm_exit_during_initialization(
+            "-XX:KMLLibraryPath entry exceeds the maximum path length",
+            paths[i]);
+      }
+
+      if (os::file_exists(library_path)) {
+        found = true;
+        break;
+      }
+    }
+
+    free_kml_library_paths(paths, path_count);
+    return found;
+  }
+
+  static address load_kml_pow() {
+    static const char kml_library_name[] = "libkm.so";
+    if (!FLAG_IS_DEFAULT(KMLLibraryPath) &&
+        (KMLLibraryPath == nullptr || KMLLibraryPath[0] == '\0')) {
+      vm_exit_during_initialization("-XX:KMLLibraryPath must not be empty");
+    }
+
+    char library_path[JVM_MAXPATHLEN];
+    const char* library_to_load = kml_library_name;
+    if (KMLLibraryPath != nullptr) {
+      if (!find_kml_library_path(KMLLibraryPath, kml_library_name,
+                                 library_path, sizeof(library_path))) {
+        vm_exit_during_initialization(
+            "Unable to find libkm.so in -XX:KMLLibraryPath",
+            KMLLibraryPath);
+      }
+      library_to_load = library_path;
+    }
+
+    char ebuf[1024];
+    void* const library_handle =
+        os::dll_load(library_to_load, ebuf, sizeof(ebuf));
+    if (library_handle == nullptr) {
+      vm_exit_during_initialization("Unable to load KML library", ebuf);
+    }
+
+    // The generated adapter embeds pow_entry, so deliberately leave the
+    // library loaded for the lifetime of the VM.
+    const address pow_entry =
+        reinterpret_cast<address>(os::dll_lookup(library_handle, "pow"));
+    if (pow_entry == nullptr) {
+      vm_exit_during_initialization(
+          "Unable to find symbol 'pow' in KML library", library_to_load);
+    }
+
+    log_info(library)("Loaded KML library %s, handle " INTPTR_FORMAT
+                      ", pow entry " INTPTR_FORMAT,
+                      library_to_load, p2i(library_handle), p2i(pow_entry));
+    return pow_entry;
+  }
+
+  address generate_kml_pow_adapter(address kml_pow_entry) {
+    __ align(CodeEntryAlignment);
+    StubCodeMark mark(this, "StubRoutines", "kml_pow");
+    address start = __ pc();
+
+    const FloatRegister x = v0;
+    const FloatRegister y = v1;
+    const Register target = r16;
+
+    static constexpr int DOUBLE_FRACTION_BITS = 52;
+    static constexpr int DOUBLE_EXPONENT_BITS = 11;
+    static constexpr int DOUBLE_SIGN_BIT = BitsPerLong - 1;
+    static constexpr int HUGE_Y_EXPONENT_FIELD = 0x41e; // Biased exponent of 2^31.
+    static constexpr int HALF_EXPONENT_FIELD = 0x3fe;
+    static constexpr int ONE_EXPONENT_FIELD = 0x3ff;
+    static constexpr int TWO_EXPONENT_FIELD = 0x400;
+
+    Label use_kml;
+    Label zero_fraction;
+    Label pow_abs_one;
+    Label pow_minus_one;
+    Label pow_two;
+    Label pow_half;
+    Label return_one;
+    Label use_fdlibm;
+
+    // Preserve fdlibm's high-accuracy path for huge exponents. In particular,
+    // KML loses precision when x is very close to one and |y| is large. This
+    // also sends non-finite exponents to fdlibm, whose semantics differ from
+    // KML pow for a few inputs.
+    __ fmovd(rscratch2, y);
+    __ ubfx(rscratch1, rscratch2,
+            DOUBLE_FRACTION_BITS, DOUBLE_EXPONENT_BITS);
+    __ cmpw(rscratch1, HUGE_Y_EXPONENT_FIELD);
+    __ br(Assembler::HS, use_fdlibm);
+
+    // A finite y with zero fraction bits is signed zero or an exact signed
+    // normal power of two. Dispatch those uncommon values separately, keeping
+    // the ordinary KML path short.
+    __ lsl(rscratch1, rscratch2, BitsPerLong - DOUBLE_FRACTION_BITS);
+    __ cbz(rscratch1, zero_fraction);
+
+    __ bind(use_kml);
+    // Use IP0 as the indirect branch target so a BTI c landing pad is accepted.
+    __ mov(target, kml_pow_entry);
+    __ br(target);
+
+    __ bind(zero_fraction);
+    __ ubfx(rscratch1, rscratch2,
+            DOUBLE_FRACTION_BITS, DOUBLE_EXPONENT_BITS);
+    __ cbzw(rscratch1, return_one); // y is +0.0 or -0.0.
+
+    __ cmpw(rscratch1, ONE_EXPONENT_FIELD);
+    __ br(Assembler::EQ, pow_abs_one);
+
+    // The remaining fast paths apply only to positive exponents. Negative
+    // powers of two continue to use KML's general implementation.
+    __ tbnz(rscratch2, DOUBLE_SIGN_BIT, use_kml);
+    __ cmpw(rscratch1, TWO_EXPONENT_FIELD);
+    __ br(Assembler::EQ, pow_two);
+    __ cmpw(rscratch1, HALF_EXPONENT_FIELD);
+    __ br(Assembler::EQ, pow_half);
+    __ b(use_kml);
+
+    __ bind(pow_abs_one);
+    __ tbnz(rscratch2, DOUBLE_SIGN_BIT, pow_minus_one);
+    // Multiplication by one preserves all finite values and signed zeros, and
+    // also quiets a signaling NaN as fdlibm's initial NaN check does.
+    __ fmuld(x, x, y);                // y == 1.0.
+    __ ret(lr);
+
+    __ bind(pow_minus_one);
+    __ fmovd(y, 1.0);
+    __ fdivd(x, y, x);                // y == -1.0.
+    __ ret(lr);
+
+    __ bind(pow_two);
+    __ fmuld(x, x, x);
+    __ ret(lr);
+
+    __ bind(pow_half);
+    // pow(-0.0, 0.5) is +0.0 and pow(-Inf, 0.5) is +Inf, while
+    // sqrt returns -0.0 and NaN respectively. Keep all negative-sign x
+    // values on the fdlibm path.
+    __ fmovd(rscratch1, x);
+    __ tbnz(rscratch1, DOUBLE_SIGN_BIT, use_fdlibm);
+    __ fsqrtd(x, x);
+    __ ret(lr);
+
+    __ bind(return_one);
+    __ fmovd(x, 1.0);
+    __ ret(lr);
+
+    __ bind(use_fdlibm);
+    __ mov(target, CAST_FROM_FN_PTR(address, SharedRuntime::dpow));
+    __ br(target);
+
+    return start;
+  }
+#endif // LINUX
 
   // Initialization
   void generate_initial() {
@@ -8423,6 +8631,16 @@ class StubGenerator: public StubCodeGenerator {
     // if (vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dlog)) {
     //   StubRoutines::_dlog = generate_dlog();
     // }
+
+    if (UseKMLPow) {
+#ifdef LINUX
+      const address kml_pow_entry = load_kml_pow();
+      StubRoutines::_dpow = generate_kml_pow_adapter(kml_pow_entry);
+#else
+      vm_exit_during_initialization(
+          "-XX:+UseKMLPow is only supported on Linux");
+#endif // LINUX
+    }
 
     if (vmIntrinsics::is_intrinsic_available(vmIntrinsics::_dsin)) {
       StubRoutines::_dsin = generate_dsin_dcos(/* isCos = */ false);
