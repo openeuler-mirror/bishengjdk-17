@@ -208,8 +208,8 @@ public final class ModuleBootstrap {
         boolean haveUpgradeModulePath = (upgradeModulePath != null);
         boolean haveModulePath = (appModulePath != null || haveUpgradeModulePath);
         boolean needResolution = true;
-        boolean hasSplitPackages;
-        boolean hasIncubatorModules;
+        boolean mayContainSplitPackages = true;
+        boolean mayContainIncubatorModules = true;
 
         // If the java heap was archived at CDS dump time and the environment
         // at dump time matches the current environment then use the archived
@@ -221,14 +221,17 @@ public final class ModuleBootstrap {
                 && limitModules.isEmpty()
                 && !isPatched) {
             systemModuleFinder = archivedModuleGraph.finder();
-            hasSplitPackages = archivedModuleGraph.hasSplitPackages();
-            hasIncubatorModules = archivedModuleGraph.hasIncubatorModules();
+            mayContainSplitPackages = archivedModuleGraph.hasSplitPackages();
+            mayContainIncubatorModules = archivedModuleGraph.hasIncubatorModules();
             needResolution = (traceOutput != null);
         } else {
             if (!haveModulePath && addModules.isEmpty() && limitModules.isEmpty()) {
                 systemModules = SystemModuleFinders.systemModules(mainModule);
-                if (systemModules != null && !isPatched) {
-                    needResolution = (traceOutput != null);
+                if (systemModules != null && !isPatched && traceOutput == null) {
+                    // use pre-generated configuration
+                    needResolution = false;
+                    mayContainSplitPackages = systemModules.hasSplitPackages();
+                    mayContainIncubatorModules = systemModules.hasIncubatorModules();
                 }
             }
             if (systemModules == null) {
@@ -244,8 +247,6 @@ public final class ModuleBootstrap {
                 systemModuleFinder = SystemModuleFinders.ofSystem();
             }
 
-            hasSplitPackages = systemModules.hasSplitPackages();
-            hasIncubatorModules = systemModules.hasIncubatorModules();
             // not using the archived module graph - avoid accidental use
             archivedModuleGraph = null;
         }
@@ -433,7 +434,7 @@ public final class ModuleBootstrap {
         }
 
         // check for split packages in the modules mapped to the built-in loaders
-        if (hasSplitPackages || isPatched || haveModulePath) {
+        if (mayContainSplitPackages) {
             checkSplitPackages(cf, clf);
         }
 
@@ -449,7 +450,7 @@ public final class ModuleBootstrap {
         // Step 7: Miscellaneous
 
         // check incubating status
-        if (hasIncubatorModules || haveModulePath) {
+        if (mayContainIncubatorModules) {
             checkIncubatingStatus(cf);
         }
 
@@ -475,6 +476,8 @@ public final class ModuleBootstrap {
                 && addModules.isEmpty()
                 && allJrtOrModularJar(cf)
                 && mainModule == null) {
+            boolean hasSplitPackages = containsSplitPackages(cf);
+            boolean hasIncubatorModules = containsIncubatorModule(cf);
             ArchivedModuleGraph.archive(hasSplitPackages,
                                         hasIncubatorModules,
                                         systemModuleFinder,
@@ -532,8 +535,18 @@ public final class ModuleBootstrap {
     }
 
     /**
-     * Checks for split packages between modules defined to the built-in class
-     * loaders.
+     * Returns true if the configuration contains modules with overlapping packages.
+     */
+    private static boolean containsSplitPackages(Configuration cf) {
+        boolean found = cf.modules().stream()
+                .map(m -> m.reference().descriptor().packages())
+                .flatMap(Set::stream)
+                .allMatch(new HashSet<>()::add);
+        return !found;
+    }
+
+    /**
+     * Checks for split packages between modules defined to the built-in class loaders.
      */
     private static void checkSplitPackages(Configuration cf,
                                            Function<String, ClassLoader> clf) {
@@ -913,6 +926,15 @@ public final class ModuleBootstrap {
      */
     private static String getAndRemoveProperty(String key) {
         return (String) System.getProperties().remove(key);
+    }
+
+    /**
+     * Returns true if the configuration contains an incubator module.
+     */
+    private static boolean containsIncubatorModule(Configuration cf) {
+        return cf.modules().stream()
+                .map(ResolvedModule::reference)
+                .anyMatch(ModuleResolution::hasIncubatingWarning);
     }
 
     /**
