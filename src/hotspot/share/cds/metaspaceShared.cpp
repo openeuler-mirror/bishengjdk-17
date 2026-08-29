@@ -259,6 +259,7 @@ void MetaspaceShared::post_initialize(TRAPS) {
         }
         ClassLoaderExt::init_paths_start_index(info->app_class_paths_start_index());
         ClassLoaderExt::init_app_module_paths_start_index(info->app_module_paths_start_index());
+        ClassLoaderExt::init_num_module_paths(info->num_module_paths());
       }
     }
   }

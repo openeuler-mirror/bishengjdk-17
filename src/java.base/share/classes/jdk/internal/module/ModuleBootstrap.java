@@ -33,6 +33,7 @@ import java.lang.module.ModuleFinder;
 import java.lang.module.ModuleReference;
 import java.lang.module.ResolvedModule;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -140,7 +141,6 @@ public final class ModuleBootstrap {
      */
     private static boolean canUseArchivedBootLayer() {
         return getProperty("jdk.module.upgrade.path") == null &&
-               getProperty("jdk.module.path") == null &&
                getProperty("jdk.module.patch.0") == null &&       // --patch-module
                getProperty("jdk.module.main") == null &&          // --module
                getProperty("jdk.module.addmods.0") == null  &&    // --add-modules
@@ -205,9 +205,9 @@ public final class ModuleBootstrap {
         SystemModules systemModules = null;
         ModuleFinder systemModuleFinder;
 
-        boolean haveModulePath = (appModulePath != null || upgradeModulePath != null);
+        boolean haveUpgradeModulePath = (upgradeModulePath != null);
+        boolean haveModulePath = (appModulePath != null || haveUpgradeModulePath);
         boolean needResolution = true;
-        boolean canArchive = false;
         boolean hasSplitPackages;
         boolean hasIncubatorModules;
 
@@ -216,7 +216,7 @@ public final class ModuleBootstrap {
         // system modules and finder.
         ArchivedModuleGraph archivedModuleGraph = ArchivedModuleGraph.get(mainModule);
         if (archivedModuleGraph != null
-                && !haveModulePath
+                && !haveUpgradeModulePath
                 && addModules.isEmpty()
                 && limitModules.isEmpty()
                 && !isPatched) {
@@ -229,7 +229,6 @@ public final class ModuleBootstrap {
                 systemModules = SystemModuleFinders.systemModules(mainModule);
                 if (systemModules != null && !isPatched) {
                     needResolution = (traceOutput != null);
-                    canArchive = true;
                 }
             }
             if (systemModules == null) {
@@ -470,9 +469,12 @@ public final class ModuleBootstrap {
                 limitedFinder = new SafeModuleFinder(finder);
         }
 
-        // Archive module graph and boot layer can be archived at CDS dump time.
-        // Only allow the unnamed module case for now.
-        if (canArchive && (mainModule == null)) {
+        // Archive the module graph and boot layer at CDS dump time.
+        if (CDS.isDumpingArchive()
+                && !haveUpgradeModulePath
+                && addModules.isEmpty()
+                && allJrtOrModularJar(cf)
+                && mainModule == null) {
             ArchivedModuleGraph.archive(hasSplitPackages,
                                         hasIncubatorModules,
                                         systemModuleFinder,
@@ -503,6 +505,29 @@ public final class ModuleBootstrap {
             } else if (loader instanceof BuiltinClassLoader) {
                 ((BuiltinClassLoader) loader).loadModule(mref);
             }
+        }
+    }
+
+    /**
+     * Returns true if all modules in the configuration are in the run-time image or
+     * modular JAR files.
+     */
+    private static boolean allJrtOrModularJar(Configuration cf) {
+        return !cf.modules().stream()
+                .map(m -> m.reference().location().orElseThrow())
+                .anyMatch(uri -> !uri.getScheme().equalsIgnoreCase("jrt")
+                        && !isJarFile(uri));
+    }
+
+    /**
+     * Returns true if the given URI locates a jar file on the file system.
+     */
+    private static boolean isJarFile(URI uri) {
+        if ("file".equalsIgnoreCase(uri.getScheme())) {
+            Path path = Path.of(uri);
+            return path.toString().endsWith(".jar") && Files.isRegularFile(path);
+        } else {
+            return false;
         }
     }
 

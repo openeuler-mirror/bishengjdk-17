@@ -876,6 +876,38 @@ void FileMapInfo::log_paths(const char* msg, int start_idx, int end_idx) {
   }
 }
 
+void FileMapInfo::extract_module_paths(const char* runtime_path,
+                                       GrowableArray<const char*>* module_paths) {
+  GrowableArray<const char*>* path_array = create_path_array(runtime_path);
+  for (int i = 0; i < path_array->length(); i++) {
+    ClassLoaderExt::extract_jar_files_from_path(path_array->at(i), module_paths);
+  }
+  // Module paths are stored in sorted order in the CDS archive.
+  module_paths->sort(ClassLoaderExt::compare_module_path_by_name);
+}
+
+bool FileMapInfo::check_module_paths() {
+  const char* runtime_path = Arguments::get_property("jdk.module.path");
+  int archived_num_module_paths = header()->num_module_paths();
+  if (runtime_path == NULL && archived_num_module_paths == 0) {
+    return true;
+  }
+  if ((runtime_path == NULL && archived_num_module_paths > 0) ||
+      (runtime_path != NULL && archived_num_module_paths == 0)) {
+    return false;
+  }
+
+  ResourceMark rm;
+  GrowableArray<const char*>* module_paths = new GrowableArray<const char*>(3);
+  extract_module_paths(runtime_path, module_paths);
+  if (module_paths->length() != archived_num_module_paths) {
+    return false;
+  }
+  // check_paths() returns true on mismatch in the JDK 17 CDS implementation.
+  return !check_paths(header()->app_module_paths_start_index(),
+                      module_paths->length(), module_paths);
+}
+
 bool FileMapInfo::validate_shared_path_table() {
   assert(UseSharedSpaces, "runtime only");
 
@@ -883,6 +915,16 @@ bool FileMapInfo::validate_shared_path_table() {
 
   // Load the shared path table info from the archive header
   _shared_path_table = header()->shared_path_table();
+
+  bool matched_module_paths = true;
+  if (DynamicDumpSharedSpaces || header()->has_full_module_graph()) {
+    matched_module_paths = check_module_paths();
+  }
+  if (header()->has_full_module_graph() && !matched_module_paths) {
+    MetaspaceShared::disable_optimized_module_handling();
+    log_info(cds)("optimized module handling: disabled because of mismatched module paths");
+  }
+
   if (DynamicDumpSharedSpaces) {
     // Only support dynamic dumping with the usage of the default CDS archive
     // or a simple base archive.
@@ -897,10 +939,10 @@ bool FileMapInfo::validate_shared_path_table() {
       warning(
         "Dynamic archiving is disabled because base layer archive has appended boot classpath");
     }
-    if (header()->num_module_paths() > 0) {
+    if (header()->num_module_paths() > 0 && !matched_module_paths) {
       DynamicDumpSharedSpaces = false;
       warning(
-        "Dynamic archiving is disabled because base layer archive has module path");
+        "Dynamic archiving is disabled because base layer archive has a different module path");
     }
   }
 
