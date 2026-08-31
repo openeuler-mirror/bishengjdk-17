@@ -101,6 +101,8 @@ applications/jcstress/acqrel.java 8277434 linux-aarch64
 # :hotspot_runtime
 
 runtime/cds/appcds/jigsaw/modulepath/ModulePathAndCP_JFR.java 8253437 windows-x64
+runtime/cds/appcds/jigsaw/modulepath/MainModuleOnly.java 8316969 generic-all
+runtime/cds/appcds/jigsaw/modulepath/OptimizeModuleHandlingTest.java 8316969 generic-all
 runtime/InvocationTests/invokevirtualTests.java#current-int 8271125 generic-all
 runtime/InvocationTests/invokevirtualTests.java#current-comp 8271125 generic-all
 runtime/InvocationTests/invokevirtualTests.java#old-int 8271125 generic-all

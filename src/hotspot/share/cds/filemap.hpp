@@ -272,6 +272,7 @@ public:
   size_t ptrmap_size_in_bits()             const { return _ptrmap_size_in_bits; }
   bool compressed_oops()                   const { return _compressed_oops; }
   bool compressed_class_pointers()         const { return _compressed_class_ptrs; }
+  bool has_full_module_graph()             const { return _use_full_module_graph; }
   // FIXME: These should really return int
   jshort max_used_path_index()             const { return _max_used_path_index; }
   jshort app_module_paths_start_index()    const { return _app_module_paths_start_index; }
@@ -356,6 +357,8 @@ private:
   FileMapHeader *header() const       { return _header; }
 
 public:
+  jshort num_module_paths() const { return header()->num_module_paths(); }
+
   static bool get_base_archive_name_from_header(const char* archive_name,
                                                 int* size, char** base_archive_name);
   static bool check_archive(const char* archive_name, bool is_static);
@@ -560,6 +563,9 @@ public:
   bool  classpath_failure(const char* msg, const char* name) NOT_CDS_RETURN_(false);
   bool  check_paths(int shared_path_start_idx, int num_paths,
                     GrowableArray<const char*>* rp_array) NOT_CDS_RETURN_(false);
+  bool  check_module_paths() NOT_CDS_RETURN_(false);
+  void  extract_module_paths(const char* runtime_path,
+                             GrowableArray<const char*>* module_paths);
   bool  validate_boot_class_paths() NOT_CDS_RETURN_(false);
   bool  validate_app_class_paths(int shared_app_paths_len) NOT_CDS_RETURN_(false);
   bool  map_heap_data(MemRegion **heap_mem, int first, int max, int* num,

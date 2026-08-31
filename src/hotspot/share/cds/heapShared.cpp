@@ -30,6 +30,7 @@
 #include "cds/metaspaceShared.hpp"
 #include "classfile/classLoaderData.hpp"
 #include "classfile/classLoaderDataShared.hpp"
+#include "classfile/classLoaderExt.hpp"
 #include "classfile/javaClasses.inline.hpp"
 #include "classfile/moduleEntry.hpp"
 #include "classfile/stringTable.hpp"
@@ -749,6 +750,17 @@ void HeapShared::resolve_classes_for_subgraph_of(Klass* k, JavaThread* THREAD) {
 void HeapShared::initialize_from_archived_subgraph(Klass* k, JavaThread* THREAD) {
   if (!is_mapped()) {
     return; // nothing to do
+  }
+
+  if (k->name()->equals("jdk/internal/module/ArchivedModuleGraph") &&
+      !MetaspaceShared::use_optimized_module_handling() &&
+      // archive was created with --module-path
+      ClassLoaderExt::num_module_paths() > 0) {
+    // ArchivedModuleGraph was created with a --module-path that's different than the runtime --module-path.
+    // Thus, it might contain references to modules that do not exist at runtime. We cannot use it.
+    log_info(cds, heap)("Skip initializing ArchivedModuleGraph subgraph: is_using_optimized_module_handling=%s num_module_paths=%d",
+                        BOOL_TO_STR(MetaspaceShared::use_optimized_module_handling()), ClassLoaderExt::num_module_paths());
+    return;
   }
 
   ExceptionMark em(THREAD);

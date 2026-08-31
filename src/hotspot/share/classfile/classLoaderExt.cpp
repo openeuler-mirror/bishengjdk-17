@@ -54,6 +54,7 @@
 jshort ClassLoaderExt::_app_class_paths_start_index = ClassLoaderExt::max_classpath_index;
 jshort ClassLoaderExt::_app_module_paths_start_index = ClassLoaderExt::max_classpath_index;
 jshort ClassLoaderExt::_max_used_path_index = 0;
+int ClassLoaderExt::_num_module_paths = 0;
 bool ClassLoaderExt::_has_app_classes = false;
 bool ClassLoaderExt::_has_platform_classes = false;
 
@@ -81,17 +82,42 @@ void ClassLoaderExt::setup_app_search_path(JavaThread* current) {
   }
 }
 
+int ClassLoaderExt::compare_module_path_by_name(const char** p1, const char** p2) {
+  return strcmp(*p1, *p2);
+}
+
 void ClassLoaderExt::process_module_table(JavaThread* current, ModuleEntryTable* met) {
   ResourceMark rm(current);
-  for (int i = 0; i < met->table_size(); i++) {
-    for (ModuleEntry* m = met->bucket(i); m != NULL;) {
-      char* path = m->location()->as_C_string();
-      if (strncmp(path, "file:", 5) == 0) {
-        path = ClassLoader::skip_uri_protocol(path);
-        ClassLoader::setup_module_search_path(current, path);
+  GrowableArray<const char*>* module_paths = new GrowableArray<const char*>(5);
+
+  class ModulePathsGatherer : public ModuleClosure {
+    JavaThread* _current;
+    GrowableArray<const char*>* _module_paths;
+   public:
+    ModulePathsGatherer(JavaThread* current, GrowableArray<const char*>* module_paths) :
+      _current(current), _module_paths(module_paths) {}
+    void do_module(ModuleEntry* m) {
+      char* uri = m->location()->as_C_string();
+      if (strncmp(uri, "file:", 5) == 0) {
+        char* path = ClassLoader::skip_uri_protocol(uri);
+        extract_jar_files_from_path(path, _module_paths);
       }
-      m = m->next();
     }
+  };
+
+  ModulePathsGatherer gatherer(current, module_paths);
+  for (int i = 0; i < met->table_size(); i++) {
+    for (ModuleEntry* m = met->bucket(i); m != NULL; m = m->next()) {
+      gatherer.do_module(m);
+    }
+  }
+
+  // Sort the module paths before storing into CDS archive for simpler
+  // checking at runtime.
+  module_paths->sort(compare_module_path_by_name);
+
+  for (int i = 0; i < module_paths->length(); i++) {
+    ClassLoader::setup_module_search_path(current, module_paths->at(i));
   }
 }
 void ClassLoaderExt::setup_module_paths(JavaThread* current) {
@@ -101,6 +127,38 @@ void ClassLoaderExt::setup_module_paths(JavaThread* current) {
   Handle system_class_loader (current, SystemDictionary::java_system_loader());
   ModuleEntryTable* met = Modules::get_module_entry_table(system_class_loader);
   process_module_table(current, met);
+}
+
+bool ClassLoaderExt::has_jar_suffix(const char* filename) {
+  // In jdk.internal.module.ModulePath.readModule(), it checks for the ".jar" suffix.
+  // Performing the same check here.
+  const char* dot = strrchr(filename, '.');
+  if (dot != nullptr && strcmp(dot + 1, "jar") == 0) {
+    return true;
+  }
+  return false;
+}
+
+void ClassLoaderExt::extract_jar_files_from_path(const char* path, GrowableArray<const char*>* module_paths) {
+  DIR* dirp = os::opendir(path);
+  if (dirp == nullptr && errno == ENOTDIR && has_jar_suffix(path)) {
+    module_paths->append(path);
+  } else {
+    if (dirp != nullptr) {
+      struct dirent* dentry;
+      while ((dentry = os::readdir(dirp)) != nullptr) {
+        const char* file_name = dentry->d_name;
+        if (has_jar_suffix(file_name)) {
+          size_t full_name_len = strlen(path) + strlen(file_name) + strlen(os::file_separator()) + 1;
+          char* full_name = NEW_RESOURCE_ARRAY(char, full_name_len);
+          int n = os::snprintf(full_name, full_name_len, "%s%s%s", path, os::file_separator(), file_name);
+          assert((size_t)n == full_name_len - 1, "Unexpected number of characters in string");
+          module_paths->append(full_name);
+        }
+      }
+      os::closedir(dirp);
+    }
+  }
 }
 
 char* ClassLoaderExt::read_manifest(JavaThread* current, ClassPathEntry* entry,

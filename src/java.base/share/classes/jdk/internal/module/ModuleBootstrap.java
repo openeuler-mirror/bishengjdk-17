@@ -33,6 +33,7 @@ import java.lang.module.ModuleFinder;
 import java.lang.module.ModuleReference;
 import java.lang.module.ResolvedModule;
 import java.net.URI;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -140,7 +141,6 @@ public final class ModuleBootstrap {
      */
     private static boolean canUseArchivedBootLayer() {
         return getProperty("jdk.module.upgrade.path") == null &&
-               getProperty("jdk.module.path") == null &&
                getProperty("jdk.module.patch.0") == null &&       // --patch-module
                getProperty("jdk.module.main") == null &&          // --module
                getProperty("jdk.module.addmods.0") == null  &&    // --add-modules
@@ -205,31 +205,33 @@ public final class ModuleBootstrap {
         SystemModules systemModules = null;
         ModuleFinder systemModuleFinder;
 
-        boolean haveModulePath = (appModulePath != null || upgradeModulePath != null);
+        boolean haveUpgradeModulePath = (upgradeModulePath != null);
+        boolean haveModulePath = (appModulePath != null || haveUpgradeModulePath);
         boolean needResolution = true;
-        boolean canArchive = false;
-        boolean hasSplitPackages;
-        boolean hasIncubatorModules;
+        boolean mayContainSplitPackages = true;
+        boolean mayContainIncubatorModules = true;
 
         // If the java heap was archived at CDS dump time and the environment
         // at dump time matches the current environment then use the archived
         // system modules and finder.
         ArchivedModuleGraph archivedModuleGraph = ArchivedModuleGraph.get(mainModule);
         if (archivedModuleGraph != null
-                && !haveModulePath
+                && !haveUpgradeModulePath
                 && addModules.isEmpty()
                 && limitModules.isEmpty()
                 && !isPatched) {
             systemModuleFinder = archivedModuleGraph.finder();
-            hasSplitPackages = archivedModuleGraph.hasSplitPackages();
-            hasIncubatorModules = archivedModuleGraph.hasIncubatorModules();
+            mayContainSplitPackages = archivedModuleGraph.hasSplitPackages();
+            mayContainIncubatorModules = archivedModuleGraph.hasIncubatorModules();
             needResolution = (traceOutput != null);
         } else {
             if (!haveModulePath && addModules.isEmpty() && limitModules.isEmpty()) {
                 systemModules = SystemModuleFinders.systemModules(mainModule);
-                if (systemModules != null && !isPatched) {
-                    needResolution = (traceOutput != null);
-                    canArchive = true;
+                if (systemModules != null && !isPatched && traceOutput == null) {
+                    // use pre-generated configuration
+                    needResolution = false;
+                    mayContainSplitPackages = systemModules.hasSplitPackages();
+                    mayContainIncubatorModules = systemModules.hasIncubatorModules();
                 }
             }
             if (systemModules == null) {
@@ -245,8 +247,6 @@ public final class ModuleBootstrap {
                 systemModuleFinder = SystemModuleFinders.ofSystem();
             }
 
-            hasSplitPackages = systemModules.hasSplitPackages();
-            hasIncubatorModules = systemModules.hasIncubatorModules();
             // not using the archived module graph - avoid accidental use
             archivedModuleGraph = null;
         }
@@ -434,7 +434,7 @@ public final class ModuleBootstrap {
         }
 
         // check for split packages in the modules mapped to the built-in loaders
-        if (hasSplitPackages || isPatched || haveModulePath) {
+        if (mayContainSplitPackages) {
             checkSplitPackages(cf, clf);
         }
 
@@ -450,7 +450,7 @@ public final class ModuleBootstrap {
         // Step 7: Miscellaneous
 
         // check incubating status
-        if (hasIncubatorModules || haveModulePath) {
+        if (mayContainIncubatorModules) {
             checkIncubatingStatus(cf);
         }
 
@@ -470,9 +470,14 @@ public final class ModuleBootstrap {
                 limitedFinder = new SafeModuleFinder(finder);
         }
 
-        // Archive module graph and boot layer can be archived at CDS dump time.
-        // Only allow the unnamed module case for now.
-        if (canArchive && (mainModule == null)) {
+        // Archive the module graph and boot layer at CDS dump time.
+        if (CDS.isDumpingArchive()
+                && !haveUpgradeModulePath
+                && addModules.isEmpty()
+                && allJrtOrModularJar(cf)
+                && mainModule == null) {
+            boolean hasSplitPackages = containsSplitPackages(cf);
+            boolean hasIncubatorModules = containsIncubatorModule(cf);
             ArchivedModuleGraph.archive(hasSplitPackages,
                                         hasIncubatorModules,
                                         systemModuleFinder,
@@ -507,8 +512,41 @@ public final class ModuleBootstrap {
     }
 
     /**
-     * Checks for split packages between modules defined to the built-in class
-     * loaders.
+     * Returns true if all modules in the configuration are in the run-time image or
+     * modular JAR files.
+     */
+    private static boolean allJrtOrModularJar(Configuration cf) {
+        return !cf.modules().stream()
+                .map(m -> m.reference().location().orElseThrow())
+                .anyMatch(uri -> !uri.getScheme().equalsIgnoreCase("jrt")
+                        && !isJarFile(uri));
+    }
+
+    /**
+     * Returns true if the given URI locates a jar file on the file system.
+     */
+    private static boolean isJarFile(URI uri) {
+        if ("file".equalsIgnoreCase(uri.getScheme())) {
+            Path path = Path.of(uri);
+            return path.toString().endsWith(".jar") && Files.isRegularFile(path);
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Returns true if the configuration contains modules with overlapping packages.
+     */
+    private static boolean containsSplitPackages(Configuration cf) {
+        boolean found = cf.modules().stream()
+                .map(m -> m.reference().descriptor().packages())
+                .flatMap(Set::stream)
+                .allMatch(new HashSet<>()::add);
+        return !found;
+    }
+
+    /**
+     * Checks for split packages between modules defined to the built-in class loaders.
      */
     private static void checkSplitPackages(Configuration cf,
                                            Function<String, ClassLoader> clf) {
@@ -888,6 +926,15 @@ public final class ModuleBootstrap {
      */
     private static String getAndRemoveProperty(String key) {
         return (String) System.getProperties().remove(key);
+    }
+
+    /**
+     * Returns true if the configuration contains an incubator module.
+     */
+    private static boolean containsIncubatorModule(Configuration cf) {
+        return cf.modules().stream()
+                .map(ResolvedModule::reference)
+                .anyMatch(ModuleResolution::hasIncubatingWarning);
     }
 
     /**
