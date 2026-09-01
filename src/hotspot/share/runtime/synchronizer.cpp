@@ -1034,7 +1034,6 @@ intptr_t ObjectSynchronizer::FastHashCode(Thread* current, oop obj) {
     // been checked to make sure they can handle a safepoint. The
     // added check of the bias pattern is to avoid useless calls to
     // thread-local storage.
-    assert(false, "should not use this");
     if (obj->mark().has_bias_pattern()) {
       // Handle for oop obj in case of STW safepoint
       Handle hobj(current, obj);
