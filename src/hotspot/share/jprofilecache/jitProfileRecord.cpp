@@ -246,6 +246,7 @@ JitProfileRecorderEntry* JitProfileRecordDictionary::new_entry(unsigned int hash
 }
 
 JitProfileRecorderEntry* JitProfileRecordDictionary::add_method(unsigned int method_hash, Method* method, int bci) {
+  ResourceMark rm;
   assert_lock_strong(JitProfileRecorder_lock);
   int target_bucket = hash_to_index(method_hash);
   JitProfileRecorderEntry* record_entry = find_entry(method_hash, method);
