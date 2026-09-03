@@ -216,7 +216,7 @@ public final class ModuleBootstrap {
         // system modules and finder.
         ArchivedModuleGraph archivedModuleGraph = ArchivedModuleGraph.get(mainModule);
         if (archivedModuleGraph != null
-                && !haveUpgradeModulePath
+                && !haveModulePath
                 && addModules.isEmpty()
                 && limitModules.isEmpty()
                 && !isPatched) {
