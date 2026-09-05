@@ -94,8 +94,8 @@ public class ArchivedModuleComboTest {
         // Test case 3)
         // - Dump without --module-path, without --show-module-resolution
         // - Run with --module-path
-        //    + archived boot layer module ModuleDescriptors should be used
-        //    + archived boot layer Configuration should be used
+        //    + archived boot layer module ModuleDescriptors should be disabled
+        //    + archived boot layer Configuration should be disabled
         System.out.println("----------------------- Test case 3 ----------------------");
         output = TestCommon.exec(appJar, use_whitebox_jar,
                                  "--module-path",
@@ -103,8 +103,8 @@ public class ArchivedModuleComboTest {
                                  "-XX:+UnlockDiagnosticVMOptions",
                                  "-XX:+WhiteBoxAPI",
                                  "CheckArchivedModuleApp",
-                                 "yes",
-                                 "yes");
+                                 "no",
+                                 "no");
         TestCommon.checkExec(output);
 
         //
@@ -135,7 +135,7 @@ public class ArchivedModuleComboTest {
         // Test case 5)
         // - Dump with an empty --module-path
         // - Run with the same empty --module-path; archived boot layer
-        //   ModuleDescriptors and Configuration should be used.
+        //   ModuleDescriptors and Configuration should be disabled.
         System.out.println("----------------------- Test case 5 ----------------------");
         output = TestCommon.exec(appJar, use_whitebox_jar,
                                  "--module-path",
@@ -143,8 +143,8 @@ public class ArchivedModuleComboTest {
                                  "-XX:+UnlockDiagnosticVMOptions",
                                  "-XX:+WhiteBoxAPI",
                                  "CheckArchivedModuleApp",
-                                 "yes",
-                                 "yes");
+                                 "no",
+                                 "no");
         TestCommon.checkExec(output);
 
         //
