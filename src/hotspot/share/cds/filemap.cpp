@@ -234,7 +234,8 @@ void FileMapHeader::populate(FileMapInfo* mapinfo, size_t core_region_alignment)
     _narrow_oop_base = CompressedOops::base();
     _narrow_oop_shift = CompressedOops::shift();
     _heap_begin = CompressedOops::begin();
-    _heap_end = CompressedOops::end();
+    _heap_end = Universe::is_dynamic_max_heap_enable()
+                    ? CompressedOops::begin() + MaxHeapSize : CompressedOops::end();
   }
   _compressed_oops = UseCompressedOops;
   _compressed_class_ptrs = UseCompressedClassPointers;

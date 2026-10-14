@@ -558,10 +558,18 @@ void HeapRegionManager::iterate(HeapRegionClosure* blk) const {
 }
 
 uint HeapRegionManager::find_highest_free(bool* expanded) {
-  // Loop downwards from the highest region index, looking for an
+  uint upper_bound = reserved_length();
+  if (Universe::is_dynamic_max_heap_enable()) {
+    // Keep archive allocations below the dynamic cap. Starting at the end
+    // of the reservation could split closed and open archive regions when
+    // the commit budget is exhausted during allocation.
+    upper_bound = dynamic_max_heap_length();
+  }
+
+  // Loop downwards from the highest permitted region index, looking for an
   // entry which is either free or not yet committed.  If not yet
   // committed, expand at that index.
-  for (uint curr = reserved_length(); curr-- > 0;) {
+  for (uint curr = upper_bound; curr-- > 0;) {
     HeapRegion *hr = _regions.get_by_index(curr);
     if ((hr == NULL || !is_available(curr)) && available() >= 1) {
       // Found uncommitted and free region, expand to make it available for use.
@@ -570,6 +578,11 @@ uint HeapRegionManager::find_highest_free(bool* expanded) {
 
       *expanded = true;
       return curr;
+    }
+    if (hr == NULL || !is_available(curr)) {
+      // The dynamic heap cap prevented expansion. Keep looking for a
+      // committed free region at a lower index.
+      continue;
     }
     if (hr->is_free()) {
       *expanded = false;
@@ -592,7 +605,9 @@ bool HeapRegionManager::allocate_containing_regions(MemRegion range, size_t* com
       expand_exact(curr_index, 1, pretouch_workers);
     }
     HeapRegion* curr_region  = _regions.get_by_index(curr_index);
-    if (!curr_region->is_free()) {
+    // The region may still be unavailable if the dynamic heap cap
+    // prevented expansion.
+    if (!is_available(curr_index) || curr_region == NULL || !curr_region->is_free()) {
       return false;
     }
   }
