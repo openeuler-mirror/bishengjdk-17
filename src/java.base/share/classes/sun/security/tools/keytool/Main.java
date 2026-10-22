@@ -43,7 +43,6 @@ import java.security.cert.URICertStoreParameters;
 
 
 import java.security.interfaces.ECKey;
-import java.security.interfaces.EdECKey;
 import java.security.spec.ECParameterSpec;
 import java.text.Collator;
 import java.text.MessageFormat;
@@ -3564,13 +3563,10 @@ public final class Main {
     }
 
     private String fullDisplayAlgName(Key key) {
-        String result = key.getAlgorithm();
+        String result = KeyUtil.fullDisplayAlgName(key);
         if (key instanceof ECKey) {
             ECParameterSpec paramSpec = ((ECKey) key).getParams();
-            if (paramSpec instanceof NamedCurve) {
-                NamedCurve nc = (NamedCurve)paramSpec;
-                result += " (" + nc.getNameAndAliases()[0] + ")";
-            } else if (paramSpec.getClass().getSimpleName().equals("KAENamedCurve")) {
+            if (paramSpec != null && paramSpec.getClass().getSimpleName().equals("KAENamedCurve")) {
                 try {
                     Field na = paramSpec.getClass().getDeclaredField("nameAndAliases");
                     na.setAccessible(true);
@@ -3599,12 +3595,9 @@ public final class Main {
                     }
                 }
             }
-        } else if (key instanceof EdECKey) {
-            result = ((EdECKey) key).getParams().getName();
         }
         return result;
     }
-
     private String withWeakConstraint(Key key,
             CertPathConstraintsParameters cpcp) {
         int kLen = KeyUtil.getKeySize(key);

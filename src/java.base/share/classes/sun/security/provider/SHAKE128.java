@@ -27,7 +27,7 @@ package sun.security.provider;
 /*
  * The SHAKE128 extendable output function.
  */
-public final class SHAKE128 extends SHA3 {
+public final class SHAKE128 extends SHA3.SHA3XOF {
     public SHAKE128(int d) {
         super("SHAKE128", d, (byte) 0x1F, 32);
     }
