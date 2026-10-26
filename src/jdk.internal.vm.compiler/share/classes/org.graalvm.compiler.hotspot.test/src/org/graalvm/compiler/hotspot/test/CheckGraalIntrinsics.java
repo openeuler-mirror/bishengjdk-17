@@ -644,6 +644,26 @@ public class CheckGraalIntrinsics extends GraalTest {
         if (isJDK16OrHigher()) {
             add(toBeInvestigated, "sun/security/provider/SHA3." + shaCompressName + "([BI)V");
         }
+
+        // ML-KEM (Kyber) intrinsics: C2 MacroAssembler-based, not implemented in Graal
+        add(toBeInvestigated,
+                        "com/sun/crypto/provider/ML_KEM.implKyber12To16([BI[SI)I",
+                        "com/sun/crypto/provider/ML_KEM.implKyberAddPoly([S[S[S)I",
+                        "com/sun/crypto/provider/ML_KEM.implKyberAddPoly([S[S[S[S)I",
+                        "com/sun/crypto/provider/ML_KEM.implKyberBarrettReduce([S)I",
+                        "com/sun/crypto/provider/ML_KEM.implKyberInverseNtt([S[S)I",
+                        "com/sun/crypto/provider/ML_KEM.implKyberNtt([S[S)I",
+                        "com/sun/crypto/provider/ML_KEM.implKyberNttMult([S[S[S[S)I");
+        // ML-DSA (Dilithium) intrinsics: C2 MacroAssembler-based, not implemented in Graal
+        add(toBeInvestigated,
+                        "sun/security/provider/ML_DSA.implDilithiumAlmostInverseNtt([I[I)I",
+                        "sun/security/provider/ML_DSA.implDilithiumAlmostNtt([I[I)I",
+                        "sun/security/provider/ML_DSA.implDilithiumDecomposePoly([I[I[III)I",
+                        "sun/security/provider/ML_DSA.implDilithiumMontMulByConstant([II)I",
+                        "sun/security/provider/ML_DSA.implDilithiumNttMult([I[I[I)I");
+        // Parallel SHA3 intrinsic: C2 MacroAssembler-based, not implemented in Graal
+        add(toBeInvestigated,
+                        "sun/security/provider/SHA3Parallel.doubleKeccak([J[J)I");
     }
 
     private static boolean isJDK9OrHigher() {
