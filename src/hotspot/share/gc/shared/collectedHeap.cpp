@@ -416,8 +416,21 @@ size_t CollectedHeap::filler_array_min_size() {
 }
 
 void CollectedHeap::zap_filler_array_with(HeapWord* start, size_t words, juint value) {
-  Copy::fill_to_words(start + filler_array_hdr_size(),
-                      words - filler_array_hdr_size(), value);
+  // Zap the filler payload starting at the first array element. The base
+  // offset of an int[] is not necessarily HeapWord-aligned: with compact
+  // object headers it is only jint-aligned (12 bytes on LP64). Zap the
+  // leading partial word with a jint store, so that no gap of stale memory
+  // is left between the length field and the word-granular zap region.
+  // Such a gap would leak non-deterministic bytes into CDS archives.
+  const size_t header_bytes = arrayOopDesc::base_offset_in_bytes(T_INT);
+  const size_t header_words = align_up(header_bytes, HeapWordSize) / HeapWordSize;
+  assert(header_bytes % sizeof(jint) == 0, "header must be int aligned");
+  assert(words >= header_words, "filler smaller than array header");
+  if (header_bytes % HeapWordSize != 0) {
+    // Leading partial word of the payload, e.g. element[0] at bytes [12, 16).
+    *(jint*)(reinterpret_cast<address>(start) + header_bytes) = value;
+  }
+  Copy::fill_to_words(start + header_words, words - header_words, value);
 }
 
 #ifdef ASSERT
