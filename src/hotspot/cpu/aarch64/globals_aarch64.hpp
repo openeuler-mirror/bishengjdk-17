@@ -115,6 +115,14 @@ define_pd_global(intx, InlineSmallCode,          1000);
   product(intx, BlockZeroingLowLimit, 256,                              \
           "Minimum size in bytes when block zeroing will be used")      \
           range(wordSize, max_jint)                                     \
+  product(bool, UsePolymorphicInlining, false,                          \
+          "Profiling based inlining for two or more receivers")         \
+  product(bool, UseOnlyInlinedPolymorphic, true,                       \
+          "Don't use PolymorphicInlining if can't inline a secondary "  \
+          "method")                                                     \
+  product(intx, TypeProfileMinimumReceiverPercent, 20,                  \
+          "minimum % of receiver type to all profiled receivers")       \
+          range(0, 100)                                                 \
   product(bool, TraceTraps, false, "Trace all traps the signal handler")\
                                                                         \
   product(bool, ExitVMProfileCacheFlush, false, EXPERIMENTAL,           \

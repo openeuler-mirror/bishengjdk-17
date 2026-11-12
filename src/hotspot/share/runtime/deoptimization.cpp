@@ -2616,7 +2616,11 @@ const char* Deoptimization::_trap_reason_name[] = {
   "class_check",
   "array_check",
   "intrinsic" JVMCI_ONLY("_or_type_checked_inlining"),
+#ifdef AARCH64
+  "polymorphic" JVMCI_ONLY("_or_optimized_type_check"),
+#else
   "bimorphic" JVMCI_ONLY("_or_optimized_type_check"),
+#endif
   "profile_predicate",
   "unloaded",
   "uninitialized",
