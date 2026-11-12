@@ -100,22 +100,48 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
 
   CompileLog* log = this->log();
   if (log != nullptr) {
-    int rid = (receiver_count >= 0)? log->identify(profile.receiver(0)): -1;
-    int r2id = (rid != -1 && profile.has_receiver(1))? log->identify(profile.receiver(1)):-1;
+#ifdef AARCH64
+    if (UsePolymorphicInlining) {
+    ResourceMark rm;
+    int* rids = NEW_RESOURCE_ARRAY(int, TypeProfileWidth);
+    for (int i = 0; i < TypeProfileWidth && profile.has_receiver(i); i++) {
+      rids[i] = log->identify(profile.receiver(i));
+    }
     log->begin_elem("call method='%d' count='%d' prof_factor='%f'",
                     log->identify(callee), site_count, prof_factor);
     if (call_does_dispatch)  log->print(" virtual='1'");
     if (allow_inline)     log->print(" inline='1'");
-    if (receiver_count >= 0) {
-      log->print(" receiver='%d' receiver_count='%d'", rid, receiver_count);
-      if (profile.has_receiver(1)) {
-        log->print(" receiver2='%d' receiver2_count='%d'", r2id, profile.receiver_count(1));
+    for (int i = 0; i < TypeProfileWidth && profile.has_receiver(i); i++) {
+      if (i == 0) {
+        log->print(" receiver='%d' receiver_count='%d' receiver_prob='%f'", rids[i], profile.receiver_count(i), profile.receiver_prob(i));
+      } else {
+        log->print(" receiver%d='%d' receiver%d_count='%d' receiver%d_prob='%f'", i + 1, rids[i], i + 1, profile.receiver_count(i), i + 1, profile.receiver_prob(i));
       }
     }
     if (callee->is_method_handle_intrinsic()) {
       log->print(" method_handle_intrinsic='1'");
     }
     log->end_elem();
+    } else
+#endif // AARCH64
+    {
+      int rid = (receiver_count >= 0)? log->identify(profile.receiver(0)): -1;
+      int r2id = (rid != -1 && profile.has_receiver(1))? log->identify(profile.receiver(1)):-1;
+      log->begin_elem("call method='%d' count='%d' prof_factor='%f'",
+                      log->identify(callee), site_count, prof_factor);
+      if (call_does_dispatch)  log->print(" virtual='1'");
+      if (allow_inline)     log->print(" inline='1'");
+      if (receiver_count >= 0) {
+        log->print(" receiver='%d' receiver_count='%d'", rid, receiver_count);
+        if (profile.has_receiver(1)) {
+          log->print(" receiver2='%d' receiver2_count='%d'", r2id, profile.receiver_count(1));
+        }
+      }
+      if (callee->is_method_handle_intrinsic()) {
+        log->print(" method_handle_intrinsic='1'");
+      }
+      log->end_elem();
+    }
   }
 
   // Special case the handling of certain common, profitable library
@@ -202,6 +228,124 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
       }
     }
 
+#ifdef AARCH64
+    if (UsePolymorphicInlining) {
+    // Try using the type profile.
+    if (call_does_dispatch && site_count > 0 && UseTypeProfile &&
+        (profile.has_receiver(0) || speculative_receiver_type != NULL)) {
+      // The major receiver's count >= TypeProfileMajorReceiverPercent of site_count.
+      bool have_major_receiver = profile.has_receiver(0) && (100.*profile.receiver_prob(0) >= (float)TypeProfileMajorReceiverPercent);
+
+      int morphism = profile.morphism();
+      int width = morphism > 0 ? morphism : 1;
+      ciMethod** receiver_methods = NEW_RESOURCE_ARRAY(ciMethod*, width);
+      memset(receiver_methods, 0, sizeof(ciMethod*) * width);
+      CallGenerator** hit_cgs = NEW_RESOURCE_ARRAY(CallGenerator*, width);
+      memset(hit_cgs, 0, sizeof(CallGenerator*) * width);
+
+      if (speculative_receiver_type != NULL) {
+        if (!too_many_traps_or_recompiles(caller, bci, Deoptimization::Reason_speculate_class_check)) {
+          // We have a speculative type, we should be able to resolve
+          // the call. We do that before looking at the profiling at
+          // this invoke because it may lead to polymorphic inlining which
+          // a speculative type should help us avoid.
+          receiver_methods[0] = callee->resolve_invoke(jvms->method()->holder(),
+                                                       speculative_receiver_type);
+          if (receiver_methods[0] == NULL) {
+            speculative_receiver_type = NULL;
+          } else {
+            morphism = 1;
+          }
+        } else {
+          // speculation failed before. Use profiling at the call
+          // (could allow polymorphic inlining for instance).
+          speculative_receiver_type = NULL;
+        }
+      }
+
+      bool removed_cgs = false;
+      // Look up receivers.
+      for (int i = 0; i < morphism; i++) {
+        if ((i == 1 && !UseBimorphicInlining) || (i >= 2 && !UsePolymorphicInlining)) {
+          break;
+        }
+        if (receiver_methods[i] == NULL && profile.has_receiver(i)) {
+          receiver_methods[i] = callee->resolve_invoke(jvms->method()->holder(),
+                                                       profile.receiver(i));
+        }
+        if (receiver_methods[i] != NULL) {
+          bool allow_inline_receiver;
+          if (speculative_receiver_type != NULL) {
+            allow_inline_receiver = true;
+          } else {
+            allow_inline_receiver = 100.*profile.receiver_prob(i) >= (float)TypeProfileMinimumReceiverPercent;
+          }
+          hit_cgs[i] = this->call_generator(receiver_methods[i],
+                                            vtable_index, !call_does_dispatch, jvms,
+                                            allow_inline_receiver, prof_factor);
+          if (hit_cgs[i] != NULL) {
+            if (speculative_receiver_type != NULL) {
+              // Do nothing if it's a speculative type.
+            } else if (bytecode == Bytecodes::_invokeinterface) {
+              // Do nothing if it's an interface, multiple direct-calls are
+              // faster than one indirect-call.
+            } else if (!have_major_receiver) {
+              // Do nothing if there is no major receiver.
+            } else if ((morphism == 2 && !UseOnlyInlinedBimorphic) || (morphism >= 3 && !UseOnlyInlinedPolymorphic)) {
+              // Do nothing if the user allows non-inlined polymorphic calls.
+            } else if (!hit_cgs[i]->is_inline()) {
+              // Skip if we can't inline receiver's method.
+              hit_cgs[i] = NULL;
+              removed_cgs = true;
+            }
+          }
+        }
+      }
+
+      // Generate the fallback path.
+      Deoptimization::DeoptReason reason = (morphism != 1
+                                            ? Deoptimization::Reason_polymorphic
+                                            : Deoptimization::reason_class_check(speculative_receiver_type != NULL));
+      bool disable_trap = (profile.is_megamorphic() || removed_cgs || too_many_traps_or_recompiles(caller, bci, reason));
+      if (log != NULL) {
+        log->elem("call_fallback method='%d' count='%d' morphism='%d' trap='%d'",
+                  log->identify(callee), site_count, morphism, disable_trap ? 0 : 1);
+      }
+      CallGenerator* miss_cg;
+      if (!disable_trap) {
+        // Generate uncommon trap for class check failure path
+        // in case of polymorphic virtual call site.
+        miss_cg = CallGenerator::for_uncommon_trap(callee, reason,
+                                                   Deoptimization::Action_maybe_recompile);
+      } else {
+        // Generate virtual call for class check failure path
+        // in case of megamorphic virtual call site.
+        miss_cg = CallGenerator::for_virtual_call(callee, vtable_index);
+      }
+
+      // Generate the guards.
+      CallGenerator* cg = NULL;
+      if (speculative_receiver_type != NULL) {
+        if (hit_cgs[0] != NULL) {
+          trace_type_profile(C, jvms->method(), jvms->depth() - 1, jvms->bci(), receiver_methods[0], speculative_receiver_type, site_count, profile.receiver_count(0));
+          // We don't need to record dependency on a receiver here and below.
+          // Whenever we inline, the dependency is added by Parse::Parse().
+          cg = CallGenerator::for_predicted_call(speculative_receiver_type, miss_cg, hit_cgs[0], PROB_MAX);
+        }
+      } else {
+        for (int i = morphism - 1; i >= 0 && miss_cg != NULL; i--) {
+          if (hit_cgs[i] != NULL) {
+            trace_type_profile(C, jvms->method(), jvms->depth() - 1, jvms->bci(), receiver_methods[i], profile.receiver(i), site_count, profile.receiver_count(i));
+            miss_cg = CallGenerator::for_predicted_call(profile.receiver(i), miss_cg, hit_cgs[i], profile.receiver_prob(i));
+          }
+        }
+        cg = miss_cg;
+      }
+      if (cg != NULL)  return cg;
+    }
+    } else
+#endif // AARCH64
+    {
     // Try using the type profile.
     if (call_does_dispatch && site_count > 0 && UseTypeProfile) {
       // The major receiver's count >= TypeProfileMajorReceiverPercent of site_count.
@@ -260,7 +404,11 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
           }
           CallGenerator* miss_cg;
           Deoptimization::DeoptReason reason = (morphism == 2
+#ifdef AARCH64
+                                               ? Deoptimization::Reason_polymorphic
+#else
                                                ? Deoptimization::Reason_bimorphic
+#endif
                                                : Deoptimization::reason_class_check(speculative_receiver_type != nullptr));
           if ((morphism == 1 || (morphism == 2 && next_hit_cg != nullptr)) &&
               !too_many_traps_or_recompiles(caller, bci, reason)
@@ -293,6 +441,7 @@ CallGenerator* Compile::call_generator(ciMethod* callee, int vtable_index, bool 
           }
         }
       }
+    }
     }
 
     // If there is only one implementor of this interface then we

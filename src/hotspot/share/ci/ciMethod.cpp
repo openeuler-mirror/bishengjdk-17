@@ -498,24 +498,50 @@ ciCallProfile ciMethod::call_profile_at_bci(int bci) {
           // If we extend profiling to record methods,
           // we will set result._method also.
         }
-        // Determine call site's morphism.
-        // The call site count is 0 with known morphism (only 1 or 2 receivers)
-        // or < 0 in the case of a type check failure for checkcast, aastore, instanceof.
-        // The call site count is > 0 in the case of a polymorphic virtual call.
-        if (morphism > 0 && morphism == result._limit) {
-           // The morphism <= MorphismLimit.
-           if ((morphism <  ciCallProfile::MorphismLimit) ||
-               (morphism == ciCallProfile::MorphismLimit && count == 0)) {
+#ifdef AARCH64
+        if (UsePolymorphicInlining) {
+          // Determine call site's megamorphism.
+          // The call site count is 0 with known morphism or < 0 in the
+          // case of a type check failure for checkcast, aastore, instanceof.
+          // The call site count is > 0 in the case of a megamorphic virtual call.
+          if (morphism > 0 && morphism == result._limit) {
+             if ((morphism <  TypeProfileWidth) ||
+                 (morphism == TypeProfileWidth && count == 0)) {
 #ifdef ASSERT
-             if (count > 0) {
-               this->print_short_name(tty);
-               tty->print_cr(" @ bci:%d", bci);
-               this->print_codes();
-               assert(false, "this call site should not be polymorphic");
+               if (count > 0) {
+                 this->print_short_name(tty);
+                 tty->print_cr(" @ bci:%d", bci);
+                 this->print_codes();
+                 assert(false, "this call site should not be megamorphic");
+               }
+#endif // ASSERT
+             } else {
+               result._is_megamorphic = true;
              }
-#endif
-             result._morphism = morphism;
-           }
+          }
+          result._morphism = morphism;
+        } else
+#endif // AARCH64
+        {
+          // Determine call site's morphism.
+          // The call site count is 0 with known morphism (only 1 or 2 receivers)
+          // or < 0 in the case of a type check failure for checkcast, aastore, instanceof.
+          // The call site count is > 0 in the case of a polymorphic virtual call.
+          if (morphism > 0 && morphism == result._limit) {
+             // The morphism <= MorphismLimit.
+             if ((morphism <  ciCallProfile::BimorphicLimit) ||
+                 (morphism == ciCallProfile::BimorphicLimit && count == 0)) {
+#ifdef ASSERT
+               if (count > 0) {
+                 this->print_short_name(tty);
+                 tty->print_cr(" @ bci:%d", bci);
+                 this->print_codes();
+                 assert(false, "this call site should not be polymorphic");
+               }
+#endif // ASSERT
+               result._morphism = morphism;
+             }
+          }
         }
         // Make the count consistent if this is a call profile. If count is
         // zero or less, presume that this is a typecheck profile and
@@ -545,7 +571,12 @@ void ciCallProfile::add_receiver(ciKlass* receiver, int receiver_count) {
   }
   _receiver[i] = receiver;
   _receiver_count[i] = receiver_count;
+#ifdef AARCH64
+  int limit = UsePolymorphicInlining ? MIN2((int)TypeProfileWidth, (int)MorphismLimit) : (int)BimorphicLimit;
+  if (_limit < limit) _limit++;
+#else
   if (_limit < MorphismLimit) _limit++;
+#endif // AARCH64
 }
 
 

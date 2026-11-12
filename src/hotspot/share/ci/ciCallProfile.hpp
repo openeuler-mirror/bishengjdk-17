@@ -38,7 +38,13 @@ private:
   friend class ciMethod;
   friend class ciMethodHandle;
 
-  enum { MorphismLimit = 2 }; // Max call site's morphism we care about
+  enum { BimorphicLimit = 2 };
+#ifdef AARCH64
+  enum { MorphismLimit = 8 }; // Max call site's morphism we care about
+  bool _is_megamorphic;       // whether the call site is megamorphic
+#else
+  enum { MorphismLimit = BimorphicLimit }; // Max call site's morphism we care about
+#endif
   int  _limit;                // number of receivers have been determined
   int  _morphism;             // determined call site's morphism
   int  _count;                // # times has this call been executed
@@ -46,6 +52,10 @@ private:
   ciKlass*  _receiver[MorphismLimit + 1];  // receivers (exact)
 
   ciCallProfile() {
+#ifdef AARCH64
+    guarantee(MorphismLimit >= TypeProfileWidth, "MorphismLimit can't be smaller than TypeProfileWidth");
+    _is_megamorphic = false;
+#endif
     _limit = 0;
     _morphism    = 0;
     _count = -1;
@@ -56,6 +66,10 @@ private:
   void add_receiver(ciKlass* receiver, int receiver_count);
 
 public:
+#ifdef AARCH64
+  bool      is_megamorphic() const    { return _is_megamorphic; }
+#endif
+
   // Note:  The following predicates return false for invalid profiles:
   bool      has_receiver(int i) const { return _limit > i; }
   int       morphism() const          { return _morphism; }

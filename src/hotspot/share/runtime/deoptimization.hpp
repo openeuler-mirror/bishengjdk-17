@@ -63,12 +63,20 @@ class Deoptimization : AllStatic {
     Reason_class_check,           // saw unexpected object class (@bci)
     Reason_array_check,           // saw unexpected array class (aastore @bci)
     Reason_intrinsic,             // saw unexpected operand to intrinsic (@bci)
+#ifdef AARCH64
+    Reason_polymorphic,           // saw unexpected object class in polymorphic inlining (@bci)
+#else
     Reason_bimorphic,             // saw unexpected object class in bimorphic inlining (@bci)
+#endif
 
 #if INCLUDE_JVMCI
     Reason_unreached0             = Reason_null_assert,
     Reason_type_checked_inlining  = Reason_intrinsic,
+#ifdef AARCH64
+    Reason_optimized_type_check   = Reason_polymorphic,
+#else
     Reason_optimized_type_check   = Reason_bimorphic,
+#endif
 #endif
 
     Reason_profile_predicate,     // compiler generated predicate moved from frequent branch in a loop failed
